@@ -567,3 +567,131 @@ enum MessageType: String, Codable {
 | `apps/agor-ui/src/components/PermissionRequestBlock/` | Permission UI reference |
 | `apps/agor-ui/src/components/InputRequestBlock/` | Input request UI reference |
 | `apps/agor-daemon/src/index.ts` | Endpoint contracts (prompt, permission, input) |
+
+---
+
+## Building the App
+
+### Requirements
+
+| Item | Size | Notes |
+|------|------|-------|
+| **macOS 14+** (Sonoma or later) | — | Required for Xcode 16 |
+| **Xcode 16+** | ~35 GB | Includes Swift 5.9+, iOS 17 SDK |
+| **iOS 17+ Simulator** | ~7 GB | Downloaded within Xcode |
+| **SPM dependencies** | ~200 MB | Auto-fetched on first build |
+| **Total disk space** | **~42 GB** | Can be on an external SSD (see below) |
+
+### Step 1: Install Xcode
+
+**Option A — Mac App Store (simplest)**
+
+Open the App Store, search "Xcode", click Install. This places it in `/Applications/Xcode.app`.
+
+**Option B — Manual download (choose install location)**
+
+1. Go to https://developer.apple.com/download/all/ (free Apple ID required)
+2. Download **Xcode 16.3** (or latest) — the `.xip` file (~7 GB)
+3. Extract it:
+   ```bash
+   cd /Applications   # or /Volumes/YourExternalSSD
+   xip -x ~/Downloads/Xcode_16.3.xip
+   ```
+4. Point macOS to it:
+   ```bash
+   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+   # Or if on external drive:
+   # sudo xcode-select -s /Volumes/YourExternalSSD/Xcode.app/Contents/Developer
+   ```
+5. Accept the license:
+   ```bash
+   sudo xcodebuild -license accept
+   ```
+
+**Option C — Install on an external drive (saves internal disk space)**
+
+Xcode can live on any APFS or HFS+ formatted drive. **exFAT, FAT32, and NTFS will NOT work** — Xcode requires Unix permissions and symlinks.
+
+If your external drive is exFAT, you can create a partition:
+- Open **Disk Utility** → select external drive → **Partition**
+- Add a ~50 GB **APFS** partition for Xcode
+- Keep the rest as exFAT for cross-platform use
+
+An **SSD is strongly recommended** — building on an HDD will be 5-10x slower.
+
+Then follow Option B above, extracting to `/Volumes/YourExternalSSD/`.
+
+### Step 2: Install iOS Simulator
+
+```bash
+# Download the iOS 17+ simulator runtime
+xcodebuild -downloadPlatform iOS
+```
+
+Or in Xcode: **Xcode → Settings → Platforms → + → iOS 17**.
+
+### Step 3: Open the Project
+
+```bash
+cd apps/agor-ios
+open Package.swift
+```
+
+Xcode opens and automatically resolves SPM dependencies (SocketIO, Textual, Highlightr). This takes 1-2 minutes the first time.
+
+### Step 4: Build
+
+1. In Xcode's toolbar, select the scheme **AgorApp**
+2. Select a device: **iPhone 16** simulator (or any iOS 17+ target)
+3. Press **⌘B** (Product → Build)
+
+First build takes 2-3 minutes (compiling all dependencies). Subsequent builds are ~10 seconds.
+
+**Or from the command line:**
+
+```bash
+xcodebuild \
+  -scheme AgorApp \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  build
+```
+
+### Step 5: Run
+
+Press **⌘R** (Product → Run). The simulator launches and the app shows the connection setup screen.
+
+Enter:
+- **Daemon URL**: `http://<your-server-ip>:3030` (e.g., `http://192.168.1.100:3030`)
+- **Email**: your Agor account email
+- **Password**: your password
+
+### Running on a Physical iPhone
+
+1. **Xcode → Settings → Accounts** → add your Apple ID
+2. Select the project in the sidebar → **Signing & Capabilities** → choose your team (free Personal Team works)
+3. Connect your iPhone via USB (or pair wirelessly via **Window → Devices and Simulators**)
+4. Select your iPhone in the device dropdown
+5. Press **⌘R**
+6. First time: on your iPhone go to **Settings → General → VPN & Device Management** → trust the developer profile
+
+### Running Tests
+
+```bash
+xcodebuild \
+  -scheme AgorAppTests \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  test
+```
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| "No such module 'SocketIO'" | Wait for SPM to finish resolving — check the progress bar at the top of Xcode |
+| "Signing requires a development team" | Xcode → Settings → Accounts → add Apple ID, then select it in Signing & Capabilities |
+| Simulator not available | `xcodebuild -downloadPlatform iOS` or Xcode → Settings → Platforms |
+| Build fails with Swift version error | Ensure Xcode 16+ (Swift 5.9+). Check with `swift --version` |
+| App can't connect to daemon | Verify the daemon URL is reachable from your Mac/phone. The daemon must bind to `0.0.0.0:3030` (not `127.0.0.1`) |
+| "App Transport Security" error | Already handled — `Info.plist` includes `NSAllowsArbitraryLoads` for http:// connections |
