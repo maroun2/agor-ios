@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "AgorApp",
     platforms: [
-        .iOS(.v17)
+        .iOS(.v18)
     ],
     products: [],
     dependencies: [
@@ -21,7 +21,10 @@ let package = Package(
                 "Highlightr",
             ],
             path: "AgorApp",
-            exclude: ["Info.plist"]
+            exclude: ["Info.plist"],
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
         ),
         .testTarget(
             name: "AgorAppTests",
