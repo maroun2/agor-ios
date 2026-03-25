@@ -1,0 +1,613 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		01C64F8019E1DC764E7C07A3 /* AgorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F5CC95AB69ABEC9E465619 /* AgorClient.swift */; };
+		03781520E668203C6012378E /* Permission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA0E541AF2D2E4F02EAE49 /* Permission.swift */; };
+		05C095D4C93E72284978C4B0 /* SocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3C6C8A44F09215C1E9387E /* SocketService.swift */; };
+		069098C39CDE8E9A33B7217C /* InputRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0769CCEA40D22DDA6010D42 /* InputRequest.swift */; };
+		0DFBFA7A639DDCCCA6DD34FF /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0AD9A555E01E8E4969D922C /* Message.swift */; };
+		0F7050228A6E77DC360720A9 /* ToolUseBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA2A3F882B5A99C76A0E922 /* ToolUseBlockView.swift */; };
+		1074F181D730E0C247CF54BB /* Streaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */; };
+		14E11B0726D82E3B5B127D78 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65ACB752D15547530061855 /* ChatViewModel.swift */; };
+		171444BE6629F435A0E425DD /* StreamingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD882855177D24609BBFF09 /* StreamingService.swift */; };
+		1A3718A7729A34DE78A08914 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95311D8A9520E21301A4BD82 /* MessageBubble.swift */; };
+		1BC915EC35578109B1FEBEC7 /* TextBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */; };
+		1CE37DCD20495BD391F51718 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64449C07C2E5A1B6E0D8A9E4 /* AppViewModel.swift */; };
+		246D9FCC47F6980198DEE416 /* WorktreeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC71207C8865D4E80E36A220 /* WorktreeRow.swift */; };
+		350F75444CDCD3A9389358B0 /* NavigationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */; };
+		36E023A754775A327ABD3345 /* JSONCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */; };
+		38342D91F7D87DC1A7F7FFE8 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0CDC85C039C7D69A1305C0 /* ToastView.swift */; };
+		3DD0DA4774269186359639D2 /* PromptInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */; };
+		4395876846626D278B46261F /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E42D02A86522D0471F54DF /* Session.swift */; };
+		43F3D54B37DC2E553E992772 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2A809CA0C2D762495B8F4A /* ChatView.swift */; };
+		466DD4C435A58213DD5E0AEC /* PermissionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */; };
+		5BB72299BB6B293193881F59 /* ThinkingBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12DFADF2F6A4CD616C0CFE2 /* ThinkingBlockView.swift */; };
+		64D1ACBE30C5C6763E589138 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */; };
+		721D00CB4C4DC42A91178927 /* BoardRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */; };
+		7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */ = {isa = PBXBuildFile; productRef = B88AC8BE0A5D228075CE47D6 /* Highlightr */; };
+		788B792D2FACD468116E54D8 /* CodeBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE62BC7B4EDAD8B23FCF60E9 /* CodeBlockView.swift */; };
+		7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF029D8E2E4880084975A69 /* SessionRow.swift */; };
+		7B97982EC9440B7AFC4F0423 /* StreamingMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51574B49ACC01F5A6753C37D /* StreamingMessageView.swift */; };
+		7BC0C6E01A0C0AC61A2531E3 /* TaskHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACA9BE6C58733198D59E7A1 /* TaskHeader.swift */; };
+		8250904F41044E1838760EC0 /* Worktree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C30C2EB6D32E85765466C8 /* Worktree.swift */; };
+		89BB2BC26F7E87B1551860C6 /* Board.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DC5206FFC124F2944812E0 /* Board.swift */; };
+		947ABC8BCA671B9BDFD1A88B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 129D2DB1B28976F25E0C070A /* ContentView.swift */; };
+		96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */; };
+		A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D605F6B723D6EA97E1A72D /* AgentIcon.swift */; };
+		A6D79B6661690381A79C5F6D /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = CCF002A5A41C9F07F7F17C60 /* Textual */; };
+		A744EEB8F99656B7E1B27398 /* InputRequestCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654C55C11D4BB92250AF1C75 /* InputRequestCardView.swift */; };
+		AD80BBC81E53D8B32913256C /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3094570185631C4C3B5D8C37 /* SidebarView.swift */; };
+		B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF72FBB9974FDE5788C1260A /* DateFormatting.swift */; };
+		C4EFEE22C5D66585847F96B0 /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF287F9448D07BFE1237380C /* ConnectionIndicator.swift */; };
+		C836E615CD25F252F2639596 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = D1D99525620248594DB52F1B /* SocketIO */; };
+		CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */; };
+		DC7DE9D63126F6C32DA55CD6 /* AgorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */; };
+		E2C80CF39B3793824AA85B2F /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */; };
+		E3E39E9B1BBAF2D1B46CCB2D /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAC2691C0FAA7FFDFD5E63F /* User.swift */; };
+		EDF28A78EAE35B2064B5AB90 /* AgorTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666E9DB8BF3E970CEC5F906F /* AgorTask.swift */; };
+		EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */; };
+		F0C35104273368720F561695 /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */; };
+		FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCardView.swift; sourceTree = "<group>"; };
+		121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewModel.swift; sourceTree = "<group>"; };
+		129D2DB1B28976F25E0C070A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONCoding.swift; sourceTree = "<group>"; };
+		1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		27DC5206FFC124F2944812E0 /* Board.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Board.swift; sourceTree = "<group>"; };
+		2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextBlockView.swift; sourceTree = "<group>"; };
+		3094570185631C4C3B5D8C37 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSetupView.swift; sourceTree = "<group>"; };
+		3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Streaming.swift; sourceTree = "<group>"; };
+		3CAC2691C0FAA7FFDFD5E63F /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
+		40F5CC95AB69ABEC9E465619 /* AgorClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgorClient.swift; sourceTree = "<group>"; };
+		51574B49ACC01F5A6753C37D /* StreamingMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMessageView.swift; sourceTree = "<group>"; };
+		5FA2A3F882B5A99C76A0E922 /* ToolUseBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolUseBlockView.swift; sourceTree = "<group>"; };
+		64449C07C2E5A1B6E0D8A9E4 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		654C55C11D4BB92250AF1C75 /* InputRequestCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputRequestCardView.swift; sourceTree = "<group>"; };
+		666E9DB8BF3E970CEC5F906F /* AgorTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgorTask.swift; sourceTree = "<group>"; };
+		79AA0E541AF2D2E4F02EAE49 /* Permission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permission.swift; sourceTree = "<group>"; };
+		7CF029D8E2E4880084975A69 /* SessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRow.swift; sourceTree = "<group>"; };
+		95311D8A9520E21301A4BD82 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
+		9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgorApp.swift; sourceTree = "<group>"; };
+		9D7E4A344E99EB593C21C406 /* AgorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardRow.swift; sourceTree = "<group>"; };
+		A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolResultBlockView.swift; sourceTree = "<group>"; };
+		A65ACB752D15547530061855 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptInputBar.swift; sourceTree = "<group>"; };
+		BF287F9448D07BFE1237380C /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
+		BF72FBB9974FDE5788C1260A /* DateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatting.swift; sourceTree = "<group>"; };
+		C0769CCEA40D22DDA6010D42 /* InputRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputRequest.swift; sourceTree = "<group>"; };
+		C0AD9A555E01E8E4969D922C /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		C9C30C2EB6D32E85765466C8 /* Worktree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Worktree.swift; sourceTree = "<group>"; };
+		CE2A809CA0C2D762495B8F4A /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
+		D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageContentView.swift; sourceTree = "<group>"; };
+		D5D605F6B723D6EA97E1A72D /* AgentIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIcon.swift; sourceTree = "<group>"; };
+		DACA9BE6C58733198D59E7A1 /* TaskHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskHeader.swift; sourceTree = "<group>"; };
+		DAD882855177D24609BBFF09 /* StreamingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingService.swift; sourceTree = "<group>"; };
+		E12DFADF2F6A4CD616C0CFE2 /* ThinkingBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingBlockView.swift; sourceTree = "<group>"; };
+		EC0CDC85C039C7D69A1305C0 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
+		ED3C6C8A44F09215C1E9387E /* SocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketService.swift; sourceTree = "<group>"; };
+		EE62BC7B4EDAD8B23FCF60E9 /* CodeBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBlockView.swift; sourceTree = "<group>"; };
+		F6E42D02A86522D0471F54DF /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		FC71207C8865D4E80E36A220 /* WorktreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRow.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B7586B77701F01BC5B4E16A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6D79B6661690381A79C5F6D /* Textual in Frameworks */,
+				C836E615CD25F252F2639596 /* SocketIO in Frameworks */,
+				7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		00DD3F9EA6948D1EE91B1AD9 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */,
+				129D2DB1B28976F25E0C070A /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		019E5A8BACB0E7BD4C1E5EBD /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */,
+				7CF029D8E2E4880084975A69 /* SessionRow.swift */,
+				3094570185631C4C3B5D8C37 /* SidebarView.swift */,
+				FC71207C8865D4E80E36A220 /* WorktreeRow.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		0BDAD469A7A12056A04EAD83 /* AgorApp */ = {
+			isa = PBXGroup;
+			children = (
+				9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */,
+				B7F4A3BC71E739DF4DE8681D /* Models */,
+				D4EA8C81F0621133CF6EAA38 /* Services */,
+				A9CEF772690B20E27E946E20 /* Utilities */,
+				4690537F3E2C24F8A9B47423 /* ViewModels */,
+				819DA584A8B314947E6FB2CD /* Views */,
+			);
+			path = AgorApp;
+			sourceTree = "<group>";
+		};
+		4690537F3E2C24F8A9B47423 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				64449C07C2E5A1B6E0D8A9E4 /* AppViewModel.swift */,
+				A65ACB752D15547530061855 /* ChatViewModel.swift */,
+				121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		51254AA089FF47797AC41936 = {
+			isa = PBXGroup;
+			children = (
+				0BDAD469A7A12056A04EAD83 /* AgorApp */,
+				D00AFC90AD6CE126C9E4E2F9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		53FA23081B57F456AF2AE352 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				CE2A809CA0C2D762495B8F4A /* ChatView.swift */,
+				95311D8A9520E21301A4BD82 /* MessageBubble.swift */,
+				D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */,
+				ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */,
+				51574B49ACC01F5A6753C37D /* StreamingMessageView.swift */,
+				DACA9BE6C58733198D59E7A1 /* TaskHeader.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		819DA584A8B314947E6FB2CD /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				00DD3F9EA6948D1EE91B1AD9 /* App */,
+				D7865E67101F01A0B416A2AB /* Common */,
+				53FA23081B57F456AF2AE352 /* Chat */,
+				89552090F212148D5BABA08A /* MessageBlocks */,
+				019E5A8BACB0E7BD4C1E5EBD /* Navigation */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		89552090F212148D5BABA08A /* MessageBlocks */ = {
+			isa = PBXGroup;
+			children = (
+				EE62BC7B4EDAD8B23FCF60E9 /* CodeBlockView.swift */,
+				654C55C11D4BB92250AF1C75 /* InputRequestCardView.swift */,
+				0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */,
+				2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */,
+				E12DFADF2F6A4CD616C0CFE2 /* ThinkingBlockView.swift */,
+				A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */,
+				5FA2A3F882B5A99C76A0E922 /* ToolUseBlockView.swift */,
+			);
+			path = MessageBlocks;
+			sourceTree = "<group>";
+		};
+		A9CEF772690B20E27E946E20 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				BF72FBB9974FDE5788C1260A /* DateFormatting.swift */,
+				D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */,
+				15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */,
+				C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		B7F4A3BC71E739DF4DE8681D /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				666E9DB8BF3E970CEC5F906F /* AgorTask.swift */,
+				27DC5206FFC124F2944812E0 /* Board.swift */,
+				C0769CCEA40D22DDA6010D42 /* InputRequest.swift */,
+				C0AD9A555E01E8E4969D922C /* Message.swift */,
+				79AA0E541AF2D2E4F02EAE49 /* Permission.swift */,
+				F6E42D02A86522D0471F54DF /* Session.swift */,
+				3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */,
+				3CAC2691C0FAA7FFDFD5E63F /* User.swift */,
+				C9C30C2EB6D32E85765466C8 /* Worktree.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D00AFC90AD6CE126C9E4E2F9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9D7E4A344E99EB593C21C406 /* AgorApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D4EA8C81F0621133CF6EAA38 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				40F5CC95AB69ABEC9E465619 /* AgorClient.swift */,
+				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
+				ED3C6C8A44F09215C1E9387E /* SocketService.swift */,
+				DAD882855177D24609BBFF09 /* StreamingService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		D7865E67101F01A0B416A2AB /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				D5D605F6B723D6EA97E1A72D /* AgentIcon.swift */,
+				BF287F9448D07BFE1237380C /* ConnectionIndicator.swift */,
+				1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */,
+				EC0CDC85C039C7D69A1305C0 /* ToastView.swift */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A65FB750632211D9897001D3 /* AgorApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5C60C7711292F13C7FA2D955 /* Build configuration list for PBXNativeTarget "AgorApp" */;
+			buildPhases = (
+				58AC23D8EB021958DDCB6502 /* Sources */,
+				B7586B77701F01BC5B4E16A3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AgorApp;
+			packageProductDependencies = (
+				CCF002A5A41C9F07F7F17C60 /* Textual */,
+				D1D99525620248594DB52F1B /* SocketIO */,
+				B88AC8BE0A5D228075CE47D6 /* Highlightr */,
+			);
+			productName = AgorApp;
+			productReference = 9D7E4A344E99EB593C21C406 /* AgorApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		44C3A8634FD58FB2CEAD00A3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A65FB750632211D9897001D3 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = B8B8437EF08638927B7FD134 /* Build configuration list for PBXProject "AgorApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 51254AA089FF47797AC41936;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7724A280542B506D96244CFC /* XCRemoteSwiftPackageReference "Highlightr" */,
+				8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
+				ABC65789A1D3FDBFE299A3DF /* XCRemoteSwiftPackageReference "textual" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D00AFC90AD6CE126C9E4E2F9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A65FB750632211D9897001D3 /* AgorApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		58AC23D8EB021958DDCB6502 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */,
+				DC7DE9D63126F6C32DA55CD6 /* AgorApp.swift in Sources */,
+				01C64F8019E1DC764E7C07A3 /* AgorClient.swift in Sources */,
+				EDF28A78EAE35B2064B5AB90 /* AgorTask.swift in Sources */,
+				1CE37DCD20495BD391F51718 /* AppViewModel.swift in Sources */,
+				FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */,
+				89BB2BC26F7E87B1551860C6 /* Board.swift in Sources */,
+				721D00CB4C4DC42A91178927 /* BoardRow.swift in Sources */,
+				43F3D54B37DC2E553E992772 /* ChatView.swift in Sources */,
+				14E11B0726D82E3B5B127D78 /* ChatViewModel.swift in Sources */,
+				788B792D2FACD468116E54D8 /* CodeBlockView.swift in Sources */,
+				C4EFEE22C5D66585847F96B0 /* ConnectionIndicator.swift in Sources */,
+				96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */,
+				947ABC8BCA671B9BDFD1A88B /* ContentView.swift in Sources */,
+				B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */,
+				CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */,
+				069098C39CDE8E9A33B7217C /* InputRequest.swift in Sources */,
+				A744EEB8F99656B7E1B27398 /* InputRequestCardView.swift in Sources */,
+				36E023A754775A327ABD3345 /* JSONCoding.swift in Sources */,
+				E2C80CF39B3793824AA85B2F /* KeychainHelper.swift in Sources */,
+				0DFBFA7A639DDCCCA6DD34FF /* Message.swift in Sources */,
+				1A3718A7729A34DE78A08914 /* MessageBubble.swift in Sources */,
+				F0C35104273368720F561695 /* MessageContentView.swift in Sources */,
+				350F75444CDCD3A9389358B0 /* NavigationViewModel.swift in Sources */,
+				03781520E668203C6012378E /* Permission.swift in Sources */,
+				466DD4C435A58213DD5E0AEC /* PermissionCardView.swift in Sources */,
+				3DD0DA4774269186359639D2 /* PromptInputBar.swift in Sources */,
+				4395876846626D278B46261F /* Session.swift in Sources */,
+				7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */,
+				AD80BBC81E53D8B32913256C /* SidebarView.swift in Sources */,
+				05C095D4C93E72284978C4B0 /* SocketService.swift in Sources */,
+				64D1ACBE30C5C6763E589138 /* StatusBadge.swift in Sources */,
+				1074F181D730E0C247CF54BB /* Streaming.swift in Sources */,
+				7B97982EC9440B7AFC4F0423 /* StreamingMessageView.swift in Sources */,
+				171444BE6629F435A0E425DD /* StreamingService.swift in Sources */,
+				7BC0C6E01A0C0AC61A2531E3 /* TaskHeader.swift in Sources */,
+				1BC915EC35578109B1FEBEC7 /* TextBlockView.swift in Sources */,
+				5BB72299BB6B293193881F59 /* ThinkingBlockView.swift in Sources */,
+				38342D91F7D87DC1A7F7FFE8 /* ToastView.swift in Sources */,
+				EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */,
+				0F7050228A6E77DC360720A9 /* ToolUseBlockView.swift in Sources */,
+				E3E39E9B1BBAF2D1B46CCB2D /* User.swift in Sources */,
+				8250904F41044E1838760EC0 /* Worktree.swift in Sources */,
+				246D9FCC47F6980198DEE416 /* WorktreeRow.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		14004EA8955B84261446EE80 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L94RKR8S54;
+				INFOPLIST_FILE = AgorApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.agor.AgorApp;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6086DC3656C131AE4FCFFA82 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7E709230DBB31E5D2EBFC120 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L94RKR8S54;
+				INFOPLIST_FILE = AgorApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.agor.AgorApp;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E73AD31A65A362E2E9159378 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5C60C7711292F13C7FA2D955 /* Build configuration list for PBXNativeTarget "AgorApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				14004EA8955B84261446EE80 /* Debug */,
+				7E709230DBB31E5D2EBFC120 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B8B8437EF08638927B7FD134 /* Build configuration list for PBXProject "AgorApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E73AD31A65A362E2E9159378 /* Debug */,
+				6086DC3656C131AE4FCFFA82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7724A280542B506D96244CFC /* XCRemoteSwiftPackageReference "Highlightr" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/raspu/Highlightr.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.1;
+			};
+		};
+		8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/socketio/socket.io-client-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 16.1.1;
+			};
+		};
+		ABC65789A1D3FDBFE299A3DF /* XCRemoteSwiftPackageReference "textual" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/textual.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B88AC8BE0A5D228075CE47D6 /* Highlightr */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7724A280542B506D96244CFC /* XCRemoteSwiftPackageReference "Highlightr" */;
+			productName = Highlightr;
+		};
+		CCF002A5A41C9F07F7F17C60 /* Textual */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ABC65789A1D3FDBFE299A3DF /* XCRemoteSwiftPackageReference "textual" */;
+			productName = Textual;
+		};
+		D1D99525620248594DB52F1B /* SocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
+			productName = SocketIO;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 44C3A8634FD58FB2CEAD00A3 /* Project object */;
+}

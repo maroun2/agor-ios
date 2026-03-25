@@ -1,0 +1,51 @@
+name: AgorApp
+options:
+  bundleIdPrefix: com.agor
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+
+packages:
+  textual:
+    url: https://github.com/gonzalezreal/textual.git
+    from: "0.3.0"
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift.git
+    from: "16.1.1"
+  Highlightr:
+    url: https://github.com/raspu/Highlightr.git
+    from: "2.2.1"
+
+targets:
+  AgorApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: AgorApp
+        excludes:
+          - Info.plist
+    info:
+      path: AgorApp/Info.plist
+      properties:
+        CFBundleName: AgorApp
+        CFBundleDisplayName: Agor
+        CFBundleIdentifier: com.agor.AgorApp
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0"
+        UILaunchStoryboardName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp
+      SWIFT_VERSION: "5.0"
+      DEVELOPMENT_TEAM: "95327R65BM"
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: textual
+        product: Textual
+      - package: SocketIO
+        product: SocketIO
+      - package: Highlightr
