@@ -2,8 +2,8 @@ import SwiftUI
 
 struct TaskHeader: View {
     let task: AgorTask
-
-    @State private var isCollapsed = false
+    let isCollapsed: Bool
+    let onToggle: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -11,9 +11,7 @@ struct TaskHeader: View {
                 .padding(.horizontal)
 
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isCollapsed.toggle()
-                }
+                onToggle()
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")

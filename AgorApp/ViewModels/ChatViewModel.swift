@@ -39,6 +39,21 @@ final class ChatViewModel {
     var error: String?
     var promptText: String = ""
 
+    // Collapsed tasks
+    var collapsedTaskIds: Set<String> = []
+
+    // Incremented only when a new message arrives at the bottom (not when prepending old ones)
+    var scrollToBottomToken: Int = 0
+
+    func toggleTaskCollapsed(_ taskId: String) {
+        if collapsedTaskIds.contains(taskId) {
+            collapsedTaskIds.remove(taskId)
+        } else {
+            collapsedTaskIds.insert(taskId)
+        }
+        rebuildDisplayItems()
+    }
+
     // Streaming
     var activeStreams: [String: StreamingMessage] = [:]
 
@@ -71,6 +86,7 @@ final class ChatViewModel {
         tasks = []
         displayItems = []
         activeStreams = [:]
+        collapsedTaskIds = []
         currentSkip = 0
         hasMore = true
         error = nil
@@ -107,6 +123,9 @@ final class ChatViewModel {
             )
             if currentSessionId == sessionId {
                 tasks = response.data
+                // Collapse all tasks except the last one
+                let lastId = response.data.last?.taskId
+                collapsedTaskIds = Set(response.data.compactMap { $0.taskId != lastId ? $0.taskId : nil })
                 rebuildDisplayItems()
             }
         } catch {
@@ -121,20 +140,24 @@ final class ChatViewModel {
                 "/messages",
                 query: [
                     "session_id": sessionId,
-                    "$sort[index]": "1",
+                    "$sort[index]": "-1",  // newest first so last task loads immediately
                     "$limit": "\(pageSize)",
                     "$skip": "\(currentSkip)",
                 ]
             )
             if currentSessionId == sessionId {
+                // Server returns newest-first; reverse to get chronological order
+                let page = response.data.reversed()
                 if currentSkip == 0 {
-                    messages = response.data
+                    messages = Array(page)
+                    rebuildDisplayItems()
+                    scrollToBottomToken += 1  // scroll to bottom on initial load
                 } else {
-                    messages.append(contentsOf: response.data)
+                    messages = Array(page) + messages  // prepend older messages, no scroll
+                    rebuildDisplayItems()
                 }
                 hasMore = response.total > messages.count
                 currentSkip = messages.count
-                rebuildDisplayItems()
             }
         } catch {
             self.error = "Failed to load messages"
@@ -244,6 +267,7 @@ final class ChatViewModel {
         for task in tasks {
             handledTaskIds.insert(task.taskId)
             items.append(.taskHeader(task))
+            guard !collapsedTaskIds.contains(task.taskId) else { continue }
             let taskMessages = taskMap[task.taskId] ?? []
             items.append(contentsOf: taskMessages.map { .message($0) })
         }
@@ -276,6 +300,7 @@ final class ChatViewModel {
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
                 self.rebuildDisplayItems()
+                self.scrollToBottomToken += 1  // new message — scroll to bottom
             }
         }
 

@@ -45,8 +45,12 @@ struct ChatView: View {
                         ForEach(viewModel.displayItems) { item in
                             switch item {
                             case .taskHeader(let task):
-                                TaskHeader(task: task)
-                                    .id(item.id)
+                                TaskHeader(
+                                    task: task,
+                                    isCollapsed: viewModel.collapsedTaskIds.contains(task.taskId),
+                                    onToggle: { viewModel.toggleTaskCollapsed(task.taskId) }
+                                )
+                                .id(item.id)
 
                             case .message(let message):
                                 MessageBubble(
@@ -73,10 +77,8 @@ struct ChatView: View {
                     await viewModel.loadMessages(sessionId)
                 }
                 .onAppear { scrollProxy = proxy }
-                .onChange(of: viewModel.displayItems.count) { _, _ in
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
+                .onChange(of: viewModel.scrollToBottomToken) { _, _ in
+                    proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
 
