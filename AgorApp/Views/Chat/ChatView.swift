@@ -74,6 +74,7 @@ struct ChatView: View {
                 }
                 .refreshable {
                     viewModel.error = nil
+                    viewModel.resetMessagePagination()
                     await viewModel.loadMessages(sessionId)
                 }
                 .onAppear { scrollProxy = proxy }

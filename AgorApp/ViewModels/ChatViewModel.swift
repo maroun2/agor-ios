@@ -136,28 +136,50 @@ final class ChatViewModel {
     func loadMessages(_ sessionId: String) async {
         isLoadingMessages = true
         do {
-            let response: PaginatedResponse<Message> = try await client.getPaginated(
-                "/messages",
-                query: [
-                    "session_id": sessionId,
-                    "$sort[index]": "-1",  // newest first so last task loads immediately
-                    "$limit": "\(pageSize)",
-                    "$skip": "\(currentSkip)",
-                ]
-            )
-            if currentSessionId == sessionId {
-                // Server returns newest-first; reverse to get chronological order
-                let page = response.data.reversed()
-                if currentSkip == 0 {
-                    messages = Array(page)
+            if currentSkip == 0 {
+                // Initial load: get the total first so we can jump to the last page
+                let count: PaginatedResponse<Message> = try await client.getPaginated(
+                    "/messages",
+                    query: ["session_id": sessionId, "$limit": "1"]
+                )
+                let total = count.total
+                let startSkip = max(0, total - pageSize)
+                let response: PaginatedResponse<Message> = try await client.getPaginated(
+                    "/messages",
+                    query: [
+                        "session_id": sessionId,
+                        "$sort[index]": "1",
+                        "$limit": "\(pageSize)",
+                        "$skip": "\(startSkip)",
+                    ]
+                )
+                if currentSessionId == sessionId {
+                    messages = response.data
+                    hasMore = startSkip > 0
+                    // currentSkip tracks how many messages from the tail we've loaded
+                    // For "load earlier", we go backwards from startSkip
+                    currentSkip = startSkip
                     rebuildDisplayItems()
-                    scrollToBottomToken += 1  // scroll to bottom on initial load
-                } else {
-                    messages = Array(page) + messages  // prepend older messages, no scroll
+                    scrollToBottomToken += 1
+                }
+            } else {
+                // Load earlier: fetch the page just before what we have
+                let prevSkip = max(0, currentSkip - pageSize)
+                let response: PaginatedResponse<Message> = try await client.getPaginated(
+                    "/messages",
+                    query: [
+                        "session_id": sessionId,
+                        "$sort[index]": "1",
+                        "$limit": "\(pageSize)",
+                        "$skip": "\(prevSkip)",
+                    ]
+                )
+                if currentSessionId == sessionId {
+                    messages = response.data + messages  // prepend older page
+                    hasMore = prevSkip > 0
+                    currentSkip = prevSkip
                     rebuildDisplayItems()
                 }
-                hasMore = response.total > messages.count
-                currentSkip = messages.count
             }
         } catch {
             self.error = "Failed to load messages"
@@ -168,6 +190,12 @@ final class ChatViewModel {
     func loadMore() async {
         guard hasMore, !isLoadingMessages, let sessionId = currentSessionId else { return }
         await loadMessages(sessionId)
+    }
+
+    func resetMessagePagination() {
+        messages = []
+        currentSkip = 0
+        hasMore = true
     }
 
     // MARK: - Send Prompt
