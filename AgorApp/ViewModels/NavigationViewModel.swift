@@ -58,6 +58,33 @@ final class NavigationViewModel {
     private let client: AgorClient
     private let socketService: SocketService
 
+    // MARK: - Expansion Persistence
+
+    private static let collapsedBoardsKey = "agor.collapsedBoardIds"
+    private static let collapsedWorktreesKey = "agor.collapsedWorktreeIds"
+
+    private var collapsedBoardIds: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.collapsedBoardsKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: Self.collapsedBoardsKey) }
+    }
+
+    private var collapsedWorktreeIds: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.collapsedWorktreesKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: Self.collapsedWorktreesKey) }
+    }
+
+    func setBoardExpanded(_ boardId: String, expanded: Bool) {
+        var collapsed = collapsedBoardIds
+        if expanded { collapsed.remove(boardId) } else { collapsed.insert(boardId) }
+        collapsedBoardIds = collapsed
+    }
+
+    func setWorktreeExpanded(_ worktreeId: String, expanded: Bool) {
+        var collapsed = collapsedWorktreeIds
+        if expanded { collapsed.remove(worktreeId) } else { collapsed.insert(worktreeId) }
+        collapsedWorktreeIds = collapsed
+    }
+
     init(client: AgorClient, socketService: SocketService) {
         self.client = client
         self.socketService = socketService
@@ -95,7 +122,7 @@ final class NavigationViewModel {
                 ]
             )
             boardNode.worktrees = response.data.map { WorktreeNode(worktree: $0) }
-            boardNode.isExpanded = true
+            boardNode.isExpanded = !collapsedBoardIds.contains(boardNode.board.boardId)
 
             // Auto-load sessions for all worktrees
             for wt in boardNode.worktrees {
@@ -120,7 +147,7 @@ final class NavigationViewModel {
                 ]
             )
             worktreeNode.sessions = response.data
-            worktreeNode.isExpanded = true
+            worktreeNode.isExpanded = !collapsedWorktreeIds.contains(worktreeNode.worktree.worktreeId)
         } catch {
             // Non-fatal
         }
