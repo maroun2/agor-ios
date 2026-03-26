@@ -24,6 +24,7 @@ final class BoardNode: Identifiable {
 final class WorktreeNode: Identifiable {
     let worktree: Worktree
     var sessions: [Session] = []
+    var repoName: String?
     var isExpanded = false
     var isLoading = false
 
@@ -104,10 +105,27 @@ final class NavigationViewModel {
             for node in boardNodes {
                 await loadWorktrees(for: node)
             }
+
+            // Fetch repo names and apply to all worktree nodes
+            await loadRepoNames()
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func loadRepoNames() async {
+        do {
+            let response: PaginatedResponse<Repo> = try await client.getPaginated("/repos", query: ["$limit": "100"])
+            let lookup = Dictionary(uniqueKeysWithValues: response.data.map { ($0.repoId, $0.name) })
+            for board in boardNodes {
+                for wt in board.worktrees {
+                    wt.repoName = lookup[wt.worktree.repoId]
+                }
+            }
+        } catch {
+            // Non-fatal — repo names are display-only
+        }
     }
 
     func loadWorktrees(for boardNode: BoardNode) async {

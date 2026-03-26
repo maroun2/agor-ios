@@ -34,7 +34,7 @@ struct PromptInputBar: View {
                             .frame(width: 32, height: 32)
                     } else {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
+                            .font(.system(size: 36))
                             .symbolRenderingMode(.hierarchical)
                     }
                 }

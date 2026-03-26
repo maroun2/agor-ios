@@ -117,7 +117,11 @@ private struct WorktreeSection: View {
                 }
             }
         } label: {
-            WorktreeRow(worktree: worktreeNode.worktree, attentionCount: worktreeNode.attentionCount)
+            WorktreeRow(
+                worktree: worktreeNode.worktree,
+                repoName: worktreeNode.repoName,
+                attentionCount: worktreeNode.attentionCount
+            )
         }
         .selectionDisabled()
     }
