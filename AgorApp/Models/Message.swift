@@ -170,9 +170,9 @@ struct ToolResultBlock: Codable {
 
 struct ThinkingContent: Codable {
     let type: String
-    let thinking: String
+    let thinking: String?  // nil for redacted blocks (only `signature` present)
 
-    init(type: String = "thinking", thinking: String) {
+    init(type: String = "thinking", thinking: String? = nil) {
         self.type = type
         self.thinking = thinking
     }
