@@ -204,23 +204,20 @@ final class ChatViewModel {
     }
 
     private func loadTaskMessagesIfNeeded(_ task: AgorTask) async {
-        guard let range = task.messageRange, let sessionId = currentSessionId else { return }
-        // Check if we already have any message in this task's range
-        let loadedIndices = Set(messages.map(\.index))
-        guard !loadedIndices.contains(range.startIndex) else { return }
+        guard let sessionId = currentSessionId else { return }
+        // Skip if we already have messages for this task
+        guard !messages.contains(where: { $0.taskId == task.taskId }) else { return }
 
-        let count = max(1, range.endIndex - range.startIndex + 1)
         do {
             let response: PaginatedResponse<Message> = try await client.getPaginated(
                 "/messages",
                 query: [
-                    "session_id": sessionId,
+                    "task_id": task.taskId,
                     "$sort[index]": "1",
-                    "$skip": "\(range.startIndex)",
-                    "$limit": "\(min(count + 5, 200))",
+                    "$limit": "200",
                 ]
             )
-            guard currentSessionId == sessionId else { return }
+            guard currentSessionId == sessionId, !response.data.isEmpty else { return }
             let existingIds = Set(messages.map(\.messageId))
             let newMessages = response.data.filter { !existingIds.contains($0.messageId) }
             guard !newMessages.isEmpty else { return }

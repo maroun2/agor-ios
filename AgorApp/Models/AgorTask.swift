@@ -28,22 +28,6 @@ enum TaskStatus: String, Codable {
     }
 }
 
-// MARK: - Task Message Range
-
-struct TaskMessageRange: Codable {
-    let startIndex: Int
-    let endIndex: Int
-    let startTimestamp: String
-    var endTimestamp: String?
-
-    enum CodingKeys: String, CodingKey {
-        case startIndex = "start_index"
-        case endIndex = "end_index"
-        case startTimestamp = "start_timestamp"
-        case endTimestamp = "end_timestamp"
-    }
-}
-
 // MARK: - Task Git State
 
 struct TaskGitState: Codable {
@@ -99,7 +83,8 @@ struct AgorTask: Codable, Identifiable {
     let fullPrompt: String
     var description: String?
     var status: TaskStatus
-    var messageRange: TaskMessageRange?
+    var firstMessageIndex: Int?
+    var lastMessageIndex: Int?
     var toolUseCount: Int?
     var gitState: TaskGitState?
     var durationMs: Int?
@@ -135,7 +120,8 @@ struct AgorTask: Codable, Identifiable {
         case fullPrompt = "full_prompt"
         case description
         case status
-        case messageRange = "message_range"
+        case firstMessageIndex = "first_message_index"
+        case lastMessageIndex = "last_message_index"
         case toolUseCount = "tool_use_count"
         case gitState = "git_state"
         case durationMs = "duration_ms"
