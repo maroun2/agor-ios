@@ -43,6 +43,19 @@ targets:
       SWIFT_VERSION: "5.0"
       DEVELOPMENT_TEAM: "95327R65BM"
       CODE_SIGN_STYLE: Automatic
+    preBuildScripts:
+      - name: Inject Git Hash
+        script: |
+          HASH=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          mkdir -p "$SRCROOT/AgorApp/Generated"
+          cat > "$SRCROOT/AgorApp/Generated/GitVersion.swift" << EOF
+          // Auto-generated at build time — do not edit
+          enum GitVersion {
+              static let hash = "$HASH"
+          }
+          EOF
+        outputFiles:
+          - $(SRCROOT)/AgorApp/Generated/GitVersion.swift
     dependencies:
       - package: textual
         product: Textual
