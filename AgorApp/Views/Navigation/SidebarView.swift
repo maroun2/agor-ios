@@ -25,7 +25,10 @@ struct SidebarView: View {
                 Section {
                     DisclosureGroup(isExpanded: Binding(
                         get: { boardNode.isExpanded },
-                        set: { boardNode.isExpanded = $0 }
+                        set: {
+                            boardNode.isExpanded = $0
+                            viewModel.setBoardExpanded(boardNode.board.boardId, expanded: $0)
+                        }
                     )) {
                         if boardNode.isLoading {
                             ProgressView()
@@ -34,6 +37,7 @@ struct SidebarView: View {
                             ForEach(boardNode.worktrees) { wtNode in
                                 WorktreeSection(
                                     worktreeNode: wtNode,
+                                    viewModel: viewModel,
                                     selectedSessionId: $selectedSessionId
                                 )
                             }
@@ -41,6 +45,7 @@ struct SidebarView: View {
                     } label: {
                         BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
                     }
+                    .selectionDisabled()
                 }
             }
 
@@ -86,12 +91,16 @@ struct SidebarView: View {
 
 private struct WorktreeSection: View {
     let worktreeNode: WorktreeNode
+    let viewModel: NavigationViewModel
     @Binding var selectedSessionId: String?
 
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
             get: { worktreeNode.isExpanded },
-            set: { worktreeNode.isExpanded = $0 }
+            set: {
+                worktreeNode.isExpanded = $0
+                viewModel.setWorktreeExpanded(worktreeNode.worktree.worktreeId, expanded: $0)
+            }
         )) {
             if worktreeNode.isLoading {
                 ProgressView()
@@ -110,5 +119,6 @@ private struct WorktreeSection: View {
         } label: {
             WorktreeRow(worktree: worktreeNode.worktree, attentionCount: worktreeNode.attentionCount)
         }
+        .selectionDisabled()
     }
 }

@@ -79,7 +79,9 @@ struct ChatView: View {
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.scrollToBottomToken) { _, _ in
-                    proxy.scrollTo("bottom", anchor: .bottom)
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
             }
 

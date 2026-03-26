@@ -198,7 +198,8 @@ final class ChatViewModel {
     }
 
     func resetMessagePagination() {
-        messages = []
+        // Don't clear messages here — they'll be replaced on successful reload.
+        // selectSession already clears messages before switching sessions.
         currentSkip = 0
         hasMore = true
     }
