@@ -48,10 +48,15 @@ final class ChatViewModel {
     func toggleTaskCollapsed(_ taskId: String) {
         if collapsedTaskIds.contains(taskId) {
             collapsedTaskIds.remove(taskId)
+            rebuildDisplayItems()
+            // Load messages for this task if not yet in memory
+            if let task = tasks.first(where: { $0.taskId == taskId }) {
+                Task { await loadTaskMessagesIfNeeded(task) }
+            }
         } else {
             collapsedTaskIds.insert(taskId)
+            rebuildDisplayItems()
         }
-        rebuildDisplayItems()
     }
 
     // Streaming
@@ -196,6 +201,34 @@ final class ChatViewModel {
         messages = []
         currentSkip = 0
         hasMore = true
+    }
+
+    private func loadTaskMessagesIfNeeded(_ task: AgorTask) async {
+        guard let range = task.messageRange, let sessionId = currentSessionId else { return }
+        // Check if we already have any message in this task's range
+        let loadedIndices = Set(messages.map(\.index))
+        guard !loadedIndices.contains(range.startIndex) else { return }
+
+        let count = max(1, range.endIndex - range.startIndex + 1)
+        do {
+            let response: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: [
+                    "session_id": sessionId,
+                    "$sort[index]": "1",
+                    "$skip": "\(range.startIndex)",
+                    "$limit": "\(min(count + 5, 200))",
+                ]
+            )
+            guard currentSessionId == sessionId else { return }
+            let existingIds = Set(messages.map(\.messageId))
+            let newMessages = response.data.filter { !existingIds.contains($0.messageId) }
+            guard !newMessages.isEmpty else { return }
+            messages = (messages + newMessages).sorted { $0.index < $1.index }
+            rebuildDisplayItems()
+        } catch {
+            // Non-fatal — task header still shows, just without messages
+        }
     }
 
     // MARK: - Send Prompt
