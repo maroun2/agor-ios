@@ -84,7 +84,5 @@ extension JSONEncoder {
 
 struct PaginatedResponse<T: Codable>: Codable {
     let total: Int
-    let limit: Int
-    let skip: Int
     let data: [T]
 }
