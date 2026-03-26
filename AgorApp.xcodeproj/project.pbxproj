@@ -54,6 +54,7 @@
 		EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */; };
 		F0C35104273368720F561695 /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */; };
 		FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */; };
+		FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81CFE6381FDD29480EFA395 /* GitVersion.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -79,7 +80,7 @@
 		7CF029D8E2E4880084975A69 /* SessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRow.swift; sourceTree = "<group>"; };
 		95311D8A9520E21301A4BD82 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
 		9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgorApp.swift; sourceTree = "<group>"; };
-		9D7E4A344E99EB593C21C406 /* AgorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D7E4A344E99EB593C21C406 /* AgorApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AgorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardRow.swift; sourceTree = "<group>"; };
 		A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolResultBlockView.swift; sourceTree = "<group>"; };
 		A65ACB752D15547530061855 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
@@ -101,6 +102,7 @@
 		ED3C6C8A44F09215C1E9387E /* SocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketService.swift; sourceTree = "<group>"; };
 		EE62BC7B4EDAD8B23FCF60E9 /* CodeBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBlockView.swift; sourceTree = "<group>"; };
 		F6E42D02A86522D0471F54DF /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		F81CFE6381FDD29480EFA395 /* GitVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitVersion.swift; sourceTree = "<group>"; };
 		FC71207C8865D4E80E36A220 /* WorktreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -142,6 +144,7 @@
 			isa = PBXGroup;
 			children = (
 				9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */,
+				7C09B52CBD69B279A6413CD8 /* Generated */,
 				B7F4A3BC71E739DF4DE8681D /* Models */,
 				D4EA8C81F0621133CF6EAA38 /* Services */,
 				A9CEF772690B20E27E946E20 /* Utilities */,
@@ -180,6 +183,14 @@
 				DACA9BE6C58733198D59E7A1 /* TaskHeader.swift */,
 			);
 			path = Chat;
+			sourceTree = "<group>";
+		};
+		7C09B52CBD69B279A6413CD8 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				F81CFE6381FDD29480EFA395 /* GitVersion.swift */,
+			);
+			path = Generated;
 			sourceTree = "<group>";
 		};
 		819DA584A8B314947E6FB2CD /* Views */ = {
@@ -272,6 +283,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5C60C7711292F13C7FA2D955 /* Build configuration list for PBXNativeTarget "AgorApp" */;
 			buildPhases = (
+				7D9B62499B3435F4D1E32F8C /* Inject Git Hash */,
 				58AC23D8EB021958DDCB6502 /* Sources */,
 				B7586B77701F01BC5B4E16A3 /* Frameworks */,
 			);
@@ -299,6 +311,7 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					A65FB750632211D9897001D3 = {
+						DevelopmentTeam = 95327R65BM;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -327,6 +340,28 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		7D9B62499B3435F4D1E32F8C /* Inject Git Hash */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Inject Git Hash";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/AgorApp/Generated/GitVersion.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "HASH=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo \"unknown\")\nmkdir -p \"$SRCROOT/AgorApp/Generated\"\ncat > \"$SRCROOT/AgorApp/Generated/GitVersion.swift\" << EOF\n// Auto-generated at build time — do not edit\nenum GitVersion {\n    static let hash = \"$HASH\"\n}\nEOF\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		58AC23D8EB021958DDCB6502 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -347,6 +382,7 @@
 				96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */,
 				947ABC8BCA671B9BDFD1A88B /* ContentView.swift in Sources */,
 				B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */,
+				FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */,
 				CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */,
 				069098C39CDE8E9A33B7217C /* InputRequest.swift in Sources */,
 				A744EEB8F99656B7E1B27398 /* InputRequestCardView.swift in Sources */,
@@ -388,7 +424,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L94RKR8S54;
+				DEVELOPMENT_TEAM = 95327R65BM;
 				INFOPLIST_FILE = AgorApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -464,7 +500,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L94RKR8S54;
+				DEVELOPMENT_TEAM = 95327R65BM;
 				INFOPLIST_FILE = AgorApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
