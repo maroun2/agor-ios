@@ -54,8 +54,7 @@ targets:
               static let hash = "$HASH"
           }
           EOF
-        outputFiles:
-          - $(SRCROOT)/AgorApp/Generated/GitVersion.swift
+        alwaysOutOfDate: true
     dependencies:
       - package: textual
         product: Textual
