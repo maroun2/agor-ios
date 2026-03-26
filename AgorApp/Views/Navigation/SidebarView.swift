@@ -43,16 +43,18 @@ struct SidebarView: View {
                     }
                 }
             }
+
+            // Version footer
+            Section {
+                Text(GitVersion.hash)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.sidebar)
         .navigationTitle("Agor")
-        .safeAreaInset(edge: .bottom) {
-            Text(GitVersion.hash)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-        }
         .refreshable {
             await viewModel.refresh()
         }
