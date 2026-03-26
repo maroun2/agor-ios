@@ -65,17 +65,17 @@ struct ChatView: View {
                             }
                         }
 
-                        // Bottom anchor
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
+                        // Working indicator — shown when running but no stream yet
+                        if viewModel.currentSession?.status == .running && viewModel.activeStreams.isEmpty {
+                            AgentWorkingIndicator()
+                        }
                     }
                     .padding(.vertical, 8)
-                }
-                .refreshable {
-                    viewModel.error = nil
-                    viewModel.resetMessagePagination()
-                    await viewModel.loadMessages(sessionId)
+
+                    // Bottom anchor outside LazyVStack so it's always rendered
+                    Color.clear
+                        .frame(height: 1)
+                        .id("bottom")
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.scrollToBottomToken) { _, _ in

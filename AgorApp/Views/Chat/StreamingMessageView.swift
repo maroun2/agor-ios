@@ -58,6 +58,56 @@ struct StreamingMessageView: View {
     }
 }
 
+// MARK: - Agent Working Indicator
+
+struct AgentWorkingIndicator: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "cpu")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("Assistant")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            HStack(spacing: 6) {
+                DotPulse(delay: 0)
+                DotPulse(delay: 0.2)
+                DotPulse(delay: 0.4)
+            }
+            .padding(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+            .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct DotPulse: View {
+    let delay: Double
+    @State private var scale: CGFloat = 0.6
+
+    var body: some View {
+        Circle()
+            .fill(.secondary)
+            .frame(width: 8, height: 8)
+            .scaleEffect(scale)
+            .onAppear {
+                withAnimation(
+                    .easeInOut(duration: 0.5)
+                    .repeatForever(autoreverses: true)
+                    .delay(delay)
+                ) {
+                    scale = 1.0
+                }
+            }
+    }
+}
+
 // MARK: - Thinking Indicator
 
 struct ThinkingIndicator: View {
