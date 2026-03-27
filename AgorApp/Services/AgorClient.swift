@@ -177,4 +177,16 @@ final class AgorClient {
         }
         KeychainHelper.save(authResponse.accessToken, for: .accessToken)
     }
+
+    // MARK: - Health Check
+
+    func healthCheck() async -> Bool {
+        do {
+            let request = try buildRequest(path: "/health", method: "GET")
+            let (_, response) = try await session.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
+    }
 }

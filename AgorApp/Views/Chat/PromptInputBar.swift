@@ -18,7 +18,6 @@ struct PromptInputBar: View {
                     .lineLimit(1...4)
                     .textFieldStyle(.plain)
                     .focused($isFocused)
-                    .disabled(!isInputEnabled)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
@@ -46,10 +45,6 @@ struct PromptInputBar: View {
         }
     }
 
-    private var isInputEnabled: Bool {
-        viewModel.isSessionPromptable
-    }
-
     private var canSend: Bool {
         !viewModel.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && viewModel.isSessionPromptable
@@ -59,7 +54,7 @@ struct PromptInputBar: View {
     private var placeholder: String {
         guard let session = viewModel.currentSession else { return "Type a prompt..." }
         switch session.status {
-        case .running: return "Session is running..."
+        case .running: return "Type your next message..."
         case .awaitingPermission: return "Waiting for permission..."
         case .awaitingInput: return "Waiting for input..."
         case .idle: return "Type a prompt..."

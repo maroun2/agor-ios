@@ -36,6 +36,7 @@ final class SocketService {
     private var socket: SocketIOClient?
     private let client: AgorClient
     private let decoder = JSONDecoder.agor
+    private var healthCheckTimer: Timer?
 
     init(client: AgorClient) {
         self.client = client
@@ -86,6 +87,7 @@ final class SocketService {
     }
 
     func disconnect() {
+        stopHealthCheck()
         socket?.disconnect()
         manager = nil
         socket = nil
@@ -95,6 +97,31 @@ final class SocketService {
     func reconnect() {
         disconnect()
         connect()
+    }
+
+    // MARK: - Health Check
+
+    func startHealthCheck(client: AgorClient) {
+        stopHealthCheck()
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task {
+                let isHealthy = await client.healthCheck()
+                await MainActor.run {
+                    if !isHealthy && self.connectionState == .connected {
+                        self.connectionState = .disconnected
+                        self.reconnect()
+                    } else if isHealthy && self.connectionState == .disconnected {
+                        self.reconnect()
+                    }
+                }
+            }
+        }
+    }
+
+    func stopHealthCheck() {
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = nil
     }
 
     // MARK: - Event Handlers

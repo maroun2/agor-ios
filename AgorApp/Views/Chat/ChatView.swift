@@ -19,6 +19,22 @@ struct ChatView: View {
                 )
             }
 
+            // Disconnected indicator
+            if viewModel.connectionState == .disconnected {
+                HStack {
+                    Image(systemName: "wifi.slash")
+                        .foregroundStyle(.red)
+                    Text("Disconnected from server")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.red.opacity(0.08))
+            }
+
             // Attention bar
             if viewModel.sessionNeedsAttention {
                 AttentionBar(viewModel: viewModel, scrollProxy: scrollProxy)
@@ -79,8 +95,10 @@ struct ChatView: View {
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.scrollToBottomToken) { _, _ in
-                    DispatchQueue.main.async {
-                        proxy.scrollTo("bottom", anchor: .bottom)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -94,6 +112,23 @@ struct ChatView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if let session = viewModel.currentSession {
                     HStack(spacing: 8) {
+                        // Stop button - only when session is active
+                        if viewModel.canStopSession {
+                            Button {
+                                HapticFeedback.light()
+                                viewModel.stopSession()
+                            } label: {
+                                if viewModel.isStoppingSession {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                } else {
+                                    Image(systemName: "stop.circle.fill")
+                                        .foregroundStyle(.red)
+                                        .font(.system(size: 18))
+                                }
+                            }
+                        }
+
                         if session.isPlanMode {
                             PlanModeBadge()
                         }
