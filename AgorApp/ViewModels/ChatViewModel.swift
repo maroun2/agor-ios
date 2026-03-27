@@ -116,6 +116,10 @@ final class ChatViewModel {
 
         Task {
             await loadSession(sessionId)
+            // Mark as viewed if server flagged ready_for_prompt
+            if currentSession?.readyForPrompt == true {
+                await markSessionViewed(sessionId)
+            }
             await loadTasks(sessionId)
             await loadMessages(sessionId)
             startMessagePolling()
@@ -281,6 +285,37 @@ final class ChatViewModel {
                 self.error = "Failed to send prompt: \(error.localizedDescription)"
             }
             isSendingPrompt = false
+        }
+    }
+
+    // MARK: - Mark Viewed
+
+    private func markSessionViewed(_ sessionId: String) async {
+        struct ViewedBody: Codable {
+            let readyForPrompt: Bool
+            enum CodingKeys: String, CodingKey { case readyForPrompt = "ready_for_prompt" }
+        }
+        let updated: Session? = try? await client.patch(
+            "/sessions/\(sessionId)",
+            body: ViewedBody(readyForPrompt: false)
+        )
+        if let updated, currentSessionId == sessionId {
+            currentSession = updated
+        }
+    }
+
+    // MARK: - Archive Session
+
+    func archiveCurrentSession() {
+        guard let sessionId = currentSessionId else { return }
+        Task {
+            do {
+                struct ArchiveBody: Codable { let archived: Bool }
+                let _: Session = try await client.patch("/sessions/\(sessionId)", body: ArchiveBody(archived: true))
+                currentSessionId = nil
+            } catch {
+                self.error = "Failed to archive session"
+            }
         }
     }
 

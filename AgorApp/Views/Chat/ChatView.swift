@@ -129,6 +129,15 @@ struct ChatView: View {
                             }
                         }
 
+                        // Archive button
+                        Button {
+                            viewModel.archiveCurrentSession()
+                        } label: {
+                            Image(systemName: "archivebox")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 16))
+                        }
+
                         if session.isPlanMode {
                             PlanModeBadge()
                         }

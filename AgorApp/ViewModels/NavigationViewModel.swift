@@ -66,6 +66,8 @@ final class NavigationViewModel {
         func add(_ session: Session) {
             guard !seen.contains(session.sessionId),
                   !attentionIds.contains(session.sessionId) else { return }
+            // Exclude untitled/auto-generated sessions unless favorited
+            guard session.hasExplicitTitle || favoriteSessionIds.contains(session.sessionId) else { return }
             seen.insert(session.sessionId)
             result.append(session)
         }
@@ -230,10 +232,30 @@ final class NavigationViewModel {
         for board in boardNodes {
             for wt in board.worktrees {
                 if let idx = wt.sessions.firstIndex(where: { $0.sessionId == session.sessionId }) {
-                    wt.sessions[idx] = session
+                    if session.archived == true {
+                        wt.sessions.remove(at: idx)
+                    } else {
+                        wt.sessions[idx] = session
+                    }
                     return
                 }
             }
+        }
+    }
+
+    // MARK: - Archive Session
+
+    func archiveSession(_ sessionId: String) async {
+        do {
+            struct ArchiveBody: Codable { let archived: Bool }
+            let _: Session = try await client.patch("/sessions/\(sessionId)", body: ArchiveBody(archived: true))
+            for board in boardNodes {
+                for wt in board.worktrees {
+                    wt.sessions.removeAll { $0.sessionId == sessionId }
+                }
+            }
+        } catch {
+            // Non-fatal
         }
     }
 
@@ -244,6 +266,17 @@ final class NavigationViewModel {
             for wt in board.worktrees {
                 if let session = wt.sessions.first(where: { $0.sessionId == sessionId }) {
                     return session
+                }
+            }
+        }
+        return nil
+    }
+
+    func findContext(for sessionId: String) -> (boardName: String, worktreeName: String)? {
+        for board in boardNodes {
+            for wt in board.worktrees {
+                if wt.sessions.contains(where: { $0.sessionId == sessionId }) {
+                    return (board.board.name, wt.worktree.displayName)
                 }
             }
         }

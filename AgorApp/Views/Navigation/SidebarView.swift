@@ -15,6 +15,8 @@ struct SidebarView: View {
                         }
                         .contextMenu {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                            Divider()
+                            ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
                 } header: {
@@ -27,14 +29,19 @@ struct SidebarView: View {
             if !viewModel.importantSessions.isEmpty {
                 Section {
                     ForEach(viewModel.importantSessions) { session in
+                        let ctx = viewModel.findContext(for: session.sessionId)
                         NavigationLink(value: session.sessionId) {
                             ImportantSessionRow(
                                 session: session,
-                                isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId)
+                                isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
+                                boardName: ctx?.boardName,
+                                worktreeName: ctx?.worktreeName
                             )
                         }
                         .contextMenu {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                            Divider()
+                            ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
                 } header: {
@@ -115,6 +122,8 @@ struct SidebarView: View {
 private struct ImportantSessionRow: View {
     let session: Session
     let isFavorite: Bool
+    let boardName: String?
+    let worktreeName: String?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -140,6 +149,13 @@ private struct ImportantSessionRow: View {
                     Text(session.lastUpdated.relativeTime)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                }
+
+                if let boardName, let worktreeName {
+                    Text("\(boardName) · \(worktreeName)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
@@ -181,6 +197,21 @@ private struct FavoriteButton: View {
     }
 }
 
+// MARK: - Archive Context Menu Button
+
+private struct ArchiveButton: View {
+    let sessionId: String
+    let viewModel: NavigationViewModel
+
+    var body: some View {
+        Button(role: .destructive) {
+            Task { await viewModel.archiveSession(sessionId) }
+        } label: {
+            Label("Archive", systemImage: "archivebox")
+        }
+    }
+}
+
 // MARK: - Worktree Section (expandable)
 
 private struct WorktreeSection: View {
@@ -210,6 +241,8 @@ private struct WorktreeSection: View {
                     }
                     .contextMenu {
                         FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                        Divider()
+                        ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                     }
                 }
             }

@@ -158,7 +158,12 @@ struct Session: Codable, Identifiable {
 
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
+        if let description, !description.isEmpty { return description }
         return "Session \(String(sessionId.prefix(8)))"
+    }
+
+    var hasExplicitTitle: Bool {
+        title != nil && !title!.isEmpty
     }
 
     var isPlanMode: Bool {
