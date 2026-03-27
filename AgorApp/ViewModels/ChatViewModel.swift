@@ -37,7 +37,19 @@ final class ChatViewModel {
     var isLoadingMessages = false
     var isSendingPrompt = false
     var error: String?
-    var promptText: String = ""
+    var isStoppingSession = false
+    private static let draftKeyPrefix = "agor.draft."
+
+    var promptText: String = "" {
+        didSet {
+            guard let sessionId = currentSessionId else { return }
+            if promptText.isEmpty {
+                UserDefaults.standard.removeObject(forKey: Self.draftKeyPrefix + sessionId)
+            } else {
+                UserDefaults.standard.set(promptText, forKey: Self.draftKeyPrefix + sessionId)
+            }
+        }
+    }
 
     // Collapsed tasks
     var collapsedTaskIds: Set<String> = []
@@ -45,17 +57,19 @@ final class ChatViewModel {
     // Incremented only when a new message arrives at the bottom (not when prepending old ones)
     var scrollToBottomToken: Int = 0
 
+    private var rebuildTask: Task<Void, Never>?
+
     func toggleTaskCollapsed(_ taskId: String) {
         if collapsedTaskIds.contains(taskId) {
             collapsedTaskIds.remove(taskId)
-            rebuildDisplayItems()
+            _rebuildDisplayItemsNow()
             // Load messages for this task if not yet in memory
             if let task = tasks.first(where: { $0.taskId == taskId }) {
                 Task { await loadTaskMessagesIfNeeded(task) }
             }
         } else {
             collapsedTaskIds.insert(taskId)
-            rebuildDisplayItems()
+            _rebuildDisplayItemsNow()
         }
     }
 
@@ -66,6 +80,7 @@ final class ChatViewModel {
     var hasMore = true
     private var currentSkip = 0
     private let pageSize = 50
+    private var messagePollingTimer: Timer?
 
     // Dependencies
     var userId: String
@@ -86,6 +101,7 @@ final class ChatViewModel {
 
     func selectSession(_ sessionId: String) {
         guard sessionId != currentSessionId else { return }
+        stopMessagePolling()
         currentSessionId = sessionId
         messages = []
         tasks = []
@@ -95,11 +111,26 @@ final class ChatViewModel {
         currentSkip = 0
         hasMore = true
         error = nil
+        // Restore draft for this session (set directly to avoid didSet writing back before session is set)
+        promptText = UserDefaults.standard.string(forKey: Self.draftKeyPrefix + sessionId) ?? ""
 
         Task {
             await loadSession(sessionId)
             await loadTasks(sessionId)
             await loadMessages(sessionId)
+            startMessagePolling()
+        }
+    }
+
+    func refreshCurrentSession() {
+        guard let sessionId = currentSessionId else { return }
+        stopMessagePolling()
+        Task {
+            await loadSession(sessionId)
+            await loadTasks(sessionId)
+            resetMessagePagination()
+            await loadMessages(sessionId)
+            startMessagePolling()
         }
     }
 
@@ -253,6 +284,75 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: - Stop Session
+
+    func stopSession() {
+        guard let sessionId = currentSessionId, canStopSession else { return }
+        isStoppingSession = true
+        Task {
+            do {
+                struct EmptyBody: Codable {}
+                _ = try await client.postRaw("/sessions/\(sessionId)/stop", body: EmptyBody())
+            } catch {
+                self.error = "Failed to stop session: \(error.localizedDescription)"
+            }
+            isStoppingSession = false
+        }
+    }
+
+    // MARK: - Message Polling
+
+    func startMessagePolling() {
+        stopMessagePolling()
+        messagePollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            guard let self, let sessionId = self.currentSessionId else { return }
+            Task { await self.checkForNewMessages(sessionId) }
+        }
+    }
+
+    func stopMessagePolling() {
+        messagePollingTimer?.invalidate()
+        messagePollingTimer = nil
+    }
+
+    private func checkForNewMessages(_ sessionId: String) async {
+        guard sessionId == currentSessionId else { return }
+        do {
+            let count: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: ["session_id": sessionId, "$limit": "1"]
+            )
+            let serverTotal = count.total
+            let lastIndex = messages.last?.index ?? 0
+
+            // If server has more messages than we know about, fetch the new ones
+            if serverTotal > messages.count + currentSkip {
+                let newMessages: PaginatedResponse<Message> = try await client.getPaginated(
+                    "/messages",
+                    query: [
+                        "session_id": sessionId,
+                        "index[$gt]": "\(lastIndex)",
+                        "$sort[index]": "1",
+                        "$limit": "50",
+                    ]
+                )
+                guard sessionId == self.currentSessionId else { return }
+                let existingIds = Set(messages.map(\.messageId))
+                let newOnly = newMessages.data.filter { !existingIds.contains($0.messageId) }
+                if !newOnly.isEmpty {
+                    messages.append(contentsOf: newOnly)
+                    rebuildDisplayItems()
+                    scrollToBottomToken += 1
+                }
+            }
+
+            // Also refresh session state
+            await loadSession(sessionId)
+        } catch {
+            // Non-fatal — polling failures are silent
+        }
+    }
+
     // MARK: - Permission Decision
 
     func approvePermission(requestId: String, taskId: String?, scope: PermissionScope) {
@@ -317,6 +417,15 @@ final class ChatViewModel {
     // MARK: - Display Items Builder
 
     func rebuildDisplayItems() {
+        rebuildTask?.cancel()
+        rebuildTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+            _rebuildDisplayItemsNow()
+        }
+    }
+
+    private func _rebuildDisplayItemsNow() {
         var items: [DisplayItem] = []
 
         // Group messages by task_id
@@ -395,6 +504,10 @@ final class ChatViewModel {
 
     // MARK: - State Helpers
 
+    var connectionState: ConnectionState {
+        socketService.connectionState
+    }
+
     var isSessionPromptable: Bool {
         currentSession?.isPromptable ?? false
     }
@@ -419,6 +532,11 @@ final class ChatViewModel {
             }
         }
         return nil
+    }
+
+    var canStopSession: Bool {
+        guard let session = currentSession else { return false }
+        return session.status.isActive && !isStoppingSession
     }
 
     // MARK: - Streaming Handlers

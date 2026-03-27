@@ -76,6 +76,7 @@ struct MainNavigationView: View {
         }
         .task {
             socketService.connect()
+            socketService.startHealthCheck(client: appViewModel.client)
             await navigationVM.loadBoards()
             await appViewModel.authService.fetchCurrentUser()
             chatVM.userId = appViewModel.currentUser?.userId ?? chatVM.userId
@@ -105,6 +106,8 @@ struct MainNavigationView: View {
         switch newPhase {
         case .background:
             wasBackgrounded = true
+            socketService.stopHealthCheck()
+            chatVM.stopMessagePolling()
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
@@ -112,12 +115,11 @@ struct MainNavigationView: View {
             if socketService.connectionState != .connected {
                 socketService.reconnect()
             }
+            socketService.startHealthCheck(client: appViewModel.client)
             // Re-fetch state
             Task {
                 await navigationVM.refresh()
-                if let sessionId = selectedSessionId {
-                    chatVM.selectSession(sessionId)
-                }
+                chatVM.refreshCurrentSession()
             }
 
         default:

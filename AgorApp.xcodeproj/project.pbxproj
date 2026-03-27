@@ -54,6 +54,7 @@
 		EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */; };
 		F0C35104273368720F561695 /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */; };
 		FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */; };
+		FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F4192EE4627122322579D6 /* Repo.swift */; };
 		FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81CFE6381FDD29480EFA395 /* GitVersion.swift */; };
 /* End PBXBuildFile section */
 
@@ -90,6 +91,7 @@
 		C0769CCEA40D22DDA6010D42 /* InputRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputRequest.swift; sourceTree = "<group>"; };
 		C0AD9A555E01E8E4969D922C /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		C7F4192EE4627122322579D6 /* Repo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Repo.swift; sourceTree = "<group>"; };
 		C9C30C2EB6D32E85765466C8 /* Worktree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Worktree.swift; sourceTree = "<group>"; };
 		CE2A809CA0C2D762495B8F4A /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
@@ -238,6 +240,7 @@
 				C0769CCEA40D22DDA6010D42 /* InputRequest.swift */,
 				C0AD9A555E01E8E4969D922C /* Message.swift */,
 				79AA0E541AF2D2E4F02EAE49 /* Permission.swift */,
+				C7F4192EE4627122322579D6 /* Repo.swift */,
 				F6E42D02A86522D0471F54DF /* Session.swift */,
 				3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */,
 				3CAC2691C0FAA7FFDFD5E63F /* User.swift */,
@@ -354,7 +357,6 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/AgorApp/Generated/GitVersion.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -395,6 +397,7 @@
 				03781520E668203C6012378E /* Permission.swift in Sources */,
 				466DD4C435A58213DD5E0AEC /* PermissionCardView.swift in Sources */,
 				3DD0DA4774269186359639D2 /* PromptInputBar.swift in Sources */,
+				FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */,
 				4395876846626D278B46261F /* Session.swift in Sources */,
 				7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */,
 				AD80BBC81E53D8B32913256C /* SidebarView.swift in Sources */,
