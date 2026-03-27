@@ -47,22 +47,56 @@ final class NavigationViewModel {
     var isLoading = false
     var error: String?
 
-    // Sessions needing attention (across all boards)
+    // Stored so @Observable tracks changes and computed sections recompute reactively
+    var favoriteSessionIds: Set<String> = []
+
+    // Sessions needing attention (awaiting permission or input)
     var attentionSessions: [Session] {
-        boardNodes.flatMap { board in
-            board.worktrees.flatMap { wt in
-                wt.sessions.filter(\.status.needsAttention)
-            }
+        boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.filter(\.status.needsAttention) } }
+    }
+
+    // Important sessions: ready-for-prompt + running + favorites + 3 most recent
+    // Excludes attention sessions (they have their own section above)
+    var importantSessions: [Session] {
+        let all = boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
+        let attentionIds = Set(attentionSessions.map(\.sessionId))
+        var seen = Set<String>()
+        var result: [Session] = []
+
+        func add(_ session: Session) {
+            guard !seen.contains(session.sessionId),
+                  !attentionIds.contains(session.sessionId) else { return }
+            seen.insert(session.sessionId)
+            result.append(session)
         }
+
+        // 1. Ready for prompt — agent finished, user hasn't reviewed yet
+        for s in all where s.readyForPrompt == true { add(s) }
+
+        // 2. Running sessions
+        for s in all where s.status == .running { add(s) }
+
+        // 3. Favorites (local)
+        for s in all where favoriteSessionIds.contains(s.sessionId) { add(s) }
+
+        // 4. Last 3 recently updated (not already included)
+        let recent = all
+            .filter { !seen.contains($0.sessionId) && !attentionIds.contains($0.sessionId) }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+            .prefix(3)
+        for s in recent { add(s) }
+
+        return result
     }
 
     private let client: AgorClient
     private let socketService: SocketService
 
-    // MARK: - Expansion Persistence
+    // MARK: - Persistence
 
     private static let collapsedBoardsKey = "agor.collapsedBoardIds"
     private static let collapsedWorktreesKey = "agor.collapsedWorktreeIds"
+    private static let favoritesKey = "agor.favoriteSessionIds"
 
     private var collapsedBoardIds: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: Self.collapsedBoardsKey) ?? []) }
@@ -86,9 +120,20 @@ final class NavigationViewModel {
         collapsedWorktreeIds = collapsed
     }
 
+    func toggleFavorite(_ sessionId: String) {
+        if favoriteSessionIds.contains(sessionId) {
+            favoriteSessionIds.remove(sessionId)
+        } else {
+            favoriteSessionIds.insert(sessionId)
+        }
+        UserDefaults.standard.set(Array(favoriteSessionIds), forKey: Self.favoritesKey)
+    }
+
     init(client: AgorClient, socketService: SocketService) {
         self.client = client
         self.socketService = socketService
+        // Load persisted favorites into stored property so @Observable tracks it
+        self.favoriteSessionIds = Set(UserDefaults.standard.stringArray(forKey: Self.favoritesKey) ?? [])
         setupSocketHandlers()
     }
 
@@ -101,12 +146,10 @@ final class NavigationViewModel {
             let response: PaginatedResponse<Board> = try await client.getPaginated("/boards", query: ["$limit": "50"])
             boardNodes = response.data.map { BoardNode(board: $0) }
 
-            // Auto-expand and load all boards' worktrees
             for node in boardNodes {
                 await loadWorktrees(for: node)
             }
 
-            // Fetch repo names and apply to all worktree nodes
             await loadRepoNames()
         } catch {
             self.error = error.localizedDescription
@@ -124,7 +167,7 @@ final class NavigationViewModel {
                 }
             }
         } catch {
-            // Non-fatal — repo names are display-only
+            // Non-fatal
         }
     }
 
@@ -142,7 +185,6 @@ final class NavigationViewModel {
             boardNode.worktrees = response.data.map { WorktreeNode(worktree: $0) }
             boardNode.isExpanded = !collapsedBoardIds.contains(boardNode.board.boardId)
 
-            // Auto-load sessions for all worktrees
             for wt in boardNode.worktrees {
                 await loadSessions(for: wt)
             }

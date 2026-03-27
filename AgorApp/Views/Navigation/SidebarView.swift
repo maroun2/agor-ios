@@ -13,10 +13,33 @@ struct SidebarView: View {
                         NavigationLink(value: session.sessionId) {
                             SessionRow(session: session, showAttentionBadge: true)
                         }
+                        .contextMenu {
+                            FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                        }
                     }
                 } header: {
                     Label("Needs Attention", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
+                }
+            }
+
+            // Important Section — running, ready for prompt, favorites, 3 most recent
+            if !viewModel.importantSessions.isEmpty {
+                Section {
+                    ForEach(viewModel.importantSessions) { session in
+                        NavigationLink(value: session.sessionId) {
+                            ImportantSessionRow(
+                                session: session,
+                                isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId)
+                            )
+                        }
+                        .contextMenu {
+                            FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                        }
+                    }
+                } header: {
+                    Label("Important", systemImage: "sparkles")
+                        .foregroundStyle(.primary)
                 }
             }
 
@@ -87,6 +110,77 @@ struct SidebarView: View {
     }
 }
 
+// MARK: - Important Session Row
+
+private struct ImportantSessionRow: View {
+    let session: Session
+    let isFavorite: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            AgentIcon(agenticTool: session.agenticTool, size: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.displayTitle)
+                    .font(.subheadline)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    StatusBadge(status: session.status)
+
+                    if session.isPlanMode {
+                        Text("Plan")
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.purple.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+                            .foregroundStyle(.purple)
+                    }
+
+                    Text(session.lastUpdated.relativeTime)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: 4) {
+                if session.readyForPrompt == true {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6))
+                        .foregroundStyle(.blue)
+                }
+                if isFavorite {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Favorite Context Menu Button
+
+private struct FavoriteButton: View {
+    let sessionId: String
+    let viewModel: NavigationViewModel
+
+    var body: some View {
+        let isFav = viewModel.favoriteSessionIds.contains(sessionId)
+        Button {
+            viewModel.toggleFavorite(sessionId)
+        } label: {
+            Label(
+                isFav ? "Remove from Favorites" : "Add to Favorites",
+                systemImage: isFav ? "star.slash" : "star"
+            )
+        }
+    }
+}
+
 // MARK: - Worktree Section (expandable)
 
 private struct WorktreeSection: View {
@@ -113,6 +207,9 @@ private struct WorktreeSection: View {
                 ForEach(worktreeNode.sessions) { session in
                     NavigationLink(value: session.sessionId) {
                         SessionRow(session: session)
+                    }
+                    .contextMenu {
+                        FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
                     }
                 }
             }
