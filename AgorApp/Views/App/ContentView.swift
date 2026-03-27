@@ -71,6 +71,11 @@ struct MainNavigationView: View {
                 chatVM.selectSession(sessionId)
             }
         }
+        .onChange(of: chatVM.currentSessionId) { _, newValue in
+            if newValue == nil {
+                selectedSessionId = nil
+            }
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             handleScenePhaseChange(from: oldPhase, to: newPhase)
         }
