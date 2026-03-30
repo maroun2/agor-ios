@@ -56,6 +56,12 @@
 		FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */; };
 		FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F4192EE4627122322579D6 /* Repo.swift */; };
 		FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81CFE6381FDD29480EFA395 /* GitVersion.swift */; };
+		5BC90DEA3D09BC4E376DE5D5 /* FileItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = D46507E557BCBBBBCCA66FA7 /* FileItem.swift */; };
+		C00B51517A0485922665FC80 /* SidebarCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */; };
+		161F916CAD4F864313AB9331 /* FileBrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC26E737D8378D838218711 /* FileBrowserViewModel.swift */; };
+		90DAF3F23E00CA2933BEF56C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */; };
+		4735C99E2E79902D9352BDCA /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4797950AB817401E400F304B /* FileBrowserView.swift */; };
+		B43E07D63B8D2086016D8ABD /* FileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8986F110CB68F3E78654C53D /* FileDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,6 +112,12 @@
 		F6E42D02A86522D0471F54DF /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		F81CFE6381FDD29480EFA395 /* GitVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitVersion.swift; sourceTree = "<group>"; };
 		FC71207C8865D4E80E36A220 /* WorktreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRow.swift; sourceTree = "<group>"; };
+		D46507E557BCBBBBCCA66FA7 /* FileItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileItem.swift; sourceTree = "<group>"; };
+		94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCache.swift; sourceTree = "<group>"; };
+		9CC26E737D8378D838218711 /* FileBrowserViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserViewModel.swift; sourceTree = "<group>"; };
+		20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		4797950AB817401E400F304B /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
+		8986F110CB68F3E78654C53D /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +139,7 @@
 			children = (
 				33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */,
 				129D2DB1B28976F25E0C070A /* ContentView.swift */,
+				20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -161,6 +174,7 @@
 			children = (
 				64449C07C2E5A1B6E0D8A9E4 /* AppViewModel.swift */,
 				A65ACB752D15547530061855 /* ChatViewModel.swift */,
+				9CC26E737D8378D838218711 /* FileBrowserViewModel.swift */,
 				121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */,
 			);
 			path = ViewModels;
@@ -195,12 +209,22 @@
 			path = Generated;
 			sourceTree = "<group>";
 		};
+		FF1B94F84BAA16C69BB54FE6 /* FileBrowser */ = {
+			isa = PBXGroup;
+			children = (
+				4797950AB817401E400F304B /* FileBrowserView.swift */,
+				8986F110CB68F3E78654C53D /* FileDetailView.swift */,
+			);
+			path = FileBrowser;
+			sourceTree = "<group>";
+		};
 		819DA584A8B314947E6FB2CD /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				00DD3F9EA6948D1EE91B1AD9 /* App */,
 				D7865E67101F01A0B416A2AB /* Common */,
 				53FA23081B57F456AF2AE352 /* Chat */,
+				FF1B94F84BAA16C69BB54FE6 /* FileBrowser */,
 				89552090F212148D5BABA08A /* MessageBlocks */,
 				019E5A8BACB0E7BD4C1E5EBD /* Navigation */,
 			);
@@ -237,6 +261,7 @@
 			children = (
 				666E9DB8BF3E970CEC5F906F /* AgorTask.swift */,
 				27DC5206FFC124F2944812E0 /* Board.swift */,
+				D46507E557BCBBBBCCA66FA7 /* FileItem.swift */,
 				C0769CCEA40D22DDA6010D42 /* InputRequest.swift */,
 				C0AD9A555E01E8E4969D922C /* Message.swift */,
 				79AA0E541AF2D2E4F02EAE49 /* Permission.swift */,
@@ -262,6 +287,7 @@
 			children = (
 				40F5CC95AB69ABEC9E465619 /* AgorClient.swift */,
 				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
+				94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */,
 				ED3C6C8A44F09215C1E9387E /* SocketService.swift */,
 				DAD882855177D24609BBFF09 /* StreamingService.swift */,
 			);
@@ -384,6 +410,10 @@
 				96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */,
 				947ABC8BCA671B9BDFD1A88B /* ContentView.swift in Sources */,
 				B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */,
+				4735C99E2E79902D9352BDCA /* FileBrowserView.swift in Sources */,
+				161F916CAD4F864313AB9331 /* FileBrowserViewModel.swift in Sources */,
+				B43E07D63B8D2086016D8ABD /* FileDetailView.swift in Sources */,
+				5BC90DEA3D09BC4E376DE5D5 /* FileItem.swift in Sources */,
 				FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */,
 				CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */,
 				069098C39CDE8E9A33B7217C /* InputRequest.swift in Sources */,
@@ -400,6 +430,8 @@
 				FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */,
 				4395876846626D278B46261F /* Session.swift in Sources */,
 				7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */,
+				90DAF3F23E00CA2933BEF56C /* SettingsView.swift in Sources */,
+				C00B51517A0485922665FC80 /* SidebarCache.swift in Sources */,
 				AD80BBC81E53D8B32913256C /* SidebarView.swift in Sources */,
 				05C095D4C93E72284978C4B0 /* SocketService.swift in Sources */,
 				64D1ACBE30C5C6763E589138 /* StatusBadge.swift in Sources */,
