@@ -5,6 +5,8 @@ struct ChatView: View {
     let sessionId: String
 
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var showFileBrowser = false
+    @State private var showResetAlert = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,7 +114,40 @@ struct ChatView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if let session = viewModel.currentSession {
                     HStack(spacing: 8) {
-                        // Stop button - only when session is active
+                        // File browser
+                        if !session.worktreeId.isEmpty {
+                            Button {
+                                showFileBrowser = true
+                            } label: {
+                                Image(systemName: "folder")
+                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 16))
+                            }
+                        }
+
+                        // Archive button
+                        Button {
+                            viewModel.archiveCurrentSession()
+                        } label: {
+                            Image(systemName: "archivebox")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 16))
+                        }
+
+                        // Reset/clean button
+                        Button {
+                            showResetAlert = true
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 16))
+                        }
+
+                        if session.isPlanMode {
+                            PlanModeBadge()
+                        }
+
+                        // Status icon — doubles as stop button when running
                         if viewModel.canStopSession {
                             Button {
                                 HapticFeedback.light()
@@ -127,21 +162,10 @@ struct ChatView: View {
                                         .font(.system(size: 18))
                                 }
                             }
+                        } else {
+                            StatusBadge(status: session.status)
                         }
 
-                        // Archive button
-                        Button {
-                            viewModel.archiveCurrentSession()
-                        } label: {
-                            Image(systemName: "archivebox")
-                                .foregroundStyle(.secondary)
-                                .font(.system(size: 16))
-                        }
-
-                        if session.isPlanMode {
-                            PlanModeBadge()
-                        }
-                        StatusBadge(status: session.status)
                         AgentIcon(agenticTool: session.agenticTool, size: 18)
                     }
                 }
@@ -157,6 +181,22 @@ struct ChatView: View {
                     description: Text("Send a prompt to get started")
                 )
             }
+        }
+        .sheet(isPresented: $showFileBrowser) {
+            if let session = viewModel.currentSession {
+                FileBrowserView(viewModel: FileBrowserViewModel(
+                    worktreeId: session.worktreeId,
+                    client: viewModel.client
+                ))
+            }
+        }
+        .alert("Reset Session?", isPresented: $showResetAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Archive & Reset", role: .destructive) {
+                viewModel.archiveCurrentSession()
+            }
+        } message: {
+            Text("This will archive the current session. You can start a new conversation from the sidebar.")
         }
     }
 }
