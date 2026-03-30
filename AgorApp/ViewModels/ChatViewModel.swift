@@ -84,7 +84,7 @@ final class ChatViewModel {
 
     // Dependencies
     var userId: String
-    private let client: AgorClient
+    let client: AgorClient
     private let socketService: SocketService
     private let streamingService: StreamingService
 

@@ -52,7 +52,7 @@ final class NavigationViewModel {
 
     // Sessions needing attention (awaiting permission or input)
     var attentionSessions: [Session] {
-        boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.filter(\.status.needsAttention) } }
+        boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.filter { $0.status.needsAttention && !$0.isScheduled } } }
     }
 
     // Important sessions: ready-for-prompt + running + favorites + 3 most recent
@@ -91,8 +91,9 @@ final class NavigationViewModel {
         return result
     }
 
-    private let client: AgorClient
+    let client: AgorClient
     private let socketService: SocketService
+    private var pollingTimer: Timer?
 
     // MARK: - Persistence
 
@@ -144,6 +145,20 @@ final class NavigationViewModel {
     func loadBoards() async {
         isLoading = true
         error = nil
+
+        // Load from cache first for instant display
+        if boardNodes.isEmpty, let cached = SidebarCache.load() {
+            boardNodes = cached
+            // Restore expansion state from persisted preferences
+            for node in boardNodes {
+                node.isExpanded = !collapsedBoardIds.contains(node.board.boardId)
+                for wt in node.worktrees {
+                    wt.isExpanded = !collapsedWorktreeIds.contains(wt.worktree.worktreeId)
+                }
+            }
+            isLoading = false
+        }
+
         do {
             let response: PaginatedResponse<Board> = try await client.getPaginated("/boards", query: ["$limit": "50"])
             boardNodes = response.data.map { BoardNode(board: $0) }
@@ -153,6 +168,9 @@ final class NavigationViewModel {
             }
 
             await loadRepoNames()
+
+            // Save to cache after successful load
+            SidebarCache.save(boardNodes: boardNodes)
         } catch {
             self.error = error.localizedDescription
         }
@@ -220,6 +238,27 @@ final class NavigationViewModel {
         await loadBoards()
     }
 
+    func startPolling() {
+        stopPolling()
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.refreshExpandedNodes() }
+        }
+    }
+
+    func stopPolling() {
+        pollingTimer?.invalidate()
+        pollingTimer = nil
+    }
+
+    private func refreshExpandedNodes() async {
+        for board in boardNodes where board.isExpanded {
+            for wt in board.worktrees where wt.isExpanded {
+                await loadSessions(for: wt)
+            }
+        }
+    }
+
     // MARK: - Socket Handlers
 
     private func setupSocketHandlers() {
@@ -272,11 +311,11 @@ final class NavigationViewModel {
         return nil
     }
 
-    func findContext(for sessionId: String) -> (boardName: String, worktreeName: String)? {
+    func findContext(for sessionId: String) -> (boardName: String, worktreeName: String, boardIcon: String)? {
         for board in boardNodes {
             for wt in board.worktrees {
                 if wt.sessions.contains(where: { $0.sessionId == sessionId }) {
-                    return (board.board.name, wt.worktree.displayName)
+                    return (board.board.name, wt.worktree.displayName, board.board.displayIcon)
                 }
             }
         }

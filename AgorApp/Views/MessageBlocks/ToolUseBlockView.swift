@@ -6,31 +6,45 @@ struct ToolUseBlockView: View {
     @State private var isExpanded = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            // Full input JSON
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(formatJSON(content.input))
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .padding(8)
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
+
+                    Image(systemName: toolIcon)
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+
+                    Text(content.name)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.blue)
+
+                    Text(content.inputSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
             }
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: toolIcon)
-                    .font(.caption)
-                    .foregroundStyle(.blue)
+            .buttonStyle(.plain)
 
-                Text(content.name)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.blue)
-
-                Text(content.inputSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            if isExpanded {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(formatJSON(content.input))
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .padding(8)
+                }
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
     }

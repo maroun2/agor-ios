@@ -54,9 +54,34 @@ final class AuthService {
         // Normalize URL
         var url = daemonURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if url.hasSuffix("/") { url.removeLast() }
-        if !url.hasPrefix("http") { url = "http://\(url)" }
 
+        // Strip path components (e.g., /ui)
+        if let components = URLComponents(string: url.hasPrefix("http") ? url : "http://\(url)"),
+           let host = components.host {
+            let port = components.port ?? 3030
+            let scheme = components.scheme ?? "http"
+            url = "\(scheme)://\(host):\(port)"
+        } else {
+            if !url.hasPrefix("http") { url = "http://\(url)" }
+            // Add default port if none specified
+            if let parsed = URLComponents(string: url), parsed.port == nil {
+                url = url + ":3030"
+            }
+        }
+
+        // Validate connection via health check, try both http and https
         client.baseURL = url
+        var validated = await client.healthCheck()
+        if !validated && url.hasPrefix("http://") {
+            let httpsURL = url.replacingOccurrences(of: "http://", with: "https://")
+            client.baseURL = httpsURL
+            if await client.healthCheck() {
+                url = httpsURL
+                validated = true
+            } else {
+                client.baseURL = url // revert
+            }
+        }
 
         struct LoginRequest: Codable {
             let strategy: String

@@ -163,7 +163,9 @@ struct Session: Codable, Identifiable {
     }
 
     var hasExplicitTitle: Bool {
-        title != nil && !title!.isEmpty
+        guard let title, !title.isEmpty else { return false }
+        if title.hasPrefix("[Scheduled run") { return false }
+        return true
     }
 
     var isPlanMode: Bool {
@@ -172,6 +174,10 @@ struct Session: Codable, Identifiable {
 
     var isPromptable: Bool {
         status == .idle || readyForPrompt == true
+    }
+
+    var isScheduled: Bool {
+        scheduledFromWorktree == true || (title?.hasPrefix("[Scheduled ") == true)
     }
 
     enum CodingKeys: String, CodingKey {

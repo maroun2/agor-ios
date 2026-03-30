@@ -14,7 +14,7 @@ struct AgentIcon: View {
 
     private var iconName: String {
         switch agenticTool {
-        case .claudeCode: "brain.head.profile"
+        case .claudeCode: "star.fill"
         case .codex: "cube"
         case .gemini: "diamond"
         case .opencode: "chevron.left.forwardslash.chevron.right"

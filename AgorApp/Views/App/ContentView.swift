@@ -1,4 +1,12 @@
 import SwiftUI
+import UserNotifications
+
+enum ReconnectPhase {
+    case idle
+    case reconnecting
+    case updating
+    case done
+}
 
 struct ContentView: View {
     let appViewModel: AppViewModel
@@ -27,6 +35,8 @@ struct MainNavigationView: View {
     @State private var selectedSessionId: String?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var wasBackgrounded = false
+    @State private var reconnectPhase: ReconnectPhase = .idle
+    @State private var previousSessionStatuses: [String: SessionStatus] = [:]
 
     init(appViewModel: AppViewModel) {
         self.appViewModel = appViewModel
@@ -50,7 +60,13 @@ struct MainNavigationView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 viewModel: navigationVM,
-                selectedSessionId: $selectedSessionId
+                selectedSessionId: $selectedSessionId,
+                appViewModel: appViewModel,
+                socketService: socketService,
+                onLogout: {
+                    socketService.disconnect()
+                    appViewModel.authService.logout()
+                }
             )
         } detail: {
             if let sessionId = selectedSessionId {
@@ -65,6 +81,12 @@ struct MainNavigationView: View {
         }
         .toastOverlay(manager: toastManager) { sessionId in
             selectedSessionId = sessionId
+        }
+        .overlay(alignment: .top) {
+            if reconnectPhase != .idle {
+                ReconnectBanner(phase: reconnectPhase)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .onChange(of: selectedSessionId) { _, newValue in
             if let sessionId = newValue {
@@ -83,24 +105,14 @@ struct MainNavigationView: View {
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
             await navigationVM.loadBoards()
+            navigationVM.startPolling()
             await appViewModel.authService.fetchCurrentUser()
             chatVM.userId = appViewModel.currentUser?.userId ?? chatVM.userId
             setupCrossSessionNotifications()
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 8) {
-                    // Logout button
-                    Button {
-                        socketService.disconnect()
-                        appViewModel.authService.logout()
-                    } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.caption)
-                    }
-
-                    ConnectionIndicator(socketService: socketService)
-                }
+                ConnectionIndicator(socketService: socketService)
             }
         }
     }
@@ -113,18 +125,29 @@ struct MainNavigationView: View {
             wasBackgrounded = true
             socketService.stopHealthCheck()
             chatVM.stopMessagePolling()
+            navigationVM.stopPolling()
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
-            // Reconnect socket
-            if socketService.connectionState != .connected {
-                socketService.reconnect()
-            }
-            socketService.startHealthCheck(client: appViewModel.client)
-            // Re-fetch state
             Task {
+                // Phase 1: Reconnecting
+                if socketService.connectionState != .connected {
+                    withAnimation { reconnectPhase = .reconnecting }
+                    socketService.reconnect()
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+
+                // Phase 2: Updating data
+                withAnimation { reconnectPhase = .updating }
+                socketService.startHealthCheck(client: appViewModel.client)
                 await navigationVM.refresh()
+                navigationVM.startPolling()
                 chatVM.refreshCurrentSession()
+
+                // Phase 3: Done
+                withAnimation { reconnectPhase = .done }
+                try? await Task.sleep(for: .milliseconds(800))
+                withAnimation { reconnectPhase = .idle }
             }
 
         default:
@@ -135,8 +158,10 @@ struct MainNavigationView: View {
     // MARK: - Cross-Session Notifications
 
     private func setupCrossSessionNotifications() {
-        // Subscribe to session patches for toast notifications on OTHER sessions
         socketService.onSessionPatched { [self] session in
+            let previousStatus = previousSessionStatuses[session.sessionId]
+            previousSessionStatuses[session.sessionId] = session.status
+
             // Only toast for OTHER sessions
             guard session.sessionId != selectedSessionId else { return }
 
@@ -182,6 +207,67 @@ struct MainNavigationView: View {
             default:
                 break
             }
+
+            // Fire local notification when session transitions running → idle
+            if previousStatus == .running && session.status == .idle {
+                let isFavorited = navigationVM.favoriteSessionIds.contains(session.sessionId)
+                if isFavorited || scenePhase != .active {
+                    fireLocalNotification(
+                        title: "Session finished",
+                        body: "'\(title)' is ready for your next prompt",
+                        sessionId: session.sessionId
+                    )
+                }
+            }
+        }
+    }
+
+    private func fireLocalNotification(title: String, body: String, sessionId: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["sessionId": sessionId]
+
+        let request = UNNotificationRequest(
+            identifier: "session-\(sessionId)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+}
+
+// MARK: - Reconnect Banner
+
+private struct ReconnectBanner: View {
+    let phase: ReconnectPhase
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if phase == .done {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Text(phaseLabel)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+    }
+
+    private var phaseLabel: String {
+        switch phase {
+        case .idle: ""
+        case .reconnecting: "Reconnecting..."
+        case .updating: "Updating..."
+        case .done: "Updated"
         }
     }
 }

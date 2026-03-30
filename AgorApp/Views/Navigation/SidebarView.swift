@@ -3,6 +3,10 @@ import SwiftUI
 struct SidebarView: View {
     let viewModel: NavigationViewModel
     @Binding var selectedSessionId: String?
+    let appViewModel: AppViewModel
+    let socketService: SocketService
+    let onLogout: () -> Void
+    @State private var showSettings = false
 
     var body: some View {
         List(selection: $selectedSessionId) {
@@ -10,8 +14,9 @@ struct SidebarView: View {
             if !viewModel.attentionSessions.isEmpty {
                 Section {
                     ForEach(viewModel.attentionSessions) { session in
+                        let ctx = viewModel.findContext(for: session.sessionId)
                         NavigationLink(value: session.sessionId) {
-                            SessionRow(session: session, showAttentionBadge: true)
+                            AttentionSessionRow(session: session, boardIcon: ctx?.boardIcon)
                         }
                         .contextMenu {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
@@ -35,7 +40,8 @@ struct SidebarView: View {
                                 session: session,
                                 isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
                                 boardName: ctx?.boardName,
-                                worktreeName: ctx?.worktreeName
+                                worktreeName: ctx?.worktreeName,
+                                boardIcon: ctx?.boardIcon
                             )
                         }
                         .contextMenu {
@@ -58,6 +64,9 @@ struct SidebarView: View {
                         set: {
                             boardNode.isExpanded = $0
                             viewModel.setBoardExpanded(boardNode.board.boardId, expanded: $0)
+                            if $0 {
+                                Task { await viewModel.loadWorktrees(for: boardNode) }
+                            }
                         }
                     )) {
                         if boardNode.isLoading {
@@ -79,19 +88,36 @@ struct SidebarView: View {
                 }
             }
 
-            // Version footer
+            // Settings footer
             Section {
-                Text(GitVersion.hash)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                Button {
+                    showSettings = true
+                } label: {
+                    HStack {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(.secondary)
+                        Text("Settings")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(GitVersion.hash)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .listRowBackground(Color.clear)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("Agor")
         .refreshable {
             await viewModel.refresh()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView(
+                appViewModel: appViewModel,
+                socketService: socketService,
+                onLogout: onLogout
+            )
         }
         .overlay {
             if viewModel.isLoading && viewModel.boardNodes.isEmpty {
@@ -124,10 +150,16 @@ private struct ImportantSessionRow: View {
     let isFavorite: Bool
     let boardName: String?
     let worktreeName: String?
+    let boardIcon: String?
 
     var body: some View {
         HStack(spacing: 10) {
-            AgentIcon(agenticTool: session.agenticTool, size: 24)
+            if let boardIcon {
+                Text(boardIcon)
+                    .font(.title3)
+            } else {
+                AgentIcon(agenticTool: session.agenticTool, size: 24)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.displayTitle)
@@ -178,6 +210,39 @@ private struct ImportantSessionRow: View {
     }
 }
 
+// MARK: - Attention Session Row
+
+private struct AttentionSessionRow: View {
+    let session: Session
+    let boardIcon: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let boardIcon {
+                Text(boardIcon)
+                    .font(.title3)
+            } else {
+                AgentIcon(agenticTool: session.agenticTool, size: 24)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.displayTitle)
+                    .font(.subheadline)
+                    .lineLimit(1)
+
+                StatusBadge(status: session.status)
+            }
+
+            Spacer()
+
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+                .font(.caption)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - Favorite Context Menu Button
 
 private struct FavoriteButton: View {
@@ -218,6 +283,7 @@ private struct WorktreeSection: View {
     let worktreeNode: WorktreeNode
     let viewModel: NavigationViewModel
     @Binding var selectedSessionId: String?
+    @State private var showFileBrowser = false
 
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
@@ -225,6 +291,9 @@ private struct WorktreeSection: View {
             set: {
                 worktreeNode.isExpanded = $0
                 viewModel.setWorktreeExpanded(worktreeNode.worktree.worktreeId, expanded: $0)
+                if $0 {
+                    Task { await viewModel.loadSessions(for: worktreeNode) }
+                }
             }
         )) {
             if worktreeNode.isLoading {
@@ -254,5 +323,18 @@ private struct WorktreeSection: View {
             )
         }
         .selectionDisabled()
+        .contextMenu {
+            Button {
+                showFileBrowser = true
+            } label: {
+                Label("Browse Files", systemImage: "folder")
+            }
+        }
+        .sheet(isPresented: $showFileBrowser) {
+            FileBrowserView(viewModel: FileBrowserViewModel(
+                worktreeId: worktreeNode.worktree.worktreeId,
+                client: viewModel.client
+            ))
+        }
     }
 }

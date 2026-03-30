@@ -4,14 +4,22 @@ struct StatusBadge: View {
     let status: SessionStatus
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
+        Image(systemName: statusIcon)
+            .font(.system(size: 12))
+            .foregroundStyle(statusColor)
+            .symbolEffect(.rotate, isActive: status == .running)
+    }
 
-            Text(status.displayLabel)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private var statusIcon: String {
+        switch status {
+        case .idle: "checkmark.circle"
+        case .running: "arrow.trianglehead.2.clockwise.circle"
+        case .stopping: "stop.circle"
+        case .awaitingPermission: "lock.fill"
+        case .awaitingInput: "questionmark.circle.fill"
+        case .timedOut: "clock.badge.exclamationmark"
+        case .completed: "checkmark.circle.fill"
+        case .failed: "xmark.circle.fill"
         }
     }
 
@@ -34,14 +42,23 @@ struct TaskStatusBadge: View {
     let status: TaskStatus
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
+        Image(systemName: statusIcon)
+            .font(.system(size: 12))
+            .foregroundStyle(statusColor)
+            .symbolEffect(.rotate, isActive: status == .running)
+    }
 
-            Text(status.displayLabel)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private var statusIcon: String {
+        switch status {
+        case .created: "circle.dashed"
+        case .running: "arrow.trianglehead.2.clockwise.circle"
+        case .stopping: "stop.circle"
+        case .awaitingPermission: "lock.fill"
+        case .awaitingInput: "questionmark.circle.fill"
+        case .timedOut: "clock.badge.exclamationmark"
+        case .completed: "checkmark.circle.fill"
+        case .failed: "xmark.circle.fill"
+        case .stopped: "stop.circle.fill"
         }
     }
 
