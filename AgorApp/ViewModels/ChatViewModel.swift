@@ -319,6 +319,46 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: - Reset Session (Archive + Create New)
+
+    func resetSession(onRefreshSidebar: @escaping () async -> Void) {
+        guard let session = currentSession, let sessionId = currentSessionId else { return }
+        let worktreeId = session.worktreeId
+        let agenticTool = session.agenticTool
+
+        Task {
+            do {
+                // Archive the current session
+                struct ArchiveBody: Codable { let archived: Bool }
+                let _: Session = try await client.patch("/sessions/\(sessionId)", body: ArchiveBody(archived: true))
+
+                // Create a new session on the same worktree
+                struct CreateSessionBody: Codable {
+                    let worktreeId: String
+                    let agenticTool: AgenticToolName
+                    let status: SessionStatus
+                    enum CodingKeys: String, CodingKey {
+                        case worktreeId = "worktree_id"
+                        case agenticTool = "agentic_tool"
+                        case status
+                    }
+                }
+                let newSession: Session = try await client.post(
+                    "/sessions",
+                    body: CreateSessionBody(worktreeId: worktreeId, agenticTool: agenticTool, status: .idle)
+                )
+
+                // Switch to the new session
+                selectSession(newSession.sessionId)
+
+                // Refresh sidebar so it shows the new session
+                await onRefreshSidebar()
+            } catch {
+                self.error = "Failed to reset session"
+            }
+        }
+    }
+
     // MARK: - Stop Session
 
     func stopSession() {

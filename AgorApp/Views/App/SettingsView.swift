@@ -57,6 +57,12 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+
+                    NavigationLink {
+                        DebugLogView(client: appViewModel.client)
+                    } label: {
+                        Label("Debug Log", systemImage: "doc.text.magnifyingglass")
+                    }
                 }
 
                 // About Section

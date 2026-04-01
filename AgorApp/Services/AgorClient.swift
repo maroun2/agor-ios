@@ -78,6 +78,7 @@ final class AgorClient {
     // MARK: - Request Building
 
     private func buildRequest(path: String, method: String, query: [String: String] = [:]) throws -> URLRequest {
+        AppLogger.shared.log("\(method) \(path)", level: .debug, category: "HTTP")
         guard !baseURL.isEmpty else { throw AgorAPIError.invalidURL }
 
         var components = URLComponents(string: "\(baseURL)\(path)")
@@ -112,6 +113,7 @@ final class AgorClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            AppLogger.shared.log("Network error: \(error.localizedDescription)", level: .error, category: "HTTP")
             throw AgorAPIError.networkError(error)
         }
 
@@ -136,6 +138,7 @@ final class AgorClient {
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let body = String(data: data, encoding: .utf8)
+            AppLogger.shared.log("HTTP \(httpResponse.statusCode): \(body ?? "no body")", level: .error, category: "HTTP")
             throw AgorAPIError.httpError(statusCode: httpResponse.statusCode, body: body)
         }
 
@@ -146,6 +149,7 @@ final class AgorClient {
 
     private func refreshAccessToken() async throws {
         guard !isRefreshing, let refresh = refreshToken else { throw AgorAPIError.tokenRefreshFailed }
+        AppLogger.shared.log("Refreshing access token", category: "Auth")
         isRefreshing = true
         defer { isRefreshing = false }
 

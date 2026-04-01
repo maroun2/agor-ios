@@ -1,12 +1,19 @@
 import SwiftUI
 
+/// Identifiable wrapper for presenting a file browser sheet for a specific worktree.
+private struct FileBrowserTarget: Identifiable {
+    let id: String // worktreeId
+}
+
 struct SidebarView: View {
     let viewModel: NavigationViewModel
     @Binding var selectedSessionId: String?
     let appViewModel: AppViewModel
     let socketService: SocketService
     let onLogout: () -> Void
+
     @State private var showSettings = false
+    @State private var fileBrowserTarget: FileBrowserTarget?
 
     var body: some View {
         List(selection: $selectedSessionId) {
@@ -20,7 +27,9 @@ struct SidebarView: View {
                         }
                         .contextMenu {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                            BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
                             Divider()
+                            CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
                             ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
@@ -46,7 +55,9 @@ struct SidebarView: View {
                         }
                         .contextMenu {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                            BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
                             Divider()
+                            CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
                             ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
@@ -77,6 +88,7 @@ struct SidebarView: View {
                                 WorktreeSection(
                                     worktreeNode: wtNode,
                                     viewModel: viewModel,
+                                    socketService: socketService,
                                     selectedSessionId: $selectedSessionId
                                 )
                             }
@@ -118,6 +130,12 @@ struct SidebarView: View {
                 socketService: socketService,
                 onLogout: onLogout
             )
+        }
+        .sheet(item: $fileBrowserTarget) { target in
+            FileBrowserView(viewModel: FileBrowserViewModel(
+                worktreeId: target.id,
+                socketService: socketService
+            ))
         }
         .overlay {
             if viewModel.isLoading && viewModel.boardNodes.isEmpty {
@@ -277,13 +295,81 @@ private struct ArchiveButton: View {
     }
 }
 
+// MARK: - Browse Files Context Menu Button
+
+private struct BrowseFilesButton: View {
+    let worktreeId: String
+    @Binding var target: FileBrowserTarget?
+
+    var body: some View {
+        Button {
+            target = FileBrowserTarget(id: worktreeId)
+        } label: {
+            Label("Browse Files", systemImage: "folder")
+        }
+    }
+}
+
+// MARK: - Clean & Reset Context Menu Button
+
+private struct CleanAndResetButton: View {
+    let session: Session
+    let viewModel: NavigationViewModel
+    @Binding var selectedSessionId: String?
+
+    var body: some View {
+        Button(role: .destructive) {
+            Task {
+                await cleanAndReset()
+            }
+        } label: {
+            Label("Clean & Reset", systemImage: "arrow.counterclockwise")
+        }
+    }
+
+    private func cleanAndReset() async {
+        // 1. Archive the current session
+        await viewModel.archiveSession(session.sessionId)
+
+        // 2. Create a new session on the same worktree
+        struct CreateSessionBody: Codable {
+            let worktreeId: String
+            let agenticTool: String
+            let status: String
+
+            enum CodingKeys: String, CodingKey {
+                case worktreeId = "worktree_id"
+                case agenticTool = "agentic_tool"
+                case status
+            }
+        }
+
+        do {
+            let body = CreateSessionBody(
+                worktreeId: session.worktreeId,
+                agenticTool: session.agenticTool.rawValue,
+                status: "idle"
+            )
+            let newSession: Session = try await viewModel.client.post("/sessions", body: body)
+            selectedSessionId = newSession.sessionId
+        } catch {
+            // Session creation failed — still refresh to show archived state
+        }
+
+        // 3. Refresh sidebar
+        await viewModel.refresh()
+    }
+}
+
 // MARK: - Worktree Section (expandable)
 
 private struct WorktreeSection: View {
     let worktreeNode: WorktreeNode
     let viewModel: NavigationViewModel
+    let socketService: SocketService
     @Binding var selectedSessionId: String?
     @State private var showFileBrowser = false
+    @State private var sessionFileBrowserWorktreeId: String?
 
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
@@ -310,7 +396,13 @@ private struct WorktreeSection: View {
                     }
                     .contextMenu {
                         FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                        Button {
+                            sessionFileBrowserWorktreeId = session.worktreeId
+                        } label: {
+                            Label("Browse Files", systemImage: "folder")
+                        }
                         Divider()
+                        CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
                         ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                     }
                 }
@@ -333,7 +425,16 @@ private struct WorktreeSection: View {
         .sheet(isPresented: $showFileBrowser) {
             FileBrowserView(viewModel: FileBrowserViewModel(
                 worktreeId: worktreeNode.worktree.worktreeId,
-                client: viewModel.client
+                socketService: socketService
+            ))
+        }
+        .sheet(item: Binding(
+            get: { sessionFileBrowserWorktreeId.map { FileBrowserTarget(id: $0) } },
+            set: { sessionFileBrowserWorktreeId = $0?.id }
+        )) { target in
+            FileBrowserView(viewModel: FileBrowserViewModel(
+                worktreeId: target.id,
+                socketService: socketService
             ))
         }
     }

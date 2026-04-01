@@ -10,11 +10,11 @@ final class FileBrowserViewModel {
     var isLoadingFile = false
 
     let worktreeId: String
-    private let client: AgorClient
+    private let socketService: SocketService
 
-    init(worktreeId: String, client: AgorClient) {
+    init(worktreeId: String, socketService: SocketService) {
         self.worktreeId = worktreeId
-        self.client = client
+        self.socketService = socketService
     }
 
     // Directories at current path
@@ -50,7 +50,11 @@ final class FileBrowserViewModel {
         isLoading = true
         error = nil
         do {
-            files = try await client.get("/file", query: ["worktree_id": worktreeId])
+            // Use Socket.IO like the web UI — auth is resolved at socket connection level
+            files = try await socketService.serviceFind(
+                service: "file",
+                query: ["worktree_id": worktreeId]
+            )
         } catch {
             self.error = "Failed to load files: \(error.localizedDescription)"
         }
@@ -82,10 +86,12 @@ final class FileBrowserViewModel {
         isLoadingFile = true
         fileDetail = nil
         do {
-            var allowed = CharacterSet.urlPathAllowed
-            allowed.remove("/")
-            let encodedPath = filePath.addingPercentEncoding(withAllowedCharacters: allowed) ?? filePath
-            fileDetail = try await client.get("/file/\(encodedPath)", query: ["worktree_id": worktreeId])
+            // Use Socket.IO like the web UI
+            fileDetail = try await socketService.serviceGet(
+                service: "file",
+                id: filePath,
+                query: ["worktree_id": worktreeId]
+            )
         } catch {
             self.error = "Failed to load file: \(error.localizedDescription)"
         }

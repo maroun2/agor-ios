@@ -4,7 +4,7 @@ import Foundation
 
 @Observable
 final class BoardNode: Identifiable {
-    let board: Board
+    var board: Board
     var worktrees: [WorktreeNode] = []
     var isExpanded = false
     var isLoading = false
@@ -22,7 +22,7 @@ final class BoardNode: Identifiable {
 
 @Observable
 final class WorktreeNode: Identifiable {
-    let worktree: Worktree
+    var worktree: Worktree
     var sessions: [Session] = []
     var repoName: String?
     var isExpanded = false
@@ -161,10 +161,25 @@ final class NavigationViewModel {
 
         do {
             let response: PaginatedResponse<Board> = try await client.getPaginated("/boards", query: ["$limit": "50"])
-            boardNodes = response.data.map { BoardNode(board: $0) }
 
+            // Incremental merge: reuse existing BoardNode objects to preserve worktrees/expansion state
+            let existingByBoardId = Dictionary(uniqueKeysWithValues: boardNodes.map { ($0.board.boardId, $0) })
+            var mergedNodes: [BoardNode] = []
+            for board in response.data {
+                if let existing = existingByBoardId[board.boardId] {
+                    existing.board = board
+                    mergedNodes.append(existing)
+                } else {
+                    mergedNodes.append(BoardNode(board: board))
+                }
+            }
+            boardNodes = mergedNodes
+
+            // Only load worktrees for new boards; refresh existing expanded ones
             for node in boardNodes {
-                await loadWorktrees(for: node)
+                if existingByBoardId[node.board.boardId] == nil || node.isExpanded {
+                    await loadWorktrees(for: node)
+                }
             }
 
             await loadRepoNames()
@@ -202,11 +217,25 @@ final class NavigationViewModel {
                     "archived": "false",
                 ]
             )
-            boardNode.worktrees = response.data.map { WorktreeNode(worktree: $0) }
+            // Incremental merge: reuse existing WorktreeNode objects to preserve sessions/expansion state
+            let existingByWtId = Dictionary(uniqueKeysWithValues: boardNode.worktrees.map { ($0.worktree.worktreeId, $0) })
+            var mergedWorktrees: [WorktreeNode] = []
+            for worktree in response.data {
+                if let existing = existingByWtId[worktree.worktreeId] {
+                    existing.worktree = worktree
+                    mergedWorktrees.append(existing)
+                } else {
+                    mergedWorktrees.append(WorktreeNode(worktree: worktree))
+                }
+            }
+            boardNode.worktrees = mergedWorktrees
             boardNode.isExpanded = !collapsedBoardIds.contains(boardNode.board.boardId)
 
+            // Only load sessions for new worktrees; refresh existing expanded ones
             for wt in boardNode.worktrees {
-                await loadSessions(for: wt)
+                if existingByWtId[wt.worktree.worktreeId] == nil || wt.isExpanded {
+                    await loadSessions(for: wt)
+                }
             }
         } catch {
             // Non-fatal
@@ -226,7 +255,28 @@ final class NavigationViewModel {
                     "archived": "false",
                 ]
             )
-            worktreeNode.sessions = response.data
+            // Incremental merge: update existing sessions in-place, add new, remove deleted
+            let newSessionIds = Set(response.data.map(\.sessionId))
+            var mergedSessions: [Session] = []
+            for session in response.data {
+                mergedSessions.append(session)
+            }
+            // Only assign if content actually changed to avoid unnecessary SwiftUI redraws
+            let oldIds = Set(worktreeNode.sessions.map(\.sessionId))
+            if oldIds != newSessionIds || worktreeNode.sessions.count != mergedSessions.count {
+                worktreeNode.sessions = mergedSessions
+            } else {
+                // Update individual sessions that may have changed
+                for (index, session) in mergedSessions.enumerated() {
+                    if index < worktreeNode.sessions.count,
+                       worktreeNode.sessions[index].sessionId == session.sessionId {
+                        worktreeNode.sessions[index] = session
+                    } else {
+                        worktreeNode.sessions = mergedSessions
+                        break
+                    }
+                }
+            }
             worktreeNode.isExpanded = !collapsedWorktreeIds.contains(worktreeNode.worktree.worktreeId)
         } catch {
             // Non-fatal
