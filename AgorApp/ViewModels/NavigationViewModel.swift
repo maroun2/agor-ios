@@ -284,11 +284,13 @@ final class NavigationViewModel {
             if oldIds != newSessionIds || worktreeNode.sessions.count != mergedSessions.count {
                 worktreeNode.sessions = mergedSessions
             } else {
-                // Update individual sessions that may have changed
+                // Update individual sessions only if they actually changed
                 for (index, session) in mergedSessions.enumerated() {
                     if index < worktreeNode.sessions.count,
                        worktreeNode.sessions[index].sessionId == session.sessionId {
-                        worktreeNode.sessions[index] = session
+                        if worktreeNode.sessions[index] != session {
+                            worktreeNode.sessions[index] = session
+                        }
                     } else {
                         worktreeNode.sessions = mergedSessions
                         break
@@ -356,7 +358,7 @@ final class NavigationViewModel {
                     if session.archived == true {
                         wt.sessions.remove(at: idx)
                         AppLogger.shared.log("[Nav] onSessionPatched \(sessionId): \(oldStatus) → archived", level: .debug, category: "Nav")
-                    } else {
+                    } else if wt.sessions[idx] != session {
                         wt.sessions[idx] = session
                         if oldStatus != newStatus {
                             AppLogger.shared.log("[Nav] onSessionPatched \(sessionId): \(oldStatus) → \(newStatus)", level: .debug, category: "Nav")

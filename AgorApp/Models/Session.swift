@@ -208,3 +208,19 @@ struct Session: Codable, Identifiable {
         case archivedReason = "archived_reason"
     }
 }
+
+// MARK: - Equatable
+
+extension Session: Equatable {
+    static func == (lhs: Session, rhs: Session) -> Bool {
+        lhs.sessionId == rhs.sessionId &&
+        lhs.status == rhs.status &&
+        lhs.title == rhs.title &&
+        lhs.description == rhs.description &&
+        lhs.lastUpdated == rhs.lastUpdated &&
+        lhs.readyForPrompt == rhs.readyForPrompt &&
+        lhs.currentContextUsage == rhs.currentContextUsage &&
+        lhs.archived == rhs.archived &&
+        lhs.messageCount == rhs.messageCount
+    }
+}

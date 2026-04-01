@@ -262,6 +262,10 @@ final class SocketService {
                     do {
                         let result = try self.parseFeathersAck(data)
                         let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        if let rawJson = String(data: jsonData, encoding: .utf8) {
+                            let truncated = rawJson.count > 500 ? String(rawJson.prefix(500)) + "..." : rawJson
+                            AppLogger.shared.log("[Socket] raw response: \(truncated)", level: .debug, category: "Socket")
+                        }
                         AppLogger.shared.log("[Socket] ← find \"\(service)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
                         let decoded = try self.decoder.decode(T.self, from: jsonData)
                         continuation.resume(returning: decoded)
@@ -294,6 +298,10 @@ final class SocketService {
                     do {
                         let result = try self.parseFeathersAck(data)
                         let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        if let rawJson = String(data: jsonData, encoding: .utf8) {
+                            let truncated = rawJson.count > 500 ? String(rawJson.prefix(500)) + "..." : rawJson
+                            AppLogger.shared.log("[Socket] raw response: \(truncated)", level: .debug, category: "Socket")
+                        }
                         AppLogger.shared.log("[Socket] ← get \"\(service)\" id=\"\(id)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
                         let decoded = try self.decoder.decode(T.self, from: jsonData)
                         continuation.resume(returning: decoded)

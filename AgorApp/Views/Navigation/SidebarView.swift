@@ -336,11 +336,13 @@ private struct CleanAndResetButton: View {
             let worktreeId: String
             let agenticTool: String
             let status: String
+            var title: String?
 
             enum CodingKeys: String, CodingKey {
                 case worktreeId = "worktree_id"
                 case agenticTool = "agentic_tool"
                 case status
+                case title
             }
         }
 
@@ -348,7 +350,8 @@ private struct CleanAndResetButton: View {
             let body = CreateSessionBody(
                 worktreeId: session.worktreeId,
                 agenticTool: session.agenticTool.rawValue,
-                status: "idle"
+                status: "idle",
+                title: session.title
             )
             let newSession: Session = try await viewModel.client.post("/sessions", body: body)
             selectedSessionId = newSession.sessionId
@@ -413,15 +416,15 @@ private struct WorktreeSection: View {
                 repoName: worktreeNode.repoName,
                 attentionCount: worktreeNode.attentionCount
             )
-        }
-        .selectionDisabled()
-        .contextMenu {
-            Button {
-                showFileBrowser = true
-            } label: {
-                Label("Browse Files", systemImage: "folder")
+            .contextMenu {
+                Button {
+                    showFileBrowser = true
+                } label: {
+                    Label("Browse Files", systemImage: "folder")
+                }
             }
         }
+        .selectionDisabled()
         .sheet(isPresented: $showFileBrowser) {
             FileBrowserView(viewModel: FileBrowserViewModel(
                 worktreeId: worktreeNode.worktree.worktreeId,
