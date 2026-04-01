@@ -102,21 +102,32 @@ struct MainNavigationView: View {
             handleScenePhaseChange(from: oldPhase, to: newPhase)
         }
         .task {
+            AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
+
+            AppLogger.shared.log("[App] startup: loading boards", level: .debug, category: "App")
             await navigationVM.loadBoards()
+
             // Seed session statuses so we can detect transitions for notifications
+            var seededCount = 0
             for board in navigationVM.boardNodes {
                 for wt in board.worktrees {
                     for session in wt.sessions {
                         previousSessionStatuses[session.sessionId] = session.status
+                        seededCount += 1
                     }
                 }
             }
+            AppLogger.shared.log("[App] startup: seeded \(seededCount) session statuses", level: .debug, category: "App")
+
+            AppLogger.shared.log("[App] startup: polling started", level: .debug, category: "App")
             navigationVM.startPolling()
             await appViewModel.authService.fetchCurrentUser()
             chatVM.userId = appViewModel.currentUser?.userId ?? chatVM.userId
             setupCrossSessionNotifications()
+
+            AppLogger.shared.log("[App] startup: complete", level: .info, category: "App")
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -128,24 +139,31 @@ struct MainNavigationView: View {
     // MARK: - Background Recovery
 
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        let oldLabel = "\(oldPhase)".lowercased()
+        let newLabel = "\(newPhase)".lowercased()
+
         switch newPhase {
         case .background:
             wasBackgrounded = true
             socketService.stopHealthCheck()
             chatVM.stopMessagePolling()
             navigationVM.stopPolling()
+            AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling)", level: .info, category: "App")
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
+            AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
                 // Phase 1: Reconnecting
                 if socketService.connectionState != .connected {
+                    AppLogger.shared.log("[App] reconnect: phase 1 — reconnecting socket", level: .debug, category: "App")
                     withAnimation { reconnectPhase = .reconnecting }
                     socketService.reconnect()
                     try? await Task.sleep(for: .milliseconds(500))
                 }
 
                 // Phase 2: Updating data
+                AppLogger.shared.log("[App] reconnect: phase 2 — refreshing data", level: .debug, category: "App")
                 withAnimation { reconnectPhase = .updating }
                 socketService.startHealthCheck(client: appViewModel.client)
                 await navigationVM.refresh()
@@ -156,6 +174,7 @@ struct MainNavigationView: View {
                 withAnimation { reconnectPhase = .done }
                 try? await Task.sleep(for: .milliseconds(800))
                 withAnimation { reconnectPhase = .idle }
+                AppLogger.shared.log("[App] reconnect: complete", level: .debug, category: "App")
             }
 
         default:
@@ -218,13 +237,17 @@ struct MainNavigationView: View {
 
             // Fire local notification when session transitions running → idle
             if previousStatus == .running && session.status == .idle {
+                let shortId = String(session.sessionId.prefix(6))
                 let isFavorited = navigationVM.favoriteSessionIds.contains(session.sessionId)
                 if isFavorited || wasBackgrounded {
+                    AppLogger.shared.log("[App] notification: session \(shortId) running→idle, firing notification", level: .info, category: "App")
                     fireLocalNotification(
                         title: "Session finished",
                         body: "'\(title)' is ready for your next prompt",
                         sessionId: session.sessionId
                     )
+                } else {
+                    AppLogger.shared.log("[App] notification: session \(shortId) running→idle, skipped (active + not favorited)", level: .debug, category: "App")
                 }
             }
         }

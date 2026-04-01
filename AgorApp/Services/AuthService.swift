@@ -55,6 +55,7 @@ final class AuthService {
         // Normalize URL
         var url = daemonURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if url.hasSuffix("/") { url.removeLast() }
+        let rawInput = url
 
         // Strip path components (e.g., /ui)
         if let components = URLComponents(string: url.hasPrefix("http") ? url : "http://\(url)"),
@@ -78,20 +79,29 @@ final class AuthService {
                 url = url + ":3030"
             }
         }
+        AppLogger.shared.log("[Auth] normalizeURL: \"\(rawInput)\" → \"\(url)\"", level: .debug, category: "Auth")
 
         // Validate connection via health check, try both http and https
         client.baseURL = url
         var validated = await client.healthCheck()
+        if validated {
+            AppLogger.shared.log("[Auth] healthCheck \(url) → OK", level: .info, category: "Auth")
+        } else {
+            AppLogger.shared.log("[Auth] healthCheck \(url) → failed", level: .debug, category: "Auth")
+        }
         if !validated && url.hasPrefix("http://") {
             // When upgrading to HTTPS, strip the dev default port (:3030)
             // since HTTPS typically runs on 443
             var httpsURL = url.replacingOccurrences(of: "http://", with: "https://")
             httpsURL = httpsURL.replacingOccurrences(of: ":3030", with: "")
+            AppLogger.shared.log("[Auth] trying HTTPS fallback: \(httpsURL)", level: .debug, category: "Auth")
             client.baseURL = httpsURL
             if await client.healthCheck() {
+                AppLogger.shared.log("[Auth] healthCheck \(httpsURL) → OK", level: .info, category: "Auth")
                 url = httpsURL
                 validated = true
             } else {
+                AppLogger.shared.log("[Auth] healthCheck \(httpsURL) → failed", level: .debug, category: "Auth")
                 client.baseURL = url // revert
             }
         }
@@ -114,8 +124,10 @@ final class AuthService {
         // Persist
         KeychainHelper.save(url, for: .daemonURL)
         KeychainHelper.save(response.accessToken, for: .accessToken)
+        AppLogger.shared.log("[Auth] token saved to keychain", level: .info, category: "Auth")
         if let refresh = response.refreshToken {
             KeychainHelper.save(refresh, for: .refreshToken)
+            AppLogger.shared.log("[Auth] refresh token saved to keychain", level: .debug, category: "Auth")
         }
         if let userId = response.user?.userId {
             KeychainHelper.save(userId, for: .userId)
@@ -135,6 +147,7 @@ final class AuthService {
         currentUser = nil
         isAuthenticated = false
         KeychainHelper.deleteAll()
+        AppLogger.shared.log("[Auth] keychain: all tokens cleared", level: .info, category: "Auth")
     }
 
     // MARK: - Session Restore
@@ -142,7 +155,7 @@ final class AuthService {
     private func restoreSession() {
         guard let url = KeychainHelper.load(.daemonURL),
               let token = KeychainHelper.load(.accessToken) else {
-            AppLogger.shared.log("No saved session to restore", level: .debug, category: "Auth")
+            AppLogger.shared.log("[Auth] keychain: no saved session found", level: .debug, category: "Auth")
             return
         }
 
@@ -150,11 +163,11 @@ final class AuthService {
         client.accessToken = token
         client.refreshToken = KeychainHelper.load(.refreshToken)
         isAuthenticated = true
-        AppLogger.shared.log("Session restored for \(url)", category: "Auth")
 
         // Restore user from keychain (minimal info)
         if let userId = KeychainHelper.load(.userId),
            let email = KeychainHelper.load(.userEmail) {
+            AppLogger.shared.log("[Auth] keychain: loaded saved session for \(email)", level: .info, category: "Auth")
             currentUser = User(
                 userId: userId,
                 email: email,
@@ -168,6 +181,8 @@ final class AuthService {
                 updatedAt: nil,
                 unixUsername: nil
             )
+        } else {
+            AppLogger.shared.log("[Auth] keychain: session restored for \(url) (no user info cached)", level: .debug, category: "Auth")
         }
     }
 
@@ -181,6 +196,7 @@ final class AuthService {
                 currentUser = user
             }
         } catch {
+            AppLogger.shared.log("[Auth] fetchCurrentUser failed: \(error.localizedDescription)", level: .error, category: "Auth")
             // Non-fatal — we still have the cached info
         }
     }
