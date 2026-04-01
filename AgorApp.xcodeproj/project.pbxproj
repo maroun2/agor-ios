@@ -62,6 +62,8 @@
 		90DAF3F23E00CA2933BEF56C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */; };
 		4735C99E2E79902D9352BDCA /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4797950AB817401E400F304B /* FileBrowserView.swift */; };
 		B43E07D63B8D2086016D8ABD /* FileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8986F110CB68F3E78654C53D /* FileDetailView.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8B9C0D1E2F3A4B5C6D7E8F /* AppLogger.swift */; };
+		F2E1D0C9B8A7F6E5D4C3B2A1 /* DebugLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7E6D5C4B3A2F1E0D9C8B7A /* DebugLogView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -118,6 +120,8 @@
 		20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		4797950AB817401E400F304B /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		8986F110CB68F3E78654C53D /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
+		7A8B9C0D1E2F3A4B5C6D7E8F /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		8F7E6D5C4B3A2F1E0D9C8B7A /* DebugLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLogView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -139,6 +143,7 @@
 			children = (
 				33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */,
 				129D2DB1B28976F25E0C070A /* ContentView.swift */,
+				8F7E6D5C4B3A2F1E0D9C8B7A /* DebugLogView.swift */,
 				20E98BD52B30AF7F459AB7B2 /* SettingsView.swift */,
 			);
 			path = App;
@@ -286,6 +291,7 @@
 			isa = PBXGroup;
 			children = (
 				40F5CC95AB69ABEC9E465619 /* AgorClient.swift */,
+				7A8B9C0D1E2F3A4B5C6D7E8F /* AppLogger.swift */,
 				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
 				94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */,
 				ED3C6C8A44F09215C1E9387E /* SocketService.swift */,
@@ -396,6 +402,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* AppLogger.swift in Sources */,
 				DC7DE9D63126F6C32DA55CD6 /* AgorApp.swift in Sources */,
 				01C64F8019E1DC764E7C07A3 /* AgorClient.swift in Sources */,
 				EDF28A78EAE35B2064B5AB90 /* AgorTask.swift in Sources */,
@@ -410,6 +417,7 @@
 				96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */,
 				947ABC8BCA671B9BDFD1A88B /* ContentView.swift in Sources */,
 				B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */,
+				F2E1D0C9B8A7F6E5D4C3B2A1 /* DebugLogView.swift in Sources */,
 				4735C99E2E79902D9352BDCA /* FileBrowserView.swift in Sources */,
 				161F916CAD4F864313AB9331 /* FileBrowserViewModel.swift in Sources */,
 				B43E07D63B8D2086016D8ABD /* FileDetailView.swift in Sources */,

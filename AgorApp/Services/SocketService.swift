@@ -68,8 +68,12 @@ final class SocketService {
 
     func connect() {
         guard let token = client.accessToken,
-              let url = URL(string: client.baseURL) else { return }
+              let url = URL(string: client.baseURL) else {
+            AppLogger.shared.log("Cannot connect: missing token or URL", level: .warning, category: "Socket")
+            return
+        }
 
+        AppLogger.shared.log("Connecting to \(client.baseURL)", category: "Socket")
         connectionState = .connecting
 
         manager = SocketManager(socketURL: url, config: [
@@ -87,6 +91,7 @@ final class SocketService {
     }
 
     func disconnect() {
+        AppLogger.shared.log("Disconnecting socket", level: .debug, category: "Socket")
         stopHealthCheck()
         socket?.disconnect()
         manager = nil
@@ -130,18 +135,22 @@ final class SocketService {
         guard let socket else { return }
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
+            AppLogger.shared.log("Socket connected", category: "Socket")
             self?.connectionState = .connected
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+            AppLogger.shared.log("Socket disconnected", category: "Socket")
             self?.connectionState = .disconnected
         }
 
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            AppLogger.shared.log("Socket reconnecting", category: "Socket")
             self?.connectionState = .reconnecting
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            AppLogger.shared.log("Socket reconnect attempt", level: .debug, category: "Socket")
             self?.connectionState = .reconnecting
         }
 
@@ -218,6 +227,82 @@ final class SocketService {
                 self?.onThinkingEnd?(event)
             }
         }
+    }
+
+    // MARK: - FeathersJS Service Calls (via Socket.IO)
+
+    /// Call a FeathersJS service `find` method via the authenticated socket connection.
+    /// This mirrors how the web UI calls services — auth is resolved at socket level.
+    func serviceFind<T: Decodable>(service: String, query: [String: Any]) async throws -> T {
+        guard let socket, socket.status == .connected else {
+            throw AgorAPIError.notAuthenticated
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("find", service, ["query": query])
+                .timingOut(after: 30) { data in
+                    do {
+                        let result = try self.parseFeathersAck(data)
+                        let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        let decoded = try self.decoder.decode(T.self, from: jsonData)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
+    }
+
+    /// Call a FeathersJS service `get` method via the authenticated socket connection.
+    func serviceGet<T: Decodable>(service: String, id: String, query: [String: Any] = [:]) async throws -> T {
+        guard let socket, socket.status == .connected else {
+            throw AgorAPIError.notAuthenticated
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("get", service, id, ["query": query])
+                .timingOut(after: 30) { data in
+                    do {
+                        let result = try self.parseFeathersAck(data)
+                        let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        let decoded = try self.decoder.decode(T.self, from: jsonData)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
+    }
+
+    /// Parse FeathersJS socket ack response.
+    /// FeathersJS ack format: success → [null, result], error → [errorObject]
+    private func parseFeathersAck(_ data: [Any]) throws -> Any {
+        // Timeout
+        if let first = data.first as? String, first == "NO ACK" {
+            throw AgorAPIError.networkError(URLError(.timedOut))
+        }
+
+        // Error: single element that's a dict with "code" key
+        if data.count == 1, let errorDict = data[0] as? [String: Any], errorDict["code"] != nil {
+            let code = errorDict["code"] as? Int ?? 500
+            let message = errorDict["message"] as? String ?? "Unknown error"
+            throw AgorAPIError.httpError(statusCode: code, body: message)
+        }
+
+        // Success: [null, result]
+        if data.count >= 2 {
+            if data[1] is NSNull {
+                throw AgorAPIError.httpError(statusCode: 404, body: "Not found")
+            }
+            return data[1]
+        }
+
+        // Single result (no null prefix)
+        if let first = data.first, !(first is NSNull) {
+            return first
+        }
+
+        throw AgorAPIError.networkError(URLError(.cannotParseResponse))
     }
 
     // MARK: - Decoding Helpers

@@ -70,7 +70,7 @@ struct MainNavigationView: View {
             )
         } detail: {
             if let sessionId = selectedSessionId {
-                ChatView(viewModel: chatVM, sessionId: sessionId)
+                ChatView(viewModel: chatVM, sessionId: sessionId, socketService: socketService, navigationVM: navigationVM)
             } else {
                 ContentUnavailableView(
                     "Select a Session",
@@ -105,6 +105,14 @@ struct MainNavigationView: View {
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
             await navigationVM.loadBoards()
+            // Seed session statuses so we can detect transitions for notifications
+            for board in navigationVM.boardNodes {
+                for wt in board.worktrees {
+                    for session in wt.sessions {
+                        previousSessionStatuses[session.sessionId] = session.status
+                    }
+                }
+            }
             navigationVM.startPolling()
             await appViewModel.authService.fetchCurrentUser()
             chatVM.userId = appViewModel.currentUser?.userId ?? chatVM.userId
@@ -211,7 +219,7 @@ struct MainNavigationView: View {
             // Fire local notification when session transitions running → idle
             if previousStatus == .running && session.status == .idle {
                 let isFavorited = navigationVM.favoriteSessionIds.contains(session.sessionId)
-                if isFavorited || scenePhase != .active {
+                if isFavorited || wasBackgrounded {
                     fireLocalNotification(
                         title: "Session finished",
                         body: "'\(title)' is ready for your next prompt",

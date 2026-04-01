@@ -3,6 +3,8 @@ import SwiftUI
 struct ChatView: View {
     let viewModel: ChatViewModel
     let sessionId: String
+    let socketService: SocketService
+    let navigationVM: NavigationViewModel
 
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showFileBrowser = false
@@ -186,17 +188,19 @@ struct ChatView: View {
             if let session = viewModel.currentSession {
                 FileBrowserView(viewModel: FileBrowserViewModel(
                     worktreeId: session.worktreeId,
-                    client: viewModel.client
+                    socketService: socketService
                 ))
             }
         }
         .alert("Reset Session?", isPresented: $showResetAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Archive & Reset", role: .destructive) {
-                viewModel.archiveCurrentSession()
+                viewModel.resetSession {
+                    await navigationVM.refresh()
+                }
             }
         } message: {
-            Text("This will archive the current session. You can start a new conversation from the sidebar.")
+            Text("This will archive the current session and create a new one on the same worktree.")
         }
     }
 }

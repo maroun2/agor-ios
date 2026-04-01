@@ -47,6 +47,7 @@ final class AuthService {
     // MARK: - Login
 
     func login(daemonURL: String, email: String, password: String) async throws {
+        AppLogger.shared.log("Login attempt for \(email) at \(daemonURL)", category: "Auth")
         isLoading = true
         error = nil
         defer { isLoading = false }
@@ -58,13 +59,22 @@ final class AuthService {
         // Strip path components (e.g., /ui)
         if let components = URLComponents(string: url.hasPrefix("http") ? url : "http://\(url)"),
            let host = components.host {
-            let port = components.port ?? 3030
             let scheme = components.scheme ?? "http"
-            url = "\(scheme)://\(host):\(port)"
+            if let explicitPort = components.port {
+                // User provided an explicit port — always use it
+                url = "\(scheme)://\(host):\(explicitPort)"
+            } else if scheme == "https" {
+                // HTTPS with no port — omit port (443 is implicit)
+                url = "\(scheme)://\(host)"
+            } else {
+                // HTTP with no port — default to 3030 (dev default)
+                url = "\(scheme)://\(host):3030"
+            }
         } else {
             if !url.hasPrefix("http") { url = "http://\(url)" }
-            // Add default port if none specified
-            if let parsed = URLComponents(string: url), parsed.port == nil {
+            // Add default port only for http if none specified
+            if let parsed = URLComponents(string: url), parsed.port == nil,
+               parsed.scheme != "https" {
                 url = url + ":3030"
             }
         }
@@ -73,7 +83,10 @@ final class AuthService {
         client.baseURL = url
         var validated = await client.healthCheck()
         if !validated && url.hasPrefix("http://") {
-            let httpsURL = url.replacingOccurrences(of: "http://", with: "https://")
+            // When upgrading to HTTPS, strip the dev default port (:3030)
+            // since HTTPS typically runs on 443
+            var httpsURL = url.replacingOccurrences(of: "http://", with: "https://")
+            httpsURL = httpsURL.replacingOccurrences(of: ":3030", with: "")
             client.baseURL = httpsURL
             if await client.healthCheck() {
                 url = httpsURL
@@ -96,6 +109,7 @@ final class AuthService {
         client.refreshToken = response.refreshToken
         currentUser = response.user
         isAuthenticated = true
+        AppLogger.shared.log("Login successful for \(email)", category: "Auth")
 
         // Persist
         KeychainHelper.save(url, for: .daemonURL)
@@ -114,6 +128,7 @@ final class AuthService {
     // MARK: - Logout
 
     func logout() {
+        AppLogger.shared.log("User logged out", category: "Auth")
         client.accessToken = nil
         client.refreshToken = nil
         client.baseURL = ""
@@ -126,12 +141,16 @@ final class AuthService {
 
     private func restoreSession() {
         guard let url = KeychainHelper.load(.daemonURL),
-              let token = KeychainHelper.load(.accessToken) else { return }
+              let token = KeychainHelper.load(.accessToken) else {
+            AppLogger.shared.log("No saved session to restore", level: .debug, category: "Auth")
+            return
+        }
 
         client.baseURL = url
         client.accessToken = token
         client.refreshToken = KeychainHelper.load(.refreshToken)
         isAuthenticated = true
+        AppLogger.shared.log("Session restored for \(url)", category: "Auth")
 
         // Restore user from keychain (minimal info)
         if let userId = KeychainHelper.load(.userId),
