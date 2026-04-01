@@ -101,6 +101,7 @@ final class ChatViewModel {
 
     func selectSession(_ sessionId: String) {
         guard sessionId != currentSessionId else { return }
+        AppLogger.shared.log("[Chat] selectSession \(sessionId)", level: .info, category: "Chat")
         stopMessagePolling()
         currentSessionId = sessionId
         messages = []
@@ -163,6 +164,7 @@ final class ChatViewModel {
             )
             if currentSessionId == sessionId {
                 tasks = response.data
+                AppLogger.shared.log("[Chat] loadTasks: \(response.data.count) tasks loaded", level: .debug, category: "Chat")
                 // Collapse all tasks except the last one
                 let lastId = response.data.last?.taskId
                 collapsedTaskIds = Set(response.data.compactMap { $0.taskId != lastId ? $0.taskId : nil })
@@ -195,6 +197,7 @@ final class ChatViewModel {
                 )
                 if currentSessionId == sessionId {
                     messages = response.data
+                    AppLogger.shared.log("[Chat] loadMessages: \(response.data.count) messages loaded", level: .debug, category: "Chat")
                     hasMore = startSkip > 0
                     // currentSkip tracks how many messages from the tail we've loaded
                     // For "load earlier", we go backwards from startSkip
@@ -216,12 +219,14 @@ final class ChatViewModel {
                 )
                 if currentSessionId == sessionId {
                     messages = response.data + messages  // prepend older page
+                    AppLogger.shared.log("[Chat] loadMessages: \(response.data.count) messages loaded", level: .debug, category: "Chat")
                     hasMore = prevSkip > 0
                     currentSkip = prevSkip
                     rebuildDisplayItems()
                 }
             }
         } catch {
+            AppLogger.shared.log("[Chat] loadMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
             self.error = "Failed to load messages"
         }
         isLoadingMessages = false
@@ -269,6 +274,7 @@ final class ChatViewModel {
     func sendPrompt() {
         let text = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let sessionId = currentSessionId else { return }
+        AppLogger.shared.log("[Chat] sendPrompt to \(sessionId) (\(text.count) chars)", level: .debug, category: "Chat")
         promptText = ""
         isSendingPrompt = true
 
@@ -282,6 +288,7 @@ final class ChatViewModel {
                     body: PromptBody(prompt: text)
                 )
             } catch {
+                AppLogger.shared.log("[Chat] sendPrompt ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
                 self.error = "Failed to send prompt: \(error.localizedDescription)"
             }
             isSendingPrompt = false
@@ -308,6 +315,7 @@ final class ChatViewModel {
 
     func archiveCurrentSession() {
         guard let sessionId = currentSessionId else { return }
+        AppLogger.shared.log("[Chat] archiveSession \(sessionId)", level: .info, category: "Chat")
         Task {
             do {
                 struct ArchiveBody: Codable { let archived: Bool }
@@ -329,6 +337,7 @@ final class ChatViewModel {
         Task {
             do {
                 // Archive the current session
+                AppLogger.shared.log("[Chat] resetSession: archiving \(sessionId)", level: .info, category: "Chat")
                 struct ArchiveBody: Codable { let archived: Bool }
                 let _: Session = try await client.patch("/sessions/\(sessionId)", body: ArchiveBody(archived: true))
 
@@ -347,6 +356,7 @@ final class ChatViewModel {
                     "/sessions",
                     body: CreateSessionBody(worktreeId: worktreeId, agenticTool: agenticTool, status: .idle)
                 )
+                AppLogger.shared.log("[Chat] resetSession: created new session \(newSession.sessionId)", level: .info, category: "Chat")
 
                 // Switch to the new session
                 selectSession(newSession.sessionId)
@@ -354,6 +364,7 @@ final class ChatViewModel {
                 // Refresh sidebar so it shows the new session
                 await onRefreshSidebar()
             } catch {
+                AppLogger.shared.log("[Chat] resetSession ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
                 self.error = "Failed to reset session"
             }
         }

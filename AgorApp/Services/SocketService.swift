@@ -76,6 +76,9 @@ final class SocketService {
         AppLogger.shared.log("Connecting to \(client.baseURL)", category: "Socket")
         connectionState = .connecting
 
+        let tokenPrefix = String(token.prefix(8))
+        AppLogger.shared.log("[Socket] Authenticating socket with token \(tokenPrefix)...", level: .debug, category: "Socket")
+
         manager = SocketManager(socketURL: url, config: [
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
@@ -157,30 +160,35 @@ final class SocketService {
         // FeathersJS CRUD events: "<service> <action>"
         socket.on("sessions patched") { [weak self] data, _ in
             self?.handleDecodable(data) { (session: Session) in
+                AppLogger.shared.log("[Socket] ← event \"sessions patched\" sessionId=\(session.id) status=\(session.status)", level: .debug, category: "Socket")
                 self?.sessionPatchedHandlers.forEach { $0(session) }
             }
         }
 
         socket.on("tasks created") { [weak self] data, _ in
             self?.handleDecodable(data) { (task: AgorTask) in
+                AppLogger.shared.log("[Socket] ← event \"tasks created\" taskId=\(task.id)", level: .debug, category: "Socket")
                 self?.taskCreatedHandlers.forEach { $0(task) }
             }
         }
 
         socket.on("tasks patched") { [weak self] data, _ in
             self?.handleDecodable(data) { (task: AgorTask) in
+                AppLogger.shared.log("[Socket] ← event \"tasks patched\" taskId=\(task.id) status=\(task.status)", level: .debug, category: "Socket")
                 self?.taskPatchedHandlers.forEach { $0(task) }
             }
         }
 
         socket.on("messages created") { [weak self] data, _ in
             self?.handleDecodable(data) { (message: Message) in
+                AppLogger.shared.log("[Socket] ← event \"messages created\" messageId=\(message.id)", level: .debug, category: "Socket")
                 self?.messageCreatedHandlers.forEach { $0(message) }
             }
         }
 
         socket.on("messages patched") { [weak self] data, _ in
             self?.handleDecodable(data) { (message: Message) in
+                AppLogger.shared.log("[Socket] ← event \"messages patched\" messageId=\(message.id)", level: .debug, category: "Socket")
                 self?.messagePatchedHandlers.forEach { $0(message) }
             }
         }
@@ -188,6 +196,7 @@ final class SocketService {
         // Streaming events
         socket.on("messages streaming:start") { [weak self] data, _ in
             self?.handleDecodable(data) { (event: StreamingStartEvent) in
+                AppLogger.shared.log("[Socket] ← event \"messages streaming:start\" messageId=\(event.messageId)", level: .debug, category: "Socket")
                 self?.onStreamingStart?(event)
             }
         }
@@ -200,18 +209,21 @@ final class SocketService {
 
         socket.on("messages streaming:end") { [weak self] data, _ in
             self?.handleDecodable(data) { (event: StreamingEndEvent) in
+                AppLogger.shared.log("[Socket] ← event \"messages streaming:end\" messageId=\(event.messageId)", level: .debug, category: "Socket")
                 self?.onStreamingEnd?(event)
             }
         }
 
         socket.on("messages streaming:error") { [weak self] data, _ in
             self?.handleDecodable(data) { (event: StreamingErrorEvent) in
+                AppLogger.shared.log("[Socket] ← event \"messages streaming:error\" messageId=\(event.messageId)", level: .error, category: "Socket")
                 self?.onStreamingError?(event)
             }
         }
 
         socket.on("messages thinking:start") { [weak self] data, _ in
             self?.handleDecodable(data) { (event: ThinkingStartEvent) in
+                AppLogger.shared.log("[Socket] ← event \"messages thinking:start\" messageId=\(event.messageId)", level: .debug, category: "Socket")
                 self?.onThinkingStart?(event)
             }
         }
@@ -224,6 +236,7 @@ final class SocketService {
 
         socket.on("messages thinking:end") { [weak self] data, _ in
             self?.handleDecodable(data) { (event: ThinkingEndEvent) in
+                AppLogger.shared.log("[Socket] ← event \"messages thinking:end\" messageId=\(event.messageId)", level: .debug, category: "Socket")
                 self?.onThinkingEnd?(event)
             }
         }
@@ -238,15 +251,26 @@ final class SocketService {
             throw AgorAPIError.notAuthenticated
         }
 
+        let queryDesc = (try? String(data: JSONSerialization.data(withJSONObject: query, options: [.sortedKeys]), encoding: .utf8)) ?? "\(query)"
+        AppLogger.shared.log("[Socket] → find \"\(service)\" query=\(queryDesc)", level: .debug, category: "Socket")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
         return try await withCheckedThrowingContinuation { continuation in
             socket.emitWithAck("find", service, ["query": query])
                 .timingOut(after: 30) { data in
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                     do {
                         let result = try self.parseFeathersAck(data)
                         let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        AppLogger.shared.log("[Socket] ← find \"\(service)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
                         let decoded = try self.decoder.decode(T.self, from: jsonData)
                         continuation.resume(returning: decoded)
                     } catch {
+                        if let first = data.first as? String, first == "NO ACK" {
+                            AppLogger.shared.log("[Socket] ← find \"\(service)\" ERROR: timeout after 30s", level: .error, category: "Socket")
+                        } else {
+                            AppLogger.shared.log("[Socket] ← find \"\(service)\" ERROR: \(error.localizedDescription) (\(elapsedMs)ms)", level: .error, category: "Socket")
+                        }
                         continuation.resume(throwing: error)
                     }
                 }
@@ -259,15 +283,26 @@ final class SocketService {
             throw AgorAPIError.notAuthenticated
         }
 
+        let queryDesc = query.isEmpty ? "" : " query=\((try? String(data: JSONSerialization.data(withJSONObject: query, options: [.sortedKeys]), encoding: .utf8)) ?? "\(query)")"
+        AppLogger.shared.log("[Socket] → get \"\(service)\" id=\"\(id)\"\(queryDesc)", level: .debug, category: "Socket")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
         return try await withCheckedThrowingContinuation { continuation in
             socket.emitWithAck("get", service, id, ["query": query])
                 .timingOut(after: 30) { data in
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                     do {
                         let result = try self.parseFeathersAck(data)
                         let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        AppLogger.shared.log("[Socket] ← get \"\(service)\" id=\"\(id)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
                         let decoded = try self.decoder.decode(T.self, from: jsonData)
                         continuation.resume(returning: decoded)
                     } catch {
+                        if let first = data.first as? String, first == "NO ACK" {
+                            AppLogger.shared.log("[Socket] ← get \"\(service)\" id=\"\(id)\" ERROR: timeout after 30s", level: .error, category: "Socket")
+                        } else {
+                            AppLogger.shared.log("[Socket] ← get \"\(service)\" id=\"\(id)\" ERROR: \(error.localizedDescription) (\(elapsedMs)ms)", level: .error, category: "Socket")
+                        }
                         continuation.resume(throwing: error)
                     }
                 }

@@ -47,6 +47,8 @@ final class FileBrowserViewModel {
     }
 
     func loadFiles() async {
+        let displayPath = currentPath.isEmpty ? "/" : currentPath
+        AppLogger.shared.log("[FileBrowser] loadFiles worktreeId=\(worktreeId) path=\"\(displayPath)\"", level: .debug, category: "FileBrowser")
         isLoading = true
         error = nil
         do {
@@ -55,7 +57,11 @@ final class FileBrowserViewModel {
                 service: "file",
                 query: ["worktree_id": worktreeId]
             )
+            let dirCount = currentDirectories.count
+            let fileCount = currentFiles.count
+            AppLogger.shared.log("[FileBrowser] loadFiles OK: \(dirCount) dirs, \(fileCount) files", level: .debug, category: "FileBrowser")
         } catch {
+            AppLogger.shared.log("[FileBrowser] loadFiles ERROR: \(error.localizedDescription)", level: .error, category: "FileBrowser")
             self.error = "Failed to load files: \(error.localizedDescription)"
         }
         isLoading = false
@@ -67,6 +73,7 @@ final class FileBrowserViewModel {
         } else {
             currentPath = currentPath + "/" + directory
         }
+        AppLogger.shared.log("[FileBrowser] navigate to \"\(currentPath)\"", level: .debug, category: "FileBrowser")
     }
 
     func navigateUp() {
@@ -76,13 +83,17 @@ final class FileBrowserViewModel {
         } else {
             currentPath = ""
         }
+        let displayPath = currentPath.isEmpty ? "root" : currentPath
+        AppLogger.shared.log("[FileBrowser] navigate up to \"\(displayPath)\"", level: .debug, category: "FileBrowser")
     }
 
     func navigateToRoot() {
         currentPath = ""
+        AppLogger.shared.log("[FileBrowser] navigate to root", level: .debug, category: "FileBrowser")
     }
 
     func loadFileDetail(_ filePath: String) async {
+        AppLogger.shared.log("[FileBrowser] loadFileDetail path=\"\(filePath)\" worktreeId=\(worktreeId)", level: .debug, category: "FileBrowser")
         isLoadingFile = true
         fileDetail = nil
         do {
@@ -92,7 +103,10 @@ final class FileBrowserViewModel {
                 id: filePath,
                 query: ["worktree_id": worktreeId]
             )
+            let byteCount = fileDetail?.content?.utf8.count ?? 0
+            AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
         } catch {
+            AppLogger.shared.log("[FileBrowser] loadFileDetail ERROR: \(error.localizedDescription)", level: .error, category: "FileBrowser")
             self.error = "Failed to load file: \(error.localizedDescription)"
         }
         isLoadingFile = false

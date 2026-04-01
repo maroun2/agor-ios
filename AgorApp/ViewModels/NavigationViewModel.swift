@@ -148,6 +148,7 @@ final class NavigationViewModel {
 
         // Load from cache first for instant display
         if boardNodes.isEmpty, let cached = SidebarCache.load() {
+            AppLogger.shared.log("[Nav] cache: loaded \(cached.count) boards from disk", level: .debug, category: "Nav")
             boardNodes = cached
             // Restore expansion state from persisted preferences
             for node in boardNodes {
@@ -157,6 +158,8 @@ final class NavigationViewModel {
                 }
             }
             isLoading = false
+        } else if boardNodes.isEmpty {
+            AppLogger.shared.log("[Nav] cache: no cached data", level: .debug, category: "Nav")
         }
 
         do {
@@ -165,15 +168,22 @@ final class NavigationViewModel {
             // Incremental merge: reuse existing BoardNode objects to preserve worktrees/expansion state
             let existingByBoardId = Dictionary(uniqueKeysWithValues: boardNodes.map { ($0.board.boardId, $0) })
             var mergedNodes: [BoardNode] = []
+            var newCount = 0
+            var existingCount = 0
             for board in response.data {
                 if let existing = existingByBoardId[board.boardId] {
                     existing.board = board
                     mergedNodes.append(existing)
+                    existingCount += 1
                 } else {
                     mergedNodes.append(BoardNode(board: board))
+                    newCount += 1
                 }
             }
+            let removedCount = existingByBoardId.count - existingCount
             boardNodes = mergedNodes
+
+            AppLogger.shared.log("[Nav] loadBoards: \(mergedNodes.count) boards (\(newCount) new, \(existingCount) existing, \(removedCount) removed)", level: .debug, category: "Nav")
 
             // Only load worktrees for new boards; refresh existing expanded ones
             for node in boardNodes {
@@ -186,8 +196,10 @@ final class NavigationViewModel {
 
             // Save to cache after successful load
             SidebarCache.save(boardNodes: boardNodes)
+            AppLogger.shared.log("[Nav] cache: saved \(boardNodes.count) boards to disk", level: .debug, category: "Nav")
         } catch {
             self.error = error.localizedDescription
+            AppLogger.shared.log("[Nav] loadBoards failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
         isLoading = false
     }
@@ -202,7 +214,7 @@ final class NavigationViewModel {
                 }
             }
         } catch {
-            // Non-fatal
+            AppLogger.shared.log("[Nav] loadRepoNames failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
     }
 
@@ -231,6 +243,9 @@ final class NavigationViewModel {
             boardNode.worktrees = mergedWorktrees
             boardNode.isExpanded = !collapsedBoardIds.contains(boardNode.board.boardId)
 
+            let boardId = String(boardNode.board.boardId.prefix(8))
+            AppLogger.shared.log("[Nav] loadWorktrees boardId=\(boardId): \(mergedWorktrees.count) worktrees", level: .debug, category: "Nav")
+
             // Only load sessions for new worktrees; refresh existing expanded ones
             for wt in boardNode.worktrees {
                 if existingByWtId[wt.worktree.worktreeId] == nil || wt.isExpanded {
@@ -238,7 +253,8 @@ final class NavigationViewModel {
                 }
             }
         } catch {
-            // Non-fatal
+            let boardId = String(boardNode.board.boardId.prefix(8))
+            AppLogger.shared.log("[Nav] loadWorktrees boardId=\(boardId) failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
         boardNode.isLoading = false
     }
@@ -263,6 +279,8 @@ final class NavigationViewModel {
             }
             // Only assign if content actually changed to avoid unnecessary SwiftUI redraws
             let oldIds = Set(worktreeNode.sessions.map(\.sessionId))
+            let newIds = newSessionIds.subtracting(oldIds)
+            let removedIds = oldIds.subtracting(newSessionIds)
             if oldIds != newSessionIds || worktreeNode.sessions.count != mergedSessions.count {
                 worktreeNode.sessions = mergedSessions
             } else {
@@ -278,8 +296,12 @@ final class NavigationViewModel {
                 }
             }
             worktreeNode.isExpanded = !collapsedWorktreeIds.contains(worktreeNode.worktree.worktreeId)
+
+            let wtId = String(worktreeNode.worktree.worktreeId.prefix(8))
+            AppLogger.shared.log("[Nav] loadSessions worktreeId=\(wtId): \(mergedSessions.count) sessions (\(newIds.count) new, \(removedIds.count) removed)", level: .debug, category: "Nav")
         } catch {
-            // Non-fatal
+            let wtId = String(worktreeNode.worktree.worktreeId.prefix(8))
+            AppLogger.shared.log("[Nav] loadSessions worktreeId=\(wtId) failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
         worktreeNode.isLoading = false
     }
@@ -290,6 +312,7 @@ final class NavigationViewModel {
 
     func startPolling() {
         stopPolling()
+        AppLogger.shared.log("[Nav] polling started (45s)", level: .info, category: "Nav")
         pollingTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { await self.refreshExpandedNodes() }
@@ -297,12 +320,18 @@ final class NavigationViewModel {
     }
 
     func stopPolling() {
+        if pollingTimer != nil {
+            AppLogger.shared.log("[Nav] polling stopped", level: .info, category: "Nav")
+        }
         pollingTimer?.invalidate()
         pollingTimer = nil
     }
 
     private func refreshExpandedNodes() async {
-        for board in boardNodes where board.isExpanded {
+        let expandedBoards = boardNodes.filter(\.isExpanded)
+        let expandedWorktrees = expandedBoards.flatMap { $0.worktrees.filter(\.isExpanded) }
+        AppLogger.shared.log("[Nav] refreshExpandedNodes: \(expandedBoards.count) boards, \(expandedWorktrees.count) worktrees", level: .debug, category: "Nav")
+        for board in expandedBoards {
             for wt in board.worktrees where wt.isExpanded {
                 await loadSessions(for: wt)
             }
@@ -321,10 +350,17 @@ final class NavigationViewModel {
         for board in boardNodes {
             for wt in board.worktrees {
                 if let idx = wt.sessions.firstIndex(where: { $0.sessionId == session.sessionId }) {
+                    let oldStatus = wt.sessions[idx].status.rawValue
+                    let newStatus = session.status.rawValue
+                    let sessionId = String(session.sessionId.prefix(8))
                     if session.archived == true {
                         wt.sessions.remove(at: idx)
+                        AppLogger.shared.log("[Nav] onSessionPatched \(sessionId): \(oldStatus) → archived", level: .debug, category: "Nav")
                     } else {
                         wt.sessions[idx] = session
+                        if oldStatus != newStatus {
+                            AppLogger.shared.log("[Nav] onSessionPatched \(sessionId): \(oldStatus) → \(newStatus)", level: .debug, category: "Nav")
+                        }
                     }
                     return
                 }
@@ -344,7 +380,7 @@ final class NavigationViewModel {
                 }
             }
         } catch {
-            // Non-fatal
+            AppLogger.shared.log("[Nav] archiveSession \(String(sessionId.prefix(8))) failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
     }
 
