@@ -12,7 +12,8 @@ struct FileDetailView: View {
                 ScrollView {
                     if detail.encoding == "base64", isImageFile(filePath) {
                         // Image display
-                        if let data = Data(base64Encoded: detail.content),
+                        if let content = detail.content,
+                           let data = Data(base64Encoded: content),
                            let uiImage = UIImage(data: data) {
                             Image(uiImage: uiImage)
                                 .resizable()
@@ -22,12 +23,16 @@ struct FileDetailView: View {
                             Text("Unable to display image")
                                 .foregroundStyle(.secondary)
                         }
-                    } else {
+                    } else if let content = detail.content {
                         // Text display
-                        Text(detail.content)
+                        Text(content)
                             .font(.system(.caption, design: .monospaced))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    } else {
+                        Text("No content available")
+                            .foregroundStyle(.secondary)
                             .padding()
                     }
                 }

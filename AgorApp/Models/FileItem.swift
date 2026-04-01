@@ -3,9 +3,9 @@ import Foundation
 struct FileListItem: Codable, Identifiable {
     let path: String
     let title: String
-    let size: Int
+    var size: Int?
     let lastModified: String
-    let isText: Bool
+    var isText: Bool?
     var mimeType: String?
 
     var id: String { path }
@@ -44,6 +44,7 @@ struct FileListItem: Codable, Identifiable {
     }
 
     var formattedSize: String {
+        guard let size else { return "—" }
         if size < 1024 { return "\(size) B" }
         if size < 1024 * 1024 { return "\(size / 1024) KB" }
         return String(format: "%.1f MB", Double(size) / (1024 * 1024))
@@ -58,12 +59,12 @@ struct FileListItem: Codable, Identifiable {
 struct FileDetail: Codable {
     let path: String
     let title: String
-    let size: Int
+    var size: Int?
     let lastModified: String
-    let isText: Bool
+    var isText: Bool?
     var mimeType: String?
-    let content: String
-    let encoding: String
+    var content: String?
+    var encoding: String?
 
     enum CodingKeys: String, CodingKey {
         case path, title, size, isText, mimeType, content, encoding

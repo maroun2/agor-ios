@@ -333,6 +333,7 @@ final class ChatViewModel {
         guard let session = currentSession, let sessionId = currentSessionId else { return }
         let worktreeId = session.worktreeId
         let agenticTool = session.agenticTool
+        let sessionTitle = session.title
 
         Task {
             do {
@@ -346,15 +347,17 @@ final class ChatViewModel {
                     let worktreeId: String
                     let agenticTool: AgenticToolName
                     let status: SessionStatus
+                    var title: String?
                     enum CodingKeys: String, CodingKey {
                         case worktreeId = "worktree_id"
                         case agenticTool = "agentic_tool"
                         case status
+                        case title
                     }
                 }
                 let newSession: Session = try await client.post(
                     "/sessions",
-                    body: CreateSessionBody(worktreeId: worktreeId, agenticTool: agenticTool, status: .idle)
+                    body: CreateSessionBody(worktreeId: worktreeId, agenticTool: agenticTool, status: .idle, title: sessionTitle)
                 )
                 AppLogger.shared.log("[Chat] resetSession: created new session \(newSession.sessionId)", level: .info, category: "Chat")
 

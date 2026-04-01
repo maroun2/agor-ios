@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 enum ReconnectPhase {
     case idle
@@ -36,7 +35,7 @@ struct MainNavigationView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var wasBackgrounded = false
     @State private var reconnectPhase: ReconnectPhase = .idle
-    @State private var previousSessionStatuses: [String: SessionStatus] = [:]
+    @State private var notificationManager = NotificationManager.shared
 
     init(appViewModel: AppViewModel) {
         self.appViewModel = appViewModel
@@ -92,6 +91,7 @@ struct MainNavigationView: View {
             if let sessionId = newValue {
                 chatVM.selectSession(sessionId)
             }
+            notificationManager.activeSessionId = newValue
         }
         .onChange(of: chatVM.currentSessionId) { _, newValue in
             if newValue == nil {
@@ -101,6 +101,15 @@ struct MainNavigationView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             handleScenePhaseChange(from: oldPhase, to: newPhase)
         }
+        .onChange(of: notificationManager.pendingNavigationSessionId) { _, sessionId in
+            if let sessionId {
+                selectedSessionId = sessionId
+                notificationManager.pendingNavigationSessionId = nil
+            }
+        }
+        .onChange(of: navigationVM.favoriteSessionIds) { _, newValue in
+            notificationManager.favoriteSessionIds = newValue
+        }
         .task {
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
             socketService.connect()
@@ -109,23 +118,43 @@ struct MainNavigationView: View {
             AppLogger.shared.log("[App] startup: loading boards", level: .debug, category: "App")
             await navigationVM.loadBoards()
 
-            // Seed session statuses so we can detect transitions for notifications
-            var seededCount = 0
-            for board in navigationVM.boardNodes {
-                for wt in board.worktrees {
-                    for session in wt.sessions {
-                        previousSessionStatuses[session.sessionId] = session.status
-                        seededCount += 1
-                    }
-                }
-            }
-            AppLogger.shared.log("[App] startup: seeded \(seededCount) session statuses", level: .debug, category: "App")
+            // Seed session statuses into NotificationManager (reference type — always current)
+            let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
+            notificationManager.seedStatuses(from: allSessions)
 
             AppLogger.shared.log("[App] startup: polling started", level: .debug, category: "App")
             navigationVM.startPolling()
             await appViewModel.authService.fetchCurrentUser()
             chatVM.userId = appViewModel.currentUser?.userId ?? chatVM.userId
-            setupCrossSessionNotifications()
+
+            // Setup notification handling via NotificationManager (reference semantics — always current)
+            socketService.onSessionPatched { session in
+                // Update notification state
+                if let transition = notificationManager.handleSessionUpdate(session) {
+                    if notificationManager.shouldNotify(for: transition) {
+                        notificationManager.fireNotification(
+                            title: "Session finished",
+                            body: "'\(transition.displayTitle)' is ready for your next prompt",
+                            sessionId: transition.sessionId
+                        )
+                    }
+                }
+
+                // Still show toasts for other sessions
+                guard session.sessionId != selectedSessionId else { return }
+                let title = session.displayTitle
+                switch session.status {
+                case .awaitingPermission:
+                    toastManager.show(ToastMessage(title: "'\(title)' needs permission", subtitle: "Tap to review", icon: "exclamationmark.shield", sessionId: session.sessionId, type: .permission))
+                case .awaitingInput:
+                    toastManager.show(ToastMessage(title: "'\(title)' is asking a question", subtitle: "Tap to answer", icon: "questionmark.circle", sessionId: session.sessionId, type: .input))
+                case .completed:
+                    toastManager.show(ToastMessage(title: "'\(title)' completed", subtitle: nil, icon: "checkmark.circle", sessionId: session.sessionId, type: .completed))
+                case .failed:
+                    toastManager.show(ToastMessage(title: "'\(title)' failed", subtitle: nil, icon: "xmark.circle", sessionId: session.sessionId, type: .info))
+                default: break
+                }
+            }
 
             AppLogger.shared.log("[App] startup: complete", level: .info, category: "App")
         }
@@ -145,6 +174,7 @@ struct MainNavigationView: View {
         switch newPhase {
         case .background:
             wasBackgrounded = true
+            notificationManager.isBackgrounded = true
             socketService.stopHealthCheck()
             chatVM.stopMessagePolling()
             navigationVM.stopPolling()
@@ -152,6 +182,7 @@ struct MainNavigationView: View {
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
+            notificationManager.isBackgrounded = false
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
                 // Phase 1: Reconnecting
@@ -170,6 +201,10 @@ struct MainNavigationView: View {
                 navigationVM.startPolling()
                 chatVM.refreshCurrentSession()
 
+                // Check for missed transitions while backgrounded
+                let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
+                notificationManager.checkMissedTransitions(currentSessions: allSessions)
+
                 // Phase 3: Done
                 withAnimation { reconnectPhase = .done }
                 try? await Task.sleep(for: .milliseconds(800))
@@ -182,91 +217,6 @@ struct MainNavigationView: View {
         }
     }
 
-    // MARK: - Cross-Session Notifications
-
-    private func setupCrossSessionNotifications() {
-        socketService.onSessionPatched { [self] session in
-            let previousStatus = previousSessionStatuses[session.sessionId]
-            previousSessionStatuses[session.sessionId] = session.status
-
-            // Only toast for OTHER sessions
-            guard session.sessionId != selectedSessionId else { return }
-
-            let title = session.displayTitle
-
-            switch session.status {
-            case .awaitingPermission:
-                toastManager.show(ToastMessage(
-                    title: "'\(title)' needs permission",
-                    subtitle: "Tap to review",
-                    icon: "exclamationmark.shield",
-                    sessionId: session.sessionId,
-                    type: .permission
-                ))
-
-            case .awaitingInput:
-                toastManager.show(ToastMessage(
-                    title: "'\(title)' is asking a question",
-                    subtitle: "Tap to answer",
-                    icon: "questionmark.circle",
-                    sessionId: session.sessionId,
-                    type: .input
-                ))
-
-            case .completed:
-                toastManager.show(ToastMessage(
-                    title: "'\(title)' completed",
-                    subtitle: nil,
-                    icon: "checkmark.circle",
-                    sessionId: session.sessionId,
-                    type: .completed
-                ))
-
-            case .failed:
-                toastManager.show(ToastMessage(
-                    title: "'\(title)' failed",
-                    subtitle: nil,
-                    icon: "xmark.circle",
-                    sessionId: session.sessionId,
-                    type: .info
-                ))
-
-            default:
-                break
-            }
-
-            // Fire local notification when session transitions running → idle
-            if previousStatus == .running && session.status == .idle {
-                let shortId = String(session.sessionId.prefix(6))
-                let isFavorited = navigationVM.favoriteSessionIds.contains(session.sessionId)
-                if isFavorited || wasBackgrounded {
-                    AppLogger.shared.log("[App] notification: session \(shortId) running→idle, firing notification", level: .info, category: "App")
-                    fireLocalNotification(
-                        title: "Session finished",
-                        body: "'\(title)' is ready for your next prompt",
-                        sessionId: session.sessionId
-                    )
-                } else {
-                    AppLogger.shared.log("[App] notification: session \(shortId) running→idle, skipped (active + not favorited)", level: .debug, category: "App")
-                }
-            }
-        }
-    }
-
-    private func fireLocalNotification(title: String, body: String, sessionId: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        content.userInfo = ["sessionId": sessionId]
-
-        let request = UNNotificationRequest(
-            identifier: "session-\(sessionId)-\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-        )
-        UNUserNotificationCenter.current().add(request)
-    }
 }
 
 // MARK: - Reconnect Banner
