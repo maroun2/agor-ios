@@ -98,6 +98,19 @@ final class StreamingService {
         notifyChange()
     }
 
+    // MARK: - Cleanup
+
+    /// Clear all active streams for a session (e.g., on reconnect or when session becomes idle)
+    func clearStreams(for sessionId: String) {
+        let keysToRemove = activeStreams.filter { $0.value.sessionId == sessionId }.map(\.key)
+        guard !keysToRemove.isEmpty else { return }
+        for key in keysToRemove {
+            activeStreams.removeValue(forKey: key)
+        }
+        AppLogger.shared.log("[Streaming] cleared \(keysToRemove.count) stale streams for session \(String(sessionId.prefix(8)))", level: .debug, category: "Streaming")
+        notifyChange()
+    }
+
     // MARK: - Session Change
 
     func getStreams(for sessionId: String) -> [StreamingMessage] {

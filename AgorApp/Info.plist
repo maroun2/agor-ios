@@ -30,6 +30,14 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.agor.AgorApp.session-poll</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string></string>
 </dict>

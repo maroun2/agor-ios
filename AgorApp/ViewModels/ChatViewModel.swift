@@ -130,6 +130,9 @@ final class ChatViewModel {
     func refreshCurrentSession() {
         guard let sessionId = currentSessionId else { return }
         stopMessagePolling()
+        // Clear stale streaming state (e.g., missed thinking:end while backgrounded)
+        streamingService.clearStreams(for: sessionId)
+        activeStreams = streamingService.activeStreams
         Task {
             await loadSession(sessionId)
             await loadTasks(sessionId)
@@ -293,6 +296,45 @@ final class ChatViewModel {
             }
             isSendingPrompt = false
         }
+    }
+
+    // MARK: - File Upload
+
+    var isUploading = false
+
+    func uploadAndInsertReference(fileData: Data, fileName: String, mimeType: String) {
+        guard let sessionId = currentSessionId else { return }
+        isUploading = true
+        Task {
+            do {
+                let response = try await client.uploadFile(
+                    sessionId: sessionId,
+                    fileData: fileData,
+                    fileName: fileName,
+                    mimeType: mimeType
+                )
+                if let file = response.files.first {
+                    let reference = "@\(file.path)"
+                    if promptText.isEmpty {
+                        promptText = reference + " "
+                    } else {
+                        promptText += " " + reference + " "
+                    }
+                    AppLogger.shared.log("[Chat] uploaded \(fileName) → \(file.path)", level: .info, category: "Chat")
+                }
+            } catch {
+                self.error = "Upload failed: \(error.localizedDescription)"
+                AppLogger.shared.log("[Chat] upload ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
+            }
+            isUploading = false
+        }
+    }
+
+    func uploadDebugLog() {
+        let logText = AppLogger.shared.export()
+        guard let data = logText.data(using: .utf8) else { return }
+        let fileName = "debug-log-\(Int(Date().timeIntervalSince1970)).txt"
+        uploadAndInsertReference(fileData: data, fileName: fileName, mimeType: "text/plain")
     }
 
     // MARK: - Mark Viewed
@@ -588,6 +630,12 @@ final class ChatViewModel {
         socketService.onSessionPatched { [weak self] session in
             guard let self, session.sessionId == self.currentSessionId else { return }
             self.currentSession = session
+            // Clear stale streams when session becomes idle (handles missed thinking:end)
+            if session.status == .idle {
+                self.streamingService.clearStreams(for: session.sessionId)
+                self.activeStreams = self.streamingService.activeStreams
+                self.rebuildDisplayItems()
+            }
         }
     }
 

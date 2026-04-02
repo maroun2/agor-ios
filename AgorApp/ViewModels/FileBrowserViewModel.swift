@@ -5,6 +5,7 @@ final class FileBrowserViewModel {
     var files: [FileListItem] = []
     var currentPath: String = ""
     var isLoading = false
+    private var hasLoadedOnce = false
     var error: String?
     var fileDetail: FileDetail?
     var isLoadingFile = false
@@ -47,6 +48,8 @@ final class FileBrowserViewModel {
     }
 
     func loadFiles() async {
+        guard !isLoading else { return }
+        hasLoadedOnce = true
         let displayPath = currentPath.isEmpty ? "/" : currentPath
         AppLogger.shared.log("[FileBrowser] loadFiles worktreeId=\(worktreeId) path=\"\(displayPath)\"", level: .debug, category: "FileBrowser")
         isLoading = true
