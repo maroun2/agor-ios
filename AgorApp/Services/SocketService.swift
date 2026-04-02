@@ -256,7 +256,7 @@ final class SocketService {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("find", service, ["query": query])
+            socket.emitWithAck("find", service, query)
                 .timingOut(after: 30) { data in
                     let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                     do {
@@ -292,7 +292,7 @@ final class SocketService {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("get", service, id, ["query": query])
+            socket.emitWithAck("get", service, id, query)
                 .timingOut(after: 30) { data in
                     let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                     do {
@@ -325,11 +325,17 @@ final class SocketService {
             throw AgorAPIError.networkError(URLError(.timedOut))
         }
 
-        // Error: single element that's a dict with "code" key
+        // Error: single element that's a dict with "code" key (FeathersJS error)
         if data.count == 1, let errorDict = data[0] as? [String: Any], errorDict["code"] != nil {
             let code = errorDict["code"] as? Int ?? 500
             let message = errorDict["message"] as? String ?? "Unknown error"
             throw AgorAPIError.httpError(statusCode: code, body: message)
+        }
+
+        // Error: single element with "message" key but no "code" (plain Error from backend)
+        if data.count == 1, let errorDict = data[0] as? [String: Any], errorDict["message"] != nil, errorDict["code"] == nil {
+            let message = errorDict["message"] as? String ?? "Unknown error"
+            throw AgorAPIError.httpError(statusCode: 500, body: message)
         }
 
         // Success: [null, result]

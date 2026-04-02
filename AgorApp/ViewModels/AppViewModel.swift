@@ -12,6 +12,7 @@ final class AppViewModel {
         let client = AgorClient()
         self.client = client
         self.authService = AuthService(client: client)
+        BackgroundSessionPoller.shared.configure(client: client)
     }
 
     var isAuthenticated: Bool { authService.isAuthenticated }

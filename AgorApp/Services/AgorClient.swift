@@ -226,6 +226,54 @@ final class AgorClient {
         KeychainHelper.save(authResponse.accessToken, for: .accessToken)
     }
 
+    // MARK: - File Upload (multipart/form-data)
+
+    struct UploadedFile: Codable {
+        let filename: String
+        let path: String
+        let size: Int
+        let mimeType: String
+    }
+
+    struct UploadResponse: Codable {
+        let success: Bool
+        let files: [UploadedFile]
+    }
+
+    func uploadFile(sessionId: String, fileData: Data, fileName: String, mimeType: String) async throws -> UploadResponse {
+        guard !baseURL.isEmpty else { throw AgorAPIError.invalidURL }
+        guard let url = URL(string: "\(baseURL)/sessions/\(sessionId)/upload?destination=worktree") else {
+            throw AgorAPIError.invalidURL
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        AppLogger.shared.log("[HTTP] → POST /sessions/\(String(sessionId.prefix(8)))/upload (\(fileName), \(fileData.count) bytes)", level: .debug, category: "HTTP")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let responseBody = String(data: data, encoding: .utf8)
+            throw AgorAPIError.httpError(statusCode: statusCode, body: responseBody)
+        }
+
+        return try decoder.decode(UploadResponse.self, from: data)
+    }
+
     // MARK: - Health Check (silent — no logging since it polls frequently)
 
     func healthCheck() async -> Bool {

@@ -41,9 +41,7 @@ struct FileBrowserView: View {
                 }
             }
             .task {
-                if viewModel.files.isEmpty {
-                    await viewModel.loadFiles()
-                }
+                await viewModel.loadFiles()
             }
         }
     }

@@ -65,6 +65,7 @@
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8B9C0D1E2F3A4B5C6D7E8F /* AppLogger.swift */; };
 		F2E1D0C9B8A7F6E5D4C3B2A1 /* DebugLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7E6D5C4B3A2F1E0D9C8B7A /* DebugLogView.swift */; };
 		B4A1C2D3E5F6071829304152 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5D4C3B2A1F0E9D8C7B6A59 /* NotificationManager.swift */; };
+		C7D8E9F0A1B2C3D4E5F60718 /* BackgroundSessionPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8091A2B3C4D5E /* BackgroundSessionPoller.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +74,7 @@
 		129D2DB1B28976F25E0C070A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONCoding.swift; sourceTree = "<group>"; };
 		1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		A3B4C5D6E7F8091A2B3C4D5E /* BackgroundSessionPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSessionPoller.swift; sourceTree = "<group>"; };
 		1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
 		27DC5206FFC124F2944812E0 /* Board.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Board.swift; sourceTree = "<group>"; };
 		2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextBlockView.swift; sourceTree = "<group>"; };
@@ -295,6 +297,7 @@
 				40F5CC95AB69ABEC9E465619 /* AgorClient.swift */,
 				7A8B9C0D1E2F3A4B5C6D7E8F /* AppLogger.swift */,
 				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
+				A3B4C5D6E7F8091A2B3C4D5E /* BackgroundSessionPoller.swift */,
 				6E5D4C3B2A1F0E9D8C7B6A59 /* NotificationManager.swift */,
 				94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */,
 				ED3C6C8A44F09215C1E9387E /* SocketService.swift */,
@@ -407,6 +410,7 @@
 				A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* AppLogger.swift in Sources */,
 				DC7DE9D63126F6C32DA55CD6 /* AgorApp.swift in Sources */,
+				C7D8E9F0A1B2C3D4E5F60718 /* BackgroundSessionPoller.swift in Sources */,
 				B4A1C2D3E5F6071829304152 /* NotificationManager.swift in Sources */,
 				01C64F8019E1DC764E7C07A3 /* AgorClient.swift in Sources */,
 				EDF28A78EAE35B2064B5AB90 /* AgorTask.swift in Sources */,
