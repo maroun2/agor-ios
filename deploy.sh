@@ -6,16 +6,14 @@
 set -e
 
 DEVICE_ID="00008101-001E38812660001E"
-PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-PROFILE_UUID="57c6d436-79f9-4192-b712-440b12c9c3de"
-PROFILE="$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
+PROFILE_UUID="59d85dea-0eec-4cd0-bbb3-65e9528467e6"
+PROFILE="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
 
-# Verify profile exists and is not expired
+# Verify profile exists
 if [ ! -f "$PROFILE" ]; then
-  echo "ERROR: Provisioning profile not found at $PROFILE"
-  echo "Open Xcode, build once with Cmd+R, then run: cp ~/Library/Developer/Xcode/UserData/Provisioning\\ Profiles/*.mobileprovision \"$PROFILE_DIR/\""
+  echo "ERROR: Provisioning profile not found. Open Xcode and build once with Cmd+R to renew it."
   exit 1
 fi
 
