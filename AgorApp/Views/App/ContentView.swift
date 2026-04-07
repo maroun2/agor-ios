@@ -65,6 +65,12 @@ struct MainNavigationView: View {
                 onLogout: {
                     socketService.disconnect()
                     appViewModel.authService.logout()
+                },
+                onServerSwitch: { profile in
+                    Task {
+                        await appViewModel.switchServer(to: profile, socketService: socketService)
+                        await navigationVM.refresh()
+                    }
                 }
             )
         } detail: {

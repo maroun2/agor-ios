@@ -80,6 +80,12 @@ final class AgorClient {
         return try await execute(request)
     }
 
+    func delete(_ path: String) async throws -> Data {
+        let request = try buildRequest(path: path, method: "DELETE")
+        logOutgoingRequest(request)
+        return try await executeRaw(request, attemptRefresh: true)
+    }
+
     // MARK: - Request Building
 
     private func buildRequest(path: String, method: String, query: [String: String] = [:]) throws -> URLRequest {

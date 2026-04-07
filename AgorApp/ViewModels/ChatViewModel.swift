@@ -56,6 +56,8 @@ final class ChatViewModel {
 
     // Incremented only when a new message arrives at the bottom (not when prepending old ones)
     var scrollToBottomToken: Int = 0
+    // Set to true during reconnect to use a longer scroll delay (avoids empty space bug)
+    var isReconnectScroll = false
 
     private var rebuildTask: Task<Void, Never>?
 
@@ -133,6 +135,7 @@ final class ChatViewModel {
         // Clear stale streaming state (e.g., missed thinking:end while backgrounded)
         streamingService.clearStreams(for: sessionId)
         activeStreams = streamingService.activeStreams
+        isReconnectScroll = true
         Task {
             await loadSession(sessionId)
             await loadTasks(sessionId)
@@ -567,14 +570,14 @@ final class ChatViewModel {
             handledTaskIds.insert(task.taskId)
             items.append(.taskHeader(task))
             guard !collapsedTaskIds.contains(task.taskId) else { continue }
-            let taskMessages = taskMap[task.taskId] ?? []
+            let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
             items.append(contentsOf: taskMessages.map { .message($0) })
         }
 
         // Messages without a task
         let orphanMessages = messages.filter { msg in
             msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
-        }
+        }.sorted { $0.index < $1.index }
         items.append(contentsOf: orphanMessages.map { .message($0) })
 
         // Active streaming messages

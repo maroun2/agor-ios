@@ -3,6 +3,11 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     let viewModel: ChatViewModel
+    var worktreeId: String?
+    var socketService: SocketService?
+    var knownSessionIds: Set<String> = []
+    var onOpenFile: ((String) -> Void)?
+    var onOpenSession: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: alignment, spacing: 4) {
@@ -28,7 +33,14 @@ struct MessageBubble: View {
             Group {
                 switch message.content {
                 case .text(let text):
-                    TextBlockView(text: text)
+                    EnhancedTextBlockView(
+                        text: text,
+                        worktreeId: worktreeId,
+                        socketService: socketService,
+                        knownSessionIds: knownSessionIds,
+                        onOpenFile: onOpenFile,
+                        onOpenSession: onOpenSession
+                    )
 
                 case .blocks(let blocks):
                     MessageContentView(blocks: blocks)

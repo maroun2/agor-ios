@@ -12,6 +12,8 @@ struct SidebarView: View {
     let socketService: SocketService
     let onLogout: () -> Void
 
+    let onServerSwitch: ((ServerProfile) -> Void)?
+
     @State private var showSettings = false
     @State private var fileBrowserTarget: FileBrowserTarget?
 
@@ -120,7 +122,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Agor")
+        .navigationTitle(ServerProfileManager.shared.activeProfile?.name ?? "Agor")
         .refreshable {
             await viewModel.refresh()
         }
@@ -128,7 +130,8 @@ struct SidebarView: View {
             SettingsView(
                 appViewModel: appViewModel,
                 socketService: socketService,
-                onLogout: onLogout
+                onLogout: onLogout,
+                onServerSwitch: onServerSwitch
             )
         }
         .sheet(item: $fileBrowserTarget) { target in
@@ -373,6 +376,8 @@ private struct WorktreeSection: View {
     @Binding var selectedSessionId: String?
     @State private var showFileBrowser = false
     @State private var sessionFileBrowserWorktreeId: String?
+    @State private var showNewSessionAlert = false
+    @State private var newSessionName = ""
 
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
@@ -418,6 +423,12 @@ private struct WorktreeSection: View {
             )
             .contextMenu {
                 Button {
+                    newSessionName = ""
+                    showNewSessionAlert = true
+                } label: {
+                    Label("New Session", systemImage: "plus.bubble")
+                }
+                Button {
                     showFileBrowser = true
                 } label: {
                     Label("Browse Files", systemImage: "folder")
@@ -439,6 +450,49 @@ private struct WorktreeSection: View {
                 worktreeId: target.id,
                 socketService: socketService
             ))
+        }
+        .alert("New Session", isPresented: $showNewSessionAlert) {
+            TextField("Session name", text: $newSessionName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+                Task {
+                    await createSession(
+                        worktreeId: worktreeNode.worktree.worktreeId,
+                        name: name.isEmpty ? nil : name
+                    )
+                }
+            }
+        } message: {
+            Text("Enter a name for the new session on this worktree.")
+        }
+    }
+
+    private func createSession(worktreeId: String, name: String?) async {
+        struct CreateSessionBody: Codable {
+            let worktreeId: String
+            let agenticTool: String
+            let status: String
+            var title: String?
+            enum CodingKeys: String, CodingKey {
+                case worktreeId = "worktree_id"
+                case agenticTool = "agentic_tool"
+                case status
+                case title
+            }
+        }
+        do {
+            let body = CreateSessionBody(
+                worktreeId: worktreeId,
+                agenticTool: "claude-code",
+                status: "idle",
+                title: name
+            )
+            let newSession: Session = try await viewModel.client.post("/sessions", body: body)
+            selectedSessionId = newSession.sessionId
+            await viewModel.refresh()
+        } catch {
+            // Session creation failed — non-fatal
         }
     }
 }
