@@ -58,6 +58,8 @@ final class ChatViewModel {
     var scrollToBottomToken: Int = 0
     // Set to true during reconnect to use a longer scroll delay (avoids empty space bug)
     var isReconnectScroll = false
+    // Tracks whether user is scrolled near the bottom — new messages only auto-scroll when true
+    var userIsNearBottom = true
 
     private var rebuildTask: Task<Void, Never>?
 
@@ -476,7 +478,9 @@ final class ChatViewModel {
                 if !newOnly.isEmpty {
                     messages.append(contentsOf: newOnly)
                     rebuildDisplayItems()
-                    scrollToBottomToken += 1
+                    if userIsNearBottom {
+                        scrollToBottomToken += 1
+                    }
                 }
             }
 
@@ -602,7 +606,9 @@ final class ChatViewModel {
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
                 self.rebuildDisplayItems()
-                self.scrollToBottomToken += 1  // new message — scroll to bottom
+                if self.userIsNearBottom {
+                    self.scrollToBottomToken += 1
+                }
             }
         }
 

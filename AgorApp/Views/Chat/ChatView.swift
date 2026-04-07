@@ -103,6 +103,8 @@ struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id("bottom")
+                        .onAppear { viewModel.userIsNearBottom = true }
+                        .onDisappear { viewModel.userIsNearBottom = false }
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.scrollToBottomToken) { _, _ in
