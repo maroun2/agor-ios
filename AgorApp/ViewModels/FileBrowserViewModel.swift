@@ -95,6 +95,23 @@ final class FileBrowserViewModel {
         AppLogger.shared.log("[FileBrowser] navigate to root", level: .debug, category: "FileBrowser")
     }
 
+    func fetchFileData(_ filePath: String) async throws -> (Data, String) {
+        let detail: FileDetail = try await socketService.serviceGet(
+            service: "file",
+            id: filePath,
+            query: ["worktree_id": worktreeId]
+        )
+        guard let content = detail.content else {
+            throw NSError(domain: "FileBrowser", code: 0, userInfo: [NSLocalizedDescriptionKey: "No content"])
+        }
+        let fileName = filePath.components(separatedBy: "/").last ?? filePath
+        if detail.encoding == "base64", let data = Data(base64Encoded: content) {
+            return (data, fileName)
+        } else {
+            return (Data(content.utf8), fileName)
+        }
+    }
+
     func loadFileDetail(_ filePath: String) async {
         AppLogger.shared.log("[FileBrowser] loadFileDetail path=\"\(filePath)\" worktreeId=\(worktreeId)", level: .debug, category: "FileBrowser")
         isLoadingFile = true

@@ -8,7 +8,9 @@ struct ChatView: View {
 
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showFileBrowser = false
+    @State private var showMCPServers = false
     @State private var showResetAlert = false
+    @State private var fileBrowserVM: FileBrowserViewModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,7 +77,12 @@ struct ChatView: View {
                             case .message(let message):
                                 MessageBubble(
                                     message: message,
-                                    viewModel: viewModel
+                                    viewModel: viewModel,
+                                    worktreeId: viewModel.currentSession?.worktreeId,
+                                    socketService: socketService,
+                                    knownSessionIds: knownSessionIds,
+                                    onOpenFile: { path in openFileInBrowser(path) },
+                                    onOpenSession: { hash in navigateToSession(hash) }
                                 )
                                 .id(item.id)
 
@@ -99,7 +106,10 @@ struct ChatView: View {
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.scrollToBottomToken) { _, _ in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    // Use longer delay after reconnect to let LazyVStack finish layout
+                    let delay: Double = viewModel.isReconnectScroll ? 0.3 : 0.05
+                    if viewModel.isReconnectScroll { viewModel.isReconnectScroll = false }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                         withAnimation(.easeOut(duration: 0.15)) {
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
@@ -125,6 +135,15 @@ struct ChatView: View {
                                     .foregroundStyle(.secondary)
                                     .font(.system(size: 16))
                             }
+                        }
+
+                        // MCP servers
+                        Button {
+                            showMCPServers = true
+                        } label: {
+                            Image(systemName: "server.rack")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 16))
                         }
 
                         // Archive button
@@ -185,11 +204,26 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showFileBrowser) {
+            if let vm = fileBrowserVM {
+                FileBrowserView(viewModel: vm)
+            }
+        }
+        .sheet(isPresented: $showMCPServers) {
             if let session = viewModel.currentSession {
-                FileBrowserView(viewModel: FileBrowserViewModel(
-                    worktreeId: session.worktreeId,
-                    socketService: socketService
+                MCPServerListView(viewModel: MCPViewModel(
+                    client: viewModel.client,
+                    sessionId: session.sessionId
                 ))
+            }
+        }
+        .onChange(of: viewModel.currentSession?.worktreeId) { _, newWorktreeId in
+            if let wid = newWorktreeId, fileBrowserVM?.worktreeId != wid {
+                fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
+            }
+        }
+        .onAppear {
+            if fileBrowserVM == nil, let wid = viewModel.currentSession?.worktreeId {
+                fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
             }
         }
         .alert("Reset Session?", isPresented: $showResetAlert) {
@@ -201,6 +235,31 @@ struct ChatView: View {
             }
         } message: {
             Text("This will archive the current session and create a new one on the same worktree.")
+        }
+    }
+
+    // MARK: - Enhanced Text Helpers
+
+    private var knownSessionIds: Set<String> {
+        Set(navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.map(\.sessionId) } })
+    }
+
+    private func openFileInBrowser(_ path: String) {
+        if let vm = fileBrowserVM {
+            let components = path.components(separatedBy: "/")
+            if components.count > 1 {
+                vm.currentPath = components.dropLast().joined(separator: "/")
+            } else {
+                vm.currentPath = ""
+            }
+        }
+        showFileBrowser = true
+    }
+
+    private func navigateToSession(_ hash: String) {
+        let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
+        if let session = allSessions.first(where: { $0.sessionId.hasPrefix(hash) || $0.sessionId == hash }) {
+            viewModel.selectSession(session.sessionId)
         }
     }
 }

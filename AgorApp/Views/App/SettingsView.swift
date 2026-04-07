@@ -4,6 +4,7 @@ struct SettingsView: View {
     let appViewModel: AppViewModel
     let socketService: SocketService
     let onLogout: () -> Void
+    var onServerSwitch: ((ServerProfile) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -40,11 +41,20 @@ struct SettingsView: View {
 
                 // Connection Section
                 Section("Connection") {
-                    LabeledContent("Server") {
-                        Text(appViewModel.daemonURL)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    NavigationLink {
+                        ServerListView(
+                            profileManager: ServerProfileManager.shared,
+                            onSwitch: { profile in
+                                onServerSwitch?(profile)
+                            }
+                        )
+                    } label: {
+                        LabeledContent("Server") {
+                            Text(ServerProfileManager.shared.activeProfile?.name ?? appViewModel.daemonURL)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
 
                     LabeledContent("Status") {

@@ -4,6 +4,8 @@ struct FileBrowserView: View {
     let viewModel: FileBrowserViewModel
 
     @Environment(\.dismiss) private var dismiss
+    @State private var shareURL: URL?
+    @State private var isPreparingShare = false
 
     var body: some View {
         NavigationStack {
@@ -103,6 +105,13 @@ struct FileBrowserView: View {
                         }
                     }
                 }
+                .contextMenu {
+                    Button {
+                        Task { await prepareFileForShare(file) }
+                    } label: {
+                        Label("Share / Open in...", systemImage: "square.and.arrow.up")
+                    }
+                }
             }
 
             if viewModel.currentDirectories.isEmpty && viewModel.currentFiles.isEmpty {
@@ -111,5 +120,42 @@ struct FileBrowserView: View {
                     .font(.subheadline)
             }
         }
+        .sheet(item: Binding(
+            get: { shareURL.map { ShareItem(url: $0) } },
+            set: { if $0 == nil { shareURL = nil } }
+        )) { item in
+            ShareSheet(url: item.url)
+        }
     }
+
+    private func prepareFileForShare(_ file: FileListItem) async {
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let (data, fileName) = try await viewModel.fetchFileData(file.path)
+            let tempDir = FileManager.default.temporaryDirectory
+            let tempURL = tempDir.appendingPathComponent(fileName)
+            try? FileManager.default.removeItem(at: tempURL)
+            try data.write(to: tempURL)
+            shareURL = tempURL
+        } catch {
+            // Non-fatal — share just won't appear
+        }
+    }
+}
+
+private struct ShareItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
