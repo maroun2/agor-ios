@@ -259,6 +259,8 @@ struct ChatView: View {
             } else {
                 vm.currentPath = ""
             }
+            // Auto-open the file detail
+            Task { await vm.loadFileDetail(path) }
         }
         showFileBrowser = true
     }
