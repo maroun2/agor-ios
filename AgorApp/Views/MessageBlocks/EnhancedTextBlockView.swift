@@ -5,6 +5,7 @@ struct EnhancedTextBlockView: View {
     let worktreeId: String?
     let socketService: SocketService?
     let knownSessionIds: Set<String>
+    var knownFilePaths: [String] = []
     let onOpenFile: ((String) -> Void)?
     let onOpenSession: ((String) -> Void)?
 
@@ -15,7 +16,7 @@ struct EnhancedTextBlockView: View {
 
             // File path links + inline images
             if let worktreeId, let socketService {
-                let filePaths = FilePathDetector.detect(in: text)
+                let filePaths = FilePathDetector.detect(in: text, knownFiles: knownFilePaths)
                 if !filePaths.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(filePaths, id: \.path) { detected in

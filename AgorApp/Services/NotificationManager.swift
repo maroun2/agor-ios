@@ -11,6 +11,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     var isBackgrounded = false
     var favoriteSessionIds: Set<String> = []
 
+    // Track last notified status per session to avoid duplicate notifications
+    // Key: sessionId, Value: status we last notified about
+    private var lastNotifiedStatus: [String: SessionStatus] = [:]
+
     // Published when user taps a notification
     var pendingNavigationSessionId: String?
 
@@ -53,6 +57,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
         AppLogger.shared.log("[Notification] session \(shortId): \(prev.rawValue) -> \(session.status.rawValue)", level: .debug, category: "Notification")
 
+        // Session started running again — clear notified flag so next idle transition can notify
+        if session.status == .running {
+            lastNotifiedStatus.removeValue(forKey: session.sessionId)
+        }
+
         return SessionStatusTransition(
             sessionId: session.sessionId,
             previousStatus: prev,
@@ -65,6 +74,12 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     func shouldNotify(for transition: SessionStatusTransition) -> Bool {
         // Only running -> idle
         guard transition.previousStatus == .running && transition.newStatus == .idle else { return false }
+
+        // Already notified about this session reaching idle — skip
+        if lastNotifiedStatus[transition.sessionId] == .idle {
+            AppLogger.shared.log("[Notification] skip \(String(transition.sessionId.prefix(8))): already notified for idle", level: .debug, category: "Notification")
+            return false
+        }
 
         // Don't notify for the session user is looking at
         if transition.sessionId == activeSessionId && !isBackgrounded {
@@ -86,6 +101,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func fireNotification(title: String, body: String, sessionId: String) {
+        // Record that we notified for this session reaching idle
+        lastNotifiedStatus[sessionId] = .idle
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -93,7 +111,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.userInfo = ["sessionId": sessionId]
 
         let request = UNNotificationRequest(
-            identifier: "session-\(sessionId)-\(Date().timeIntervalSince1970)",
+            identifier: "session-\(sessionId)-idle",
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
         )

@@ -10,6 +10,9 @@ final class FileBrowserViewModel {
     var fileDetail: FileDetail?
     var isLoadingFile = false
 
+    /// Cached file paths for link resolution in chat messages
+    var filePaths: [String] { files.map(\.path) }
+
     let worktreeId: String
     private let socketService: SocketService
 

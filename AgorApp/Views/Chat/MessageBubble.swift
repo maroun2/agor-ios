@@ -6,6 +6,7 @@ struct MessageBubble: View {
     var worktreeId: String?
     var socketService: SocketService?
     var knownSessionIds: Set<String> = []
+    var knownFilePaths: [String] = []
     var onOpenFile: ((String) -> Void)?
     var onOpenSession: ((String) -> Void)?
 
@@ -38,12 +39,21 @@ struct MessageBubble: View {
                         worktreeId: worktreeId,
                         socketService: socketService,
                         knownSessionIds: knownSessionIds,
+                        knownFilePaths: knownFilePaths,
                         onOpenFile: onOpenFile,
                         onOpenSession: onOpenSession
                     )
 
                 case .blocks(let blocks):
-                    MessageContentView(blocks: blocks)
+                    MessageContentView(
+                        blocks: blocks,
+                        worktreeId: worktreeId,
+                        socketService: socketService,
+                        knownSessionIds: knownSessionIds,
+                        knownFilePaths: knownFilePaths,
+                        onOpenFile: onOpenFile,
+                        onOpenSession: onOpenSession
+                    )
 
                 case .permissionRequest(let perm):
                     PermissionCardView(

@@ -8,10 +8,12 @@ final class MCPViewModel {
     var error: String?
 
     private let client: AgorClient
+    private let socketService: SocketService
     private let sessionId: String
 
-    init(client: AgorClient, sessionId: String) {
+    init(client: AgorClient, socketService: SocketService, sessionId: String) {
         self.client = client
+        self.socketService = socketService
         self.sessionId = sessionId
     }
 
@@ -27,10 +29,12 @@ final class MCPViewModel {
 
     private func loadSessionServers() async {
         do {
-            let response: PaginatedResponse<SessionMCPServer> = try await client.getPaginated(
-                "/sessions/\(sessionId)/mcp-servers"
+            // Use Socket.IO top-level service (same as web UI) instead of REST nested route
+            let results: [SessionMCPServer] = try await socketService.serviceFind(
+                service: "session-mcp-servers",
+                query: ["session_id": sessionId, "$limit": 50]
             )
-            sessionMCPServers = response.data
+            sessionMCPServers = results
         } catch {
             self.error = "Failed to load session MCP servers"
         }
