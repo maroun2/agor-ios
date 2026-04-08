@@ -42,11 +42,12 @@ final class MCPViewModel {
 
     private func loadAvailableServers() async {
         do {
-            let response: PaginatedResponse<MCPServer> = try await client.getPaginated(
-                "/mcp-servers",
-                query: ["scope": "global", "enabled": "true", "$limit": "50"]
+            // Use Socket.IO top-level service (same as web UI) — no enabled/scope filter
+            let results: [MCPServer] = try await socketService.serviceFind(
+                service: "mcp-servers",
+                query: ["$limit": 50]
             )
-            availableMCPServers = response.data
+            availableMCPServers = results
         } catch {
             // Non-fatal — just can't add new ones
         }
