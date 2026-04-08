@@ -9,6 +9,7 @@ struct ChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showFileBrowser = false
     @State private var showMCPServers = false
+    @State private var showSessionSettings = false
     @State private var showResetAlert = false
     @State private var fileBrowserVM: FileBrowserViewModel?
 
@@ -140,6 +141,15 @@ struct ChatView: View {
                             }
                         }
 
+                        // Session settings (permission mode, etc.)
+                        Button {
+                            showSessionSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 16))
+                        }
+
                         // MCP servers
                         Button {
                             showMCPServers = true
@@ -217,6 +227,11 @@ struct ChatView: View {
                     socketService: socketService,
                     sessionId: session.sessionId
                 ))
+            }
+        }
+        .sheet(isPresented: $showSessionSettings) {
+            if let session = viewModel.currentSession {
+                SessionSettingsSheet(session: session, socketService: socketService)
             }
         }
         .onChange(of: viewModel.currentSession?.worktreeId) { _, newWorktreeId in
