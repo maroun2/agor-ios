@@ -24,5 +24,9 @@ struct MarkdownTextView: View {
     var body: some View {
         StructuredText(markdown: text)
             .textual.textSelection(.enabled)
+            .environment(\.openURL, OpenURLAction { url in
+                UIApplication.shared.open(url)
+                return .handled
+            })
     }
 }

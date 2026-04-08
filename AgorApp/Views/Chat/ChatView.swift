@@ -81,6 +81,7 @@ struct ChatView: View {
                                     worktreeId: viewModel.currentSession?.worktreeId,
                                     socketService: socketService,
                                     knownSessionIds: knownSessionIds,
+                                    knownFilePaths: fileBrowserVM?.filePaths ?? [],
                                     onOpenFile: { path in openFileInBrowser(path) },
                                     onOpenSession: { hash in navigateToSession(hash) }
                                 )
@@ -189,7 +190,6 @@ struct ChatView: View {
                             StatusBadge(status: session.status)
                         }
 
-                        AgentIcon(agenticTool: session.agenticTool, size: 18)
                     }
                 }
             }
@@ -214,18 +214,23 @@ struct ChatView: View {
             if let session = viewModel.currentSession {
                 MCPServerListView(viewModel: MCPViewModel(
                     client: viewModel.client,
+                    socketService: socketService,
                     sessionId: session.sessionId
                 ))
             }
         }
         .onChange(of: viewModel.currentSession?.worktreeId) { _, newWorktreeId in
             if let wid = newWorktreeId, fileBrowserVM?.worktreeId != wid {
-                fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
+                let vm = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
+                fileBrowserVM = vm
+                Task { await vm.loadFiles() }
             }
         }
         .onAppear {
             if fileBrowserVM == nil, let wid = viewModel.currentSession?.worktreeId {
-                fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
+                let vm = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
+                fileBrowserVM = vm
+                Task { await vm.loadFiles() }
             }
         }
         .alert("Reset Session?", isPresented: $showResetAlert) {
