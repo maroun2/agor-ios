@@ -317,6 +317,111 @@ final class SocketService {
         }
     }
 
+    /// Call a FeathersJS service `create` method via the authenticated socket connection.
+    func serviceCreate<T: Decodable>(service: String, data body: [String: Any], query: [String: Any] = [:]) async throws -> T {
+        guard let socket, socket.status == .connected else {
+            throw AgorAPIError.notAuthenticated
+        }
+
+        let bodyDesc = (try? String(data: JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]), encoding: .utf8)) ?? "\(body)"
+        AppLogger.shared.log("[Socket] → create \"\(service)\" body=\(bodyDesc)", level: .debug, category: "Socket")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        let params: [String: Any] = query.isEmpty ? [:] : ["query": query]
+
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("create", service, body, params)
+                .timingOut(after: 30) { data in
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
+                    do {
+                        let result = try self.parseFeathersAck(data)
+                        let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        if let rawJson = String(data: jsonData, encoding: .utf8) {
+                            let truncated = rawJson.count > 500 ? String(rawJson.prefix(500)) + "..." : rawJson
+                            AppLogger.shared.log("[Socket] raw response: \(truncated)", level: .debug, category: "Socket")
+                        }
+                        AppLogger.shared.log("[Socket] ← create \"\(service)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
+                        let decoded = try self.decoder.decode(T.self, from: jsonData)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        if let first = data.first as? String, first == "NO ACK" {
+                            AppLogger.shared.log("[Socket] ← create \"\(service)\" ERROR: timeout after 30s", level: .error, category: "Socket")
+                        } else {
+                            AppLogger.shared.log("[Socket] ← create \"\(service)\" ERROR: \(error.localizedDescription) (\(elapsedMs)ms)", level: .error, category: "Socket")
+                        }
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
+    }
+
+    /// Call a FeathersJS service `patch` method via the authenticated socket connection.
+    func servicePatch<T: Decodable>(service: String, id: String, data body: [String: Any], query: [String: Any] = [:]) async throws -> T {
+        guard let socket, socket.status == .connected else {
+            throw AgorAPIError.notAuthenticated
+        }
+
+        let bodyDesc = (try? String(data: JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]), encoding: .utf8)) ?? "\(body)"
+        AppLogger.shared.log("[Socket] → patch \"\(service)\" id=\"\(id)\" body=\(bodyDesc)", level: .debug, category: "Socket")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        let params: [String: Any] = query.isEmpty ? [:] : ["query": query]
+
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("patch", service, id, body, params)
+                .timingOut(after: 30) { data in
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
+                    do {
+                        let result = try self.parseFeathersAck(data)
+                        let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        AppLogger.shared.log("[Socket] ← patch \"\(service)\" id=\"\(id)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
+                        let decoded = try self.decoder.decode(T.self, from: jsonData)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        if let first = data.first as? String, first == "NO ACK" {
+                            AppLogger.shared.log("[Socket] ← patch \"\(service)\" id=\"\(id)\" ERROR: timeout after 30s", level: .error, category: "Socket")
+                        } else {
+                            AppLogger.shared.log("[Socket] ← patch \"\(service)\" id=\"\(id)\" ERROR: \(error.localizedDescription) (\(elapsedMs)ms)", level: .error, category: "Socket")
+                        }
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
+    }
+
+    /// Call a FeathersJS service `remove` method via the authenticated socket connection.
+    func serviceRemove<T: Decodable>(service: String, id: String, query: [String: Any] = [:]) async throws -> T {
+        guard let socket, socket.status == .connected else {
+            throw AgorAPIError.notAuthenticated
+        }
+
+        AppLogger.shared.log("[Socket] → remove \"\(service)\" id=\"\(id)\"", level: .debug, category: "Socket")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        let params: [String: Any] = query.isEmpty ? [:] : ["query": query]
+
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("remove", service, id, params)
+                .timingOut(after: 30) { data in
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
+                    do {
+                        let result = try self.parseFeathersAck(data)
+                        let jsonData = try JSONSerialization.data(withJSONObject: result)
+                        AppLogger.shared.log("[Socket] ← remove \"\(service)\" id=\"\(id)\" OK (\(elapsedMs)ms, \(jsonData.count) bytes)", level: .debug, category: "Socket")
+                        let decoded = try self.decoder.decode(T.self, from: jsonData)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        if let first = data.first as? String, first == "NO ACK" {
+                            AppLogger.shared.log("[Socket] ← remove \"\(service)\" id=\"\(id)\" ERROR: timeout after 30s", level: .error, category: "Socket")
+                        } else {
+                            AppLogger.shared.log("[Socket] ← remove \"\(service)\" id=\"\(id)\" ERROR: \(error.localizedDescription) (\(elapsedMs)ms)", level: .error, category: "Socket")
+                        }
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
+    }
+
     /// Parse FeathersJS socket ack response.
     /// FeathersJS ack format: success → [null, result], error → [errorObject]
     private func parseFeathersAck(_ data: [Any]) throws -> Any {

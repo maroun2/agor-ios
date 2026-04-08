@@ -31,7 +31,7 @@ struct SidebarView: View {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
                             BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
                             Divider()
-                            CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
+                            CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
                             ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
@@ -59,7 +59,7 @@ struct SidebarView: View {
                             FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
                             BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
                             Divider()
-                            CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
+                            CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
                             ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                         }
                     }
@@ -318,6 +318,7 @@ private struct BrowseFilesButton: View {
 private struct CleanAndResetButton: View {
     let session: Session
     let viewModel: NavigationViewModel
+    let socketService: SocketService
     @Binding var selectedSessionId: String?
 
     var body: some View {
@@ -334,29 +335,17 @@ private struct CleanAndResetButton: View {
         // 1. Archive the current session
         await viewModel.archiveSession(session.sessionId)
 
-        // 2. Create a new session on the same worktree
-        struct CreateSessionBody: Codable {
-            let worktreeId: String
-            let agenticTool: String
-            let status: String
-            var title: String?
-
-            enum CodingKeys: String, CodingKey {
-                case worktreeId = "worktree_id"
-                case agenticTool = "agentic_tool"
-                case status
-                case title
-            }
-        }
-
+        // 2. Create a new session on the same worktree via Socket.IO
         do {
-            let body = CreateSessionBody(
-                worktreeId: session.worktreeId,
-                agenticTool: session.agenticTool.rawValue,
-                status: "idle",
-                title: session.title
+            let newSession: Session = try await socketService.serviceCreate(
+                service: "sessions",
+                data: [
+                    "worktree_id": session.worktreeId,
+                    "agentic_tool": session.agenticTool.rawValue,
+                    "status": "idle",
+                    "title": session.title ?? ""
+                ]
             )
-            let newSession: Session = try await viewModel.client.post("/sessions", body: body)
             selectedSessionId = newSession.sessionId
         } catch {
             // Session creation failed — still refresh to show archived state
@@ -410,7 +399,7 @@ private struct WorktreeSection: View {
                             Label("Browse Files", systemImage: "folder")
                         }
                         Divider()
-                        CleanAndResetButton(session: session, viewModel: viewModel, selectedSessionId: $selectedSessionId)
+                        CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
                         ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                     }
                 }
@@ -469,26 +458,16 @@ private struct WorktreeSection: View {
     }
 
     private func createSession(worktreeId: String, name: String?) async {
-        struct CreateSessionBody: Codable {
-            let worktreeId: String
-            let agenticTool: String
-            let status: String
-            var title: String?
-            enum CodingKeys: String, CodingKey {
-                case worktreeId = "worktree_id"
-                case agenticTool = "agentic_tool"
-                case status
-                case title
-            }
-        }
         do {
-            let body = CreateSessionBody(
-                worktreeId: worktreeId,
-                agenticTool: "claude-code",
-                status: "idle",
-                title: name
+            let newSession: Session = try await socketService.serviceCreate(
+                service: "sessions",
+                data: [
+                    "worktree_id": worktreeId,
+                    "agentic_tool": "claude-code",
+                    "status": "idle",
+                    "title": name ?? ""
+                ]
             )
-            let newSession: Session = try await viewModel.client.post("/sessions", body: body)
             selectedSessionId = newSession.sessionId
             await viewModel.refresh()
         } catch {
