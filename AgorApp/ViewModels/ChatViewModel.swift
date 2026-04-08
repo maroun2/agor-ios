@@ -384,27 +384,23 @@ final class ChatViewModel {
 
         Task {
             do {
-                // Archive the current session
+                // Archive the current session via Socket.IO
                 AppLogger.shared.log("[Chat] resetSession: archiving \(sessionId)", level: .info, category: "Chat")
-                struct ArchiveBody: Codable { let archived: Bool }
-                let _: Session = try await client.patch("/sessions/\(sessionId)", body: ArchiveBody(archived: true))
+                let _: Session = try await socketService.servicePatch(
+                    service: "sessions",
+                    id: sessionId,
+                    data: ["archived": true]
+                )
 
-                // Create a new session on the same worktree
-                struct CreateSessionBody: Codable {
-                    let worktreeId: String
-                    let agenticTool: AgenticToolName
-                    let status: SessionStatus
-                    var title: String?
-                    enum CodingKeys: String, CodingKey {
-                        case worktreeId = "worktree_id"
-                        case agenticTool = "agentic_tool"
-                        case status
-                        case title
-                    }
-                }
-                let newSession: Session = try await client.post(
-                    "/sessions",
-                    body: CreateSessionBody(worktreeId: worktreeId, agenticTool: agenticTool, status: .idle, title: sessionTitle)
+                // Create a new session on the same worktree via Socket.IO
+                let newSession: Session = try await socketService.serviceCreate(
+                    service: "sessions",
+                    data: [
+                        "worktree_id": worktreeId,
+                        "agentic_tool": agenticTool.rawValue,
+                        "status": "idle",
+                        "title": sessionTitle ?? ""
+                    ]
                 )
                 AppLogger.shared.log("[Chat] resetSession: created new session \(newSession.sessionId)", level: .info, category: "Chat")
 
