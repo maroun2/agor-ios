@@ -76,7 +76,22 @@ struct ChatView: View {
 
     @ViewBuilder private var sessionSettingsSheet: some View {
         if let session = viewModel.currentSession {
-            SessionSettingsSheet(session: session, socketService: socketService)
+            NavigationStack {
+                Form {
+                    Section("Session") {
+                        LabeledContent("Name", value: session.title ?? session.sessionId)
+                        LabeledContent("Status", value: session.status.rawValue)
+                        LabeledContent("ID", value: String(session.sessionId.prefix(8)))
+                    }
+                }
+                .navigationTitle("Session Settings")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showSessionSettings = false }
+                    }
+                }
+            }
         }
     }
 
