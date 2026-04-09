@@ -393,14 +393,17 @@ final class ChatViewModel {
                 )
 
                 // Create a new session on the same worktree via Socket.IO
+                var createData: [String: Any] = [
+                    "worktree_id": worktreeId,
+                    "agentic_tool": agenticTool.rawValue,
+                    "status": "idle"
+                ]
+                if let sessionTitle, !sessionTitle.isEmpty {
+                    createData["title"] = sessionTitle
+                }
                 let newSession: Session = try await socketService.serviceCreate(
                     service: "sessions",
-                    data: [
-                        "worktree_id": worktreeId,
-                        "agentic_tool": agenticTool.rawValue,
-                        "status": "idle",
-                        "title": sessionTitle ?? ""
-                    ]
+                    data: createData
                 )
                 AppLogger.shared.log("[Chat] resetSession: created new session \(newSession.sessionId)", level: .info, category: "Chat")
 
