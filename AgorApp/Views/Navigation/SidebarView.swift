@@ -332,23 +332,29 @@ private struct CleanAndResetButton: View {
     }
 
     private func cleanAndReset() async {
+        AppLogger.shared.log("[Sidebar] cleanAndReset session=\(String(session.sessionId.prefix(8)))", level: .info, category: "Nav")
+
         // 1. Archive the current session
         await viewModel.archiveSession(session.sessionId)
 
         // 2. Create a new session on the same worktree via Socket.IO
         do {
+            var body: [String: Any] = [
+                "worktree_id": session.worktreeId,
+                "agentic_tool": session.agenticTool.rawValue,
+                "status": "idle"
+            ]
+            if let title = session.title, !title.isEmpty {
+                body["title"] = title
+            }
             let newSession: Session = try await socketService.serviceCreate(
                 service: "sessions",
-                data: [
-                    "worktree_id": session.worktreeId,
-                    "agentic_tool": session.agenticTool.rawValue,
-                    "status": "idle",
-                    "title": session.title ?? ""
-                ]
+                data: body
             )
+            AppLogger.shared.log("[Sidebar] cleanAndReset created new session \(String(newSession.sessionId.prefix(8)))", level: .info, category: "Nav")
             selectedSessionId = newSession.sessionId
         } catch {
-            // Session creation failed — still refresh to show archived state
+            AppLogger.shared.log("[Sidebar] cleanAndReset create ERROR: \(error)", level: .error, category: "Nav")
         }
 
         // 3. Refresh sidebar
@@ -382,11 +388,12 @@ private struct WorktreeSection: View {
             if worktreeNode.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-            } else if worktreeNode.sessions.isEmpty {
-                Text("No sessions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             } else {
+                if worktreeNode.sessions.isEmpty {
+                    Text("No sessions")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(worktreeNode.sessions) { session in
                     NavigationLink(value: session.sessionId) {
                         SessionRow(session: session)
@@ -402,6 +409,14 @@ private struct WorktreeSection: View {
                         CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
                         ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                     }
+                }
+                Button {
+                    newSessionName = ""
+                    showNewSessionAlert = true
+                } label: {
+                    Label("New Session", systemImage: "plus.bubble")
+                        .font(.caption)
+                        .foregroundStyle(.accent)
                 }
             }
         } label: {
@@ -458,20 +473,25 @@ private struct WorktreeSection: View {
     }
 
     private func createSession(worktreeId: String, name: String?) async {
+        AppLogger.shared.log("[Sidebar] createSession worktreeId=\(String(worktreeId.prefix(8))) name=\(name ?? "<nil>")", level: .info, category: "Nav")
         do {
+            var body: [String: Any] = [
+                "worktree_id": worktreeId,
+                "agentic_tool": "claude-code",
+                "status": "idle"
+            ]
+            if let name, !name.isEmpty {
+                body["title"] = name
+            }
             let newSession: Session = try await socketService.serviceCreate(
                 service: "sessions",
-                data: [
-                    "worktree_id": worktreeId,
-                    "agentic_tool": "claude-code",
-                    "status": "idle",
-                    "title": name ?? ""
-                ]
+                data: body
             )
+            AppLogger.shared.log("[Sidebar] createSession OK: \(String(newSession.sessionId.prefix(8)))", level: .info, category: "Nav")
             selectedSessionId = newSession.sessionId
             await viewModel.refresh()
         } catch {
-            // Session creation failed — non-fatal
+            AppLogger.shared.log("[Sidebar] createSession ERROR: \(error)", level: .error, category: "Nav")
         }
     }
 }
