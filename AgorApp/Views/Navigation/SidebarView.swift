@@ -375,101 +375,82 @@ private struct WorktreeSection: View {
     @State private var newSessionName = ""
 
     var body: some View {
+        disclosureGroup
+            .selectionDisabled()
+            .sheet(isPresented: $showFileBrowser) {
+                FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: worktreeNode.worktree.worktreeId, socketService: socketService))
+            }
+            .sheet(item: Binding(
+                get: { sessionFileBrowserWorktreeId.map { FileBrowserTarget(id: $0) } },
+                set: { sessionFileBrowserWorktreeId = $0?.id }
+            )) { target in
+                FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: target.id, socketService: socketService))
+            }
+            .alert("New Session", isPresented: $showNewSessionAlert) {
+                TextField("Session name", text: $newSessionName)
+                Button("Cancel", role: .cancel) {}
+                Button("Create") {
+                    let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task { await createSession(worktreeId: worktreeNode.worktree.worktreeId, name: name.isEmpty ? nil : name) }
+                }
+            } message: {
+                Text("Enter a name for the new session on this worktree.")
+            }
+    }
+
+    private var disclosureGroup: some View {
         DisclosureGroup(isExpanded: Binding(
             get: { worktreeNode.isExpanded },
             set: {
                 worktreeNode.isExpanded = $0
                 viewModel.setWorktreeExpanded(worktreeNode.worktree.worktreeId, expanded: $0)
-                if $0 {
-                    Task { await viewModel.loadSessions(for: worktreeNode) }
-                }
+                if $0 { Task { await viewModel.loadSessions(for: worktreeNode) } }
             }
         )) {
-            if worktreeNode.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-            } else {
-                if worktreeNode.sessions.isEmpty {
-                    Text("No sessions")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            sessionsList
+        } label: {
+            worktreeLabel
+        }
+    }
+
+    @ViewBuilder private var sessionsList: some View {
+        if worktreeNode.isLoading {
+            ProgressView().frame(maxWidth: .infinity)
+        } else {
+            if worktreeNode.sessions.isEmpty {
+                Text("No sessions").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(worktreeNode.sessions) { session in
+                NavigationLink(value: session.sessionId) {
+                    SessionRow(session: session)
                 }
-                ForEach(worktreeNode.sessions) { session in
-                    NavigationLink(value: session.sessionId) {
-                        SessionRow(session: session)
+                .contextMenu {
+                    FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                    Button { sessionFileBrowserWorktreeId = session.worktreeId } label: {
+                        Label("Browse Files", systemImage: "folder")
                     }
-                    .contextMenu {
-                        FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
-                        Button {
-                            sessionFileBrowserWorktreeId = session.worktreeId
-                        } label: {
-                            Label("Browse Files", systemImage: "folder")
-                        }
-                        Divider()
-                        CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
-                        ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
-                    }
-                }
-                Button {
-                    newSessionName = ""
-                    showNewSessionAlert = true
-                } label: {
-                    Label("New Session", systemImage: "plus.bubble")
-                        .font(.caption)
-                        .foregroundStyle(.accent)
+                    Divider()
+                    CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                    ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                 }
             }
-        } label: {
-            WorktreeRow(
-                worktree: worktreeNode.worktree,
-                repoName: worktreeNode.repoName,
-                attentionCount: worktreeNode.attentionCount
-            )
+            Button { newSessionName = ""; showNewSessionAlert = true } label: {
+                Label("New Session", systemImage: "plus.bubble")
+                    .font(.caption).foregroundStyle(Color.accentColor)
+            }
+        }
+    }
+
+    private var worktreeLabel: some View {
+        WorktreeRow(worktree: worktreeNode.worktree, repoName: worktreeNode.repoName, attentionCount: worktreeNode.attentionCount)
             .contextMenu {
-                Button {
-                    newSessionName = ""
-                    showNewSessionAlert = true
-                } label: {
+                Button { newSessionName = ""; showNewSessionAlert = true } label: {
                     Label("New Session", systemImage: "plus.bubble")
                 }
-                Button {
-                    showFileBrowser = true
-                } label: {
+                Button { showFileBrowser = true } label: {
                     Label("Browse Files", systemImage: "folder")
                 }
             }
-        }
-        .selectionDisabled()
-        .sheet(isPresented: $showFileBrowser) {
-            FileBrowserView(viewModel: FileBrowserViewModel(
-                worktreeId: worktreeNode.worktree.worktreeId,
-                socketService: socketService
-            ))
-        }
-        .sheet(item: Binding(
-            get: { sessionFileBrowserWorktreeId.map { FileBrowserTarget(id: $0) } },
-            set: { sessionFileBrowserWorktreeId = $0?.id }
-        )) { target in
-            FileBrowserView(viewModel: FileBrowserViewModel(
-                worktreeId: target.id,
-                socketService: socketService
-            ))
-        }
-        .alert("New Session", isPresented: $showNewSessionAlert) {
-            TextField("Session name", text: $newSessionName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                Task {
-                    await createSession(
-                        worktreeId: worktreeNode.worktree.worktreeId,
-                        name: name.isEmpty ? nil : name
-                    )
-                }
-            }
-        } message: {
-            Text("Enter a name for the new session on this worktree.")
-        }
     }
 
     private func createSession(worktreeId: String, name: String?) async {
