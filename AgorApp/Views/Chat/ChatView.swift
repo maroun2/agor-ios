@@ -12,6 +12,7 @@ struct ChatView: View {
     @State private var showSessionSettings = false
     @State private var showResetAlert = false
     @State private var fileBrowserVM: FileBrowserViewModel?
+    @State private var mcpVM: MCPViewModel?
 
     var body: some View {
         chatContent
@@ -21,6 +22,13 @@ struct ChatView: View {
             .overlay { emptyStateOverlay }
             .sheet(isPresented: $showFileBrowser) { fileBrowserSheet }
             .sheet(isPresented: $showMCPServers) { mcpSheet }
+            .onChange(of: showMCPServers) { _, showing in
+                if showing, let session = viewModel.currentSession {
+                    if mcpVM == nil || mcpVM?.sessionId != session.sessionId {
+                        mcpVM = MCPViewModel(client: viewModel.client, socketService: socketService, sessionId: session.sessionId)
+                    }
+                }
+            }
             .sheet(isPresented: $showSessionSettings) { sessionSettingsSheet }
             .onChange(of: viewModel.currentSession?.worktreeId) { _, newWorktreeId in
                 if let wid = newWorktreeId, fileBrowserVM?.worktreeId != wid {
@@ -69,8 +77,8 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var mcpSheet: some View {
-        if let session = viewModel.currentSession {
-            MCPServerListView(viewModel: MCPViewModel(client: viewModel.client, socketService: socketService, sessionId: session.sessionId))
+        if let vm = mcpVM {
+            MCPServerListView(viewModel: vm)
         }
     }
 

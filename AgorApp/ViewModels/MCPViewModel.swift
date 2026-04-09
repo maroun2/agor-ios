@@ -9,7 +9,7 @@ final class MCPViewModel {
 
     private let client: AgorClient
     private let socketService: SocketService
-    private let sessionId: String
+    let sessionId: String
 
     init(client: AgorClient, socketService: SocketService, sessionId: String) {
         self.client = client
