@@ -6,6 +6,7 @@ struct MessageContentView: View {
     var socketService: SocketService?
     var knownSessionIds: Set<String> = []
     var knownFilePaths: [String] = []
+    var knownSessionNames: [String: String] = [:]
     var onOpenFile: ((String) -> Void)?
     var onOpenSession: ((String) -> Void)?
 
@@ -20,6 +21,7 @@ struct MessageContentView: View {
                         socketService: socketService,
                         knownSessionIds: knownSessionIds,
                         knownFilePaths: knownFilePaths,
+                        knownSessionNames: knownSessionNames,
                         onOpenFile: onOpenFile,
                         onOpenSession: onOpenSession
                     )

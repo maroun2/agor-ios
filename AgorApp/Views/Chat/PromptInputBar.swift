@@ -6,6 +6,7 @@ struct PromptInputBar: View {
 
     @FocusState private var isFocused: Bool
     @State private var showFilePicker = false
+    @State private var showPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
@@ -21,7 +22,9 @@ struct PromptInputBar: View {
                         Label("Attach Debug Log", systemImage: "ant")
                     }
 
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Button {
+                        showPhotoPicker = true
+                    } label: {
                         Label("Attach Photo", systemImage: "photo")
                     }
 
@@ -80,6 +83,7 @@ struct PromptInputBar: View {
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.data]) { result in
             handleFileImport(result)
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
         .onChange(of: selectedPhoto) { _, newValue in
             handlePhotoSelection(newValue)
         }

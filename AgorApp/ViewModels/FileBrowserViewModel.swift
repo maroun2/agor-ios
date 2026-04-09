@@ -9,6 +9,8 @@ final class FileBrowserViewModel {
     var error: String?
     var fileDetail: FileDetail?
     var isLoadingFile = false
+    /// Set by chat links to auto-navigate to a specific file when the browser opens
+    var pendingFilePath: String?
 
     /// Cached file paths for link resolution in chat messages
     var filePaths: [String] { files.map(\.path) }

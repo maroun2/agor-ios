@@ -6,9 +6,10 @@ struct FileBrowserView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var shareURL: URL?
     @State private var isPreparingShare = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Group {
                 if viewModel.isLoading && viewModel.files.isEmpty {
                     ProgressView("Loading files...")
@@ -25,6 +26,9 @@ struct FileBrowserView: View {
                 } else {
                     fileList
                 }
+            }
+            .navigationDestination(for: String.self) { filePath in
+                FileDetailView(viewModel: viewModel, filePath: filePath)
             }
             .navigationTitle(viewModel.currentPath.isEmpty ? "Files" : viewModel.currentPath.components(separatedBy: "/").last ?? "Files")
             .navigationBarTitleDisplayMode(.inline)
@@ -44,6 +48,12 @@ struct FileBrowserView: View {
             }
             .task {
                 await viewModel.loadFiles()
+            }
+            .onAppear {
+                if let pending = viewModel.pendingFilePath {
+                    viewModel.pendingFilePath = nil
+                    navigationPath.append(pending)
+                }
             }
         }
     }
@@ -88,9 +98,7 @@ struct FileBrowserView: View {
 
             // Files
             ForEach(viewModel.currentFiles) { file in
-                NavigationLink {
-                    FileDetailView(viewModel: viewModel, filePath: file.path)
-                } label: {
+                NavigationLink(value: file.path) {
                     HStack(spacing: 8) {
                         Image(systemName: file.iconName)
                             .foregroundStyle(.secondary)
