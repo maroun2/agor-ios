@@ -6,6 +6,7 @@ struct EnhancedTextBlockView: View {
     let socketService: SocketService?
     let knownSessionIds: Set<String>
     var knownFilePaths: [String] = []
+    var knownSessionNames: [String: String] = [:]
     let onOpenFile: ((String) -> Void)?
     let onOpenSession: ((String) -> Void)?
 
@@ -24,6 +25,7 @@ struct EnhancedTextBlockView: View {
                     text: text,
                     filePaths: filePaths,
                     sessionLinks: sessionLinks,
+                    knownSessionNames: knownSessionNames,
                     onOpenFile: onOpenFile,
                     onOpenSession: onOpenSession
                 )
@@ -56,6 +58,7 @@ private struct InlineLinkedTextView: View {
     let text: String
     let filePaths: [DetectedFilePath]
     let sessionLinks: [DetectedSessionLink]
+    let knownSessionNames: [String: String]
     let onOpenFile: ((String) -> Void)?
     let onOpenSession: ((String) -> Void)?
 
@@ -114,11 +117,14 @@ private struct InlineLinkedTextView: View {
         }
 
         for link in sessionLinks {
-            let shortId = String(link.hash.prefix(8))
+            // Resolve session name: try exact match, then prefix match
+            let name = knownSessionNames[link.hash]
+                ?? knownSessionNames.first(where: { $0.key.hasPrefix(link.hash) })?.value
+                ?? String(link.hash.prefix(8))
             chips.append(LinkChip(
                 id: "session-\(link.hash)",
                 icon: "bubble.left.and.bubble.right",
-                label: shortId,
+                label: name,
                 color: .purple,
                 action: { onOpenSession?(link.hash) }
             ))

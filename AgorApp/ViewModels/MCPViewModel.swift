@@ -24,6 +24,15 @@ final class MCPViewModel {
         async let available = loadAvailableServers()
         await sessionServers
         await available
+
+        // Resolve session server names from available servers (same as web UI mcpServerById lookup)
+        let serverById = Dictionary(uniqueKeysWithValues: availableMCPServers.map { ($0.mcpServerId, $0) })
+        for i in sessionMCPServers.indices {
+            if sessionMCPServers[i].mcpServer == nil {
+                sessionMCPServers[i].mcpServer = serverById[sessionMCPServers[i].mcpServerId]
+            }
+        }
+
         isLoading = false
     }
 

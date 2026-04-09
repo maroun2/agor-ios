@@ -260,7 +260,11 @@ final class SocketService {
                 .timingOut(after: 30) { data in
                     let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                     do {
-                        let result = try self.parseFeathersAck(data)
+                        var result = try self.parseFeathersAck(data)
+                        // Unwrap paginated FeathersJS responses: {data: [...], total, skip, limit} → [...]
+                        if let dict = result as? [String: Any], let inner = dict["data"] {
+                            result = inner
+                        }
                         let jsonData = try JSONSerialization.data(withJSONObject: result)
                         if let rawJson = String(data: jsonData, encoding: .utf8) {
                             let truncated = rawJson.count > 500 ? String(rawJson.prefix(500)) + "..." : rawJson

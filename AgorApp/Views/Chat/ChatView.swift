@@ -76,22 +76,7 @@ struct ChatView: View {
 
     @ViewBuilder private var sessionSettingsSheet: some View {
         if let session = viewModel.currentSession {
-            NavigationStack {
-                Form {
-                    Section("Session") {
-                        LabeledContent("Name", value: session.title ?? session.sessionId)
-                        LabeledContent("Status", value: session.status.rawValue)
-                        LabeledContent("ID", value: String(session.sessionId.prefix(8)))
-                    }
-                }
-                .navigationTitle("Session Settings")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showSessionSettings = false }
-                    }
-                }
-            }
+            SessionSettingsSheet(session: session, socketService: socketService)
         }
     }
 
@@ -224,6 +209,7 @@ struct ChatView: View {
                 socketService: socketService,
                 knownSessionIds: knownSessionIds,
                 knownFilePaths: fileBrowserVM?.filePaths ?? [],
+                knownSessionNames: knownSessionNames,
                 onOpenFile: { path in openFileInBrowser(path) },
                 onOpenSession: { hash in navigateToSession(hash) }
             )
@@ -240,6 +226,18 @@ struct ChatView: View {
         Set(navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.map(\.sessionId) } })
     }
 
+    private var knownSessionNames: [String: String] {
+        var map: [String: String] = [:]
+        for board in navigationVM.boardNodes {
+            for wt in board.worktrees {
+                for session in wt.sessions {
+                    map[session.sessionId] = session.displayTitle
+                }
+            }
+        }
+        return map
+    }
+
     private func openFileInBrowser(_ path: String) {
         if let vm = fileBrowserVM {
             let components = path.components(separatedBy: "/")
@@ -248,8 +246,7 @@ struct ChatView: View {
             } else {
                 vm.currentPath = ""
             }
-            // Auto-open the file detail
-            Task { await vm.loadFileDetail(path) }
+            vm.pendingFilePath = path
         }
         showFileBrowser = true
     }
