@@ -66,12 +66,19 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             sessionId: session.sessionId,
             previousStatus: prev,
             newStatus: session.status,
-            displayTitle: session.displayTitle
+            displayTitle: session.displayTitle,
+            isScheduled: session.isScheduled
         )
     }
 
     /// Check if we should fire a local notification for this transition
     func shouldNotify(for transition: SessionStatusTransition) -> Bool {
+        // Never notify for scheduled sessions
+        if transition.isScheduled {
+            AppLogger.shared.log("[Notification] skip \(String(transition.sessionId.prefix(8))): scheduled session", level: .debug, category: "Notification")
+            return false
+        }
+
         // Only running -> idle
         guard transition.previousStatus == .running && transition.newStatus == .idle else { return false }
 
@@ -124,7 +131,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         AppLogger.shared.log("[Notification] checking missed transitions for \(currentSessions.count) sessions", level: .debug, category: "Notification")
         var missed = 0
         for session in currentSessions {
-            if let prev = previousSessionStatuses[session.sessionId], prev == .running, session.status == .idle {
+            if let prev = previousSessionStatuses[session.sessionId], prev == .running, session.status == .idle, !session.isScheduled {
                 missed += 1
                 fireNotification(
                     title: "Session finished",
@@ -167,4 +174,5 @@ struct SessionStatusTransition {
     let previousStatus: SessionStatus
     let newStatus: SessionStatus
     let displayTitle: String
+    let isScheduled: Bool
 }
