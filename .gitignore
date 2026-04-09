@@ -1,5 +1,6 @@
 .build/
 .swiftpm/
 *.xcodeproj
+AgorApp/Generated/GitVersion.swift
 xcuserdata/
 DerivedData/
