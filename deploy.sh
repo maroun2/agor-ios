@@ -38,7 +38,7 @@ EOF
 
 # Build (no signing)
 echo "Building..."
-xcodebuild \
+BUILD_OUTPUT=$(xcodebuild \
   -project AgorApp.xcodeproj \
   -scheme AgorApp \
   -configuration Release \
@@ -46,7 +46,14 @@ xcodebuild \
   -derivedDataPath .build/DerivedData \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
-  build | grep -E "error:|warning:|BUILD SUCCEEDED|BUILD FAILED" || true
+  build 2>&1)
+
+echo "$BUILD_OUTPUT" | grep -E "error:|warning:|BUILD SUCCEEDED|BUILD FAILED"
+
+if ! echo "$BUILD_OUTPUT" | grep -q "BUILD SUCCEEDED"; then
+  echo "ERROR: Build failed. Not deploying."
+  exit 1
+fi
 
 # Extract entitlements
 security cms -D -i "$PROFILE" 2>/dev/null \
