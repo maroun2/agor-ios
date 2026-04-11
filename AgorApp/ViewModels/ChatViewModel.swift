@@ -60,8 +60,11 @@ final class ChatViewModel {
     var isReconnectScroll = false
     // Tracks whether user is scrolled near the bottom — new messages only auto-scroll when true
     var userIsNearBottom = true
+    // Scroll to a specific message ID (for permission cards)
+    var scrollToMessageId: String?
 
     private var rebuildTask: Task<Void, Never>?
+    private var scrollDebounceTask: Task<Void, Never>?
 
     func toggleTaskCollapsed(_ taskId: String) {
         if collapsedTaskIds.contains(taskId) {
@@ -477,9 +480,7 @@ final class ChatViewModel {
                 if !newOnly.isEmpty {
                     messages.append(contentsOf: newOnly)
                     rebuildDisplayItems()
-                    if userIsNearBottom {
-                        scrollToBottomToken += 1
-                    }
+                    requestScrollToBottom()
                 }
             }
 
@@ -596,6 +597,27 @@ final class ChatViewModel {
 
     // MARK: - Socket Handlers
 
+    /// Debounced scroll-to-bottom: coalesces rapid socket messages into one scroll
+    private var scrollRequestCount = 0
+    private func requestScrollToBottom() {
+        guard userIsNearBottom else {
+            AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — userIsNearBottom=false", level: .debug, category: "Scroll")
+            return
+        }
+        scrollRequestCount += 1
+        let requestNum = scrollRequestCount
+        let wasPending = scrollDebounceTask != nil
+        scrollDebounceTask?.cancel()
+        AppLogger.shared.log("[Scroll] requestScrollToBottom #\(requestNum) queued (cancelled pending: \(wasPending))", level: .debug, category: "Scroll")
+        scrollDebounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            AppLogger.shared.log("[Scroll] debounce fired → scrollToBottomToken (coalesced \(self.scrollRequestCount - requestNum + 1) requests)", level: .debug, category: "Scroll")
+            self.scrollRequestCount = 0
+            self.scrollToBottomToken += 1
+        }
+    }
+
     private func setupSocketHandlers() {
         socketService.onMessageCreated { [weak self] message in
             guard let self, message.sessionId == self.currentSessionId else { return }
@@ -605,9 +627,8 @@ final class ChatViewModel {
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
                 self.rebuildDisplayItems()
-                if self.userIsNearBottom {
-                    self.scrollToBottomToken += 1
-                }
+                AppLogger.shared.log("[Scroll] onMessageCreated → requestScrollToBottom (msg: \(message.messageId.prefix(8)), total: \(self.messages.count))", level: .debug, category: "Scroll")
+                self.requestScrollToBottom()
             }
         }
 
@@ -637,12 +658,26 @@ final class ChatViewModel {
 
         socketService.onSessionPatched { [weak self] session in
             guard let self, session.sessionId == self.currentSessionId else { return }
+            let oldStatus = self.currentSession?.status
             self.currentSession = session
+            AppLogger.shared.log("[Scroll] onSessionPatched: \(oldStatus?.rawValue ?? "nil") → \(session.status.rawValue)", level: .debug, category: "Scroll")
             // Clear stale streams when session becomes idle (handles missed thinking:end)
             if session.status == .idle {
                 self.streamingService.clearStreams(for: session.sessionId)
                 self.activeStreams = self.streamingService.activeStreams
                 self.rebuildDisplayItems()
+            }
+            // Auto-scroll to pending permission/input card when session needs attention
+            if session.status == .awaitingPermission || session.status == .awaitingInput {
+                let permId = self.firstPendingPermissionId
+                let inputId = self.firstPendingInputId
+                AppLogger.shared.log("[Scroll] session needs attention — permId: \(permId?.prefix(8) ?? "nil"), inputId: \(inputId?.prefix(8) ?? "nil"), msgs: \(self.messages.count)", level: .debug, category: "Scroll")
+                if let msgId = permId ?? inputId {
+                    self.scrollToMessageId = "msg-\(msgId)"
+                    AppLogger.shared.log("[Scroll] → scrollToMessageId = msg-\(msgId.prefix(8))", level: .debug, category: "Scroll")
+                } else {
+                    AppLogger.shared.log("[Scroll] ⚠️ no pending permission/input message found in \(self.messages.count) messages", level: .warning, category: "Scroll")
+                }
             }
         }
     }
