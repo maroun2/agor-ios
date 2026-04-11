@@ -184,16 +184,33 @@ struct ChatView: View {
                 Color.clear
                     .frame(height: 1)
                     .id("bottom")
-                    .onAppear { viewModel.userIsNearBottom = true }
-                    .onDisappear { viewModel.userIsNearBottom = false }
+                    .onAppear {
+                        viewModel.userIsNearBottom = true
+                        AppLogger.shared.log("[Scroll] bottom marker appeared — userIsNearBottom=true", level: .debug, category: "Scroll")
+                    }
+                    .onDisappear {
+                        viewModel.userIsNearBottom = false
+                        AppLogger.shared.log("[Scroll] bottom marker disappeared — userIsNearBottom=false", level: .debug, category: "Scroll")
+                    }
             }
             .onAppear { scrollProxy = proxy }
-            .onChange(of: viewModel.scrollToBottomToken) { _, _ in
+            .onChange(of: viewModel.scrollToBottomToken) { _, token in
                 let delay: Double = viewModel.isReconnectScroll ? 0.3 : 0.05
                 if viewModel.isReconnectScroll { viewModel.isReconnectScroll = false }
+                AppLogger.shared.log("[Scroll] scrollToBottom executing (token=\(token), delay=\(delay))", level: .debug, category: "Scroll")
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+            }
+            .onChange(of: viewModel.scrollToMessageId) { _, targetId in
+                guard let targetId else { return }
+                viewModel.scrollToMessageId = nil
+                AppLogger.shared.log("[Scroll] scrollToMessage executing → \(targetId)", level: .debug, category: "Scroll")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(targetId, anchor: .center)
                     }
                 }
             }
