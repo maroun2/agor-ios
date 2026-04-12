@@ -185,11 +185,9 @@ final class NavigationViewModel {
 
             AppLogger.shared.log("[Nav] loadBoards: \(mergedNodes.count) boards (\(newCount) new, \(existingCount) existing, \(removedCount) removed)", level: .debug, category: "Nav")
 
-            // Only load worktrees for new boards; refresh existing expanded ones
+            // Load worktrees for ALL boards (sessions needed for importantSessions/attentionSessions)
             for node in boardNodes {
-                if existingByBoardId[node.board.boardId] == nil || node.isExpanded {
-                    await loadWorktrees(for: node)
-                }
+                await loadWorktrees(for: node)
             }
 
             await loadRepoNames()
@@ -246,11 +244,9 @@ final class NavigationViewModel {
             let boardId = String(boardNode.board.boardId.prefix(8))
             AppLogger.shared.log("[Nav] loadWorktrees boardId=\(boardId): \(mergedWorktrees.count) worktrees", level: .debug, category: "Nav")
 
-            // Only load sessions for new worktrees; refresh existing expanded ones
+            // Load sessions for ALL worktrees (needed for importantSessions/attentionSessions)
             for wt in boardNode.worktrees {
-                if existingByWtId[wt.worktree.worktreeId] == nil || wt.isExpanded {
-                    await loadSessions(for: wt)
-                }
+                await loadSessions(for: wt)
             }
         } catch {
             let boardId = String(boardNode.board.boardId.prefix(8))
