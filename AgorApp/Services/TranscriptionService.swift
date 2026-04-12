@@ -57,18 +57,21 @@ final class TranscriptionService {
         }
 
         state = .transcribing
+        let startTime = Date()
+        AppLogger.shared.log("[Voice] 📝 Starting transcription for: \(audioPath)", level: .info, category: "Voice")
 
         do {
             let result = try await whisperKit.transcribe(audioPath: audioPath)
             state = .ready
 
             let text = result?.text ?? ""
-            AppLogger.shared.log("[Voice] Transcription complete: \(text.count) chars", level: .debug, category: "Voice")
+            let duration = Date().timeIntervalSince(startTime)
+            AppLogger.shared.log("[Voice] ✅ Transcription complete in \(String(format: "%.1f", duration))s: \"\(text)\" (\(text.count) chars)", level: .info, category: "Voice")
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             let errorMsg = "Transcription failed: \(error.localizedDescription)"
             state = .error(errorMsg)
-            AppLogger.shared.log("[Voice] \(errorMsg)", level: .error, category: "Voice")
+            AppLogger.shared.log("[Voice] ❌ \(errorMsg)", level: .error, category: "Voice")
             throw error
         }
     }

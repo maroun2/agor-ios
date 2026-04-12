@@ -94,10 +94,16 @@ final class ContinuousVoiceService {
     // MARK: - Speech Handlers
 
     private func handleSpeechStart() {
-        guard state == .listening else { return }
+        guard state == .listening else {
+            AppLogger.shared.log("[Voice] ⚠️ Speech start ignored - not in listening state (current: \(state))", level: .warning, category: "Voice")
+            return
+        }
+
+        AppLogger.shared.log("[Voice] 🎬 Speech start triggered - preparing to record", level: .info, category: "Voice")
 
         // Stop TTS if speaking (user can interrupt)
         if tts.isSpeaking {
+            AppLogger.shared.log("[Voice] 🛑 Stopping TTS - user is speaking", level: .debug, category: "Voice")
             tts.stop()
         }
 
@@ -108,7 +114,12 @@ final class ContinuousVoiceService {
     }
 
     private func handleSpeechEnd() {
-        guard state == .recording else { return }
+        guard state == .recording else {
+            AppLogger.shared.log("[Voice] ⚠️ Speech end ignored - not in recording state (current: \(state))", level: .warning, category: "Voice")
+            return
+        }
+
+        AppLogger.shared.log("[Voice] 🎬 Speech end triggered - stopping recording and transcribing", level: .info, category: "Voice")
 
         // Stop recording and transcribe
         Task {
@@ -120,6 +131,7 @@ final class ContinuousVoiceService {
 
     private func startRecording() async {
         state = .recording
+        AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
 
         do {
             // Setup audio session
@@ -144,23 +156,31 @@ final class ContinuousVoiceService {
             audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
             audioRecorder?.record()
 
-            AppLogger.shared.log("[Voice] Recording started: \(fileName)", level: .debug, category: "Voice")
+            AppLogger.shared.log("[Voice] ✅ Recording started: \(fileName) at \(fileURL.path)", level: .info, category: "Voice")
         } catch {
-            AppLogger.shared.log("[Voice] Recording failed: \(error.localizedDescription)", level: .error, category: "Voice")
+            AppLogger.shared.log("[Voice] ❌ Recording failed: \(error.localizedDescription)", level: .error, category: "Voice")
             state = .listening
         }
     }
 
     private func stopRecordingAndTranscribe() async {
+        AppLogger.shared.log("[Voice] 🛑 Stopping recording...", level: .info, category: "Voice")
         audioRecorder?.stop()
         audioRecorder = nil
 
         guard let audioURL = currentRecordingURL else {
+            AppLogger.shared.log("[Voice] ⚠️ No recording URL found", level: .warning, category: "Voice")
             state = .listening
             return
         }
 
+        // Check file size
+        if let fileSize = try? FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? UInt64 {
+            AppLogger.shared.log("[Voice] 📊 Recording file size: \(fileSize) bytes", level: .debug, category: "Voice")
+        }
+
         state = .transcribing
+        AppLogger.shared.log("[Voice] ⚙️ STATE: recording → transcribing", level: .info, category: "Voice")
         transcriptionProgress = "Transcribing..."
 
         do {
@@ -171,18 +191,20 @@ final class ContinuousVoiceService {
             currentRecordingURL = nil
 
             guard !text.isEmpty else {
-                AppLogger.shared.log("[Voice] Transcription empty, ignoring", level: .debug, category: "Voice")
+                AppLogger.shared.log("[Voice] ⚠️ Transcription empty, ignoring", level: .warning, category: "Voice")
                 state = .listening
+                AppLogger.shared.log("[Voice] 🔵 STATE: transcribing → listening", level: .info, category: "Voice")
                 return
             }
 
             state = .sending
+            AppLogger.shared.log("[Voice] 📤 STATE: transcribing → sending", level: .info, category: "Voice")
+            AppLogger.shared.log("[Voice] ✅ Delivering transcription: \"\(text)\"", level: .info, category: "Voice")
             onTranscription?(text)
-
-            AppLogger.shared.log("[Voice] Transcription delivered: \(text)", level: .info, category: "Voice")
         } catch {
-            AppLogger.shared.log("[Voice] Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
+            AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
             state = .listening
+            AppLogger.shared.log("[Voice] 🔵 STATE: transcribing → listening (error)", level: .info, category: "Voice")
 
             // Clean up temp file on error
             try? FileManager.default.removeItem(at: audioURL)
