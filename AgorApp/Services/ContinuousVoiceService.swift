@@ -17,7 +17,7 @@ final class ContinuousVoiceService {
     var transcriptionProgress: String = ""
 
     private let vad: VoiceActivityDetector
-    private let transcription: TranscriptionService
+    let transcription: TranscriptionService  // Exposed for initialization
     private let tts: TextToSpeechService
     private var audioRecorder: AVAudioRecorder?
     private var currentRecordingURL: URL?
