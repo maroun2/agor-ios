@@ -1,0 +1,216 @@
+import Foundation
+import AVFoundation
+
+@Observable
+final class ContinuousVoiceService {
+    enum State {
+        case disabled
+        case listening      // VAD active, waiting for speech
+        case recording      // User speaking, capturing
+        case transcribing   // Processing with Whisper
+        case sending        // Sending to agent
+        case speaking       // TTS speaking to user
+    }
+
+    var state: State = .disabled
+    var currentAudioLevel: Float = 0.0
+    var transcriptionProgress: String = ""
+
+    private let vad: VoiceActivityDetector
+    private let transcription: TranscriptionService
+    private let tts: TextToSpeechService
+    private var audioRecorder: AVAudioRecorder?
+    private var currentRecordingURL: URL?
+
+    // Callbacks
+    var onTranscription: ((String) -> Void)?
+
+    init(transcriptionService: TranscriptionService, ttsService: TextToSpeechService) {
+        self.vad = VoiceActivityDetector()
+        self.transcription = transcriptionService
+        self.tts = ttsService
+
+        setupCallbacks()
+    }
+
+    convenience init() {
+        let transcriptionService = TranscriptionService()
+        let ttsService = TextToSpeechService()
+        self.init(transcriptionService: transcriptionService, ttsService: ttsService)
+    }
+
+    // MARK: - Setup
+
+    private func setupCallbacks() {
+        // VAD callbacks
+        vad.onSpeechStart = { [weak self] in
+            self?.handleSpeechStart()
+        }
+
+        vad.onSpeechEnd = { [weak self] in
+            self?.handleSpeechEnd()
+        }
+
+        // TTS callbacks
+        tts.onSpeechStarted = { [weak self] in
+            Task { @MainActor in
+                self?.state = .speaking
+            }
+        }
+
+        tts.onSpeechFinished = { [weak self] in
+            Task { @MainActor in
+                // Resume listening after TTS finishes
+                if self?.state == .speaking {
+                    self?.state = .listening
+                }
+            }
+        }
+    }
+
+    // MARK: - Control
+
+    func startListening() {
+        guard state == .disabled else { return }
+
+        do {
+            try vad.startListening()
+            state = .listening
+            AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] Failed to start listening: \(error.localizedDescription)", level: .error, category: "Voice")
+        }
+    }
+
+    func stopListening() {
+        vad.stopListening()
+        audioRecorder?.stop()
+        audioRecorder = nil
+        tts.stop()
+        state = .disabled
+        AppLogger.shared.log("[Voice] Continuous voice mode stopped", level: .info, category: "Voice")
+    }
+
+    // MARK: - Speech Handlers
+
+    private func handleSpeechStart() {
+        guard state == .listening else { return }
+
+        // Stop TTS if speaking (user can interrupt)
+        if tts.isSpeaking {
+            tts.stop()
+        }
+
+        // Start recording
+        Task {
+            await startRecording()
+        }
+    }
+
+    private func handleSpeechEnd() {
+        guard state == .recording else { return }
+
+        // Stop recording and transcribe
+        Task {
+            await stopRecordingAndTranscribe()
+        }
+    }
+
+    // MARK: - Recording
+
+    private func startRecording() async {
+        state = .recording
+
+        do {
+            // Setup audio session
+            let session = AVAudioSession.sharedInstance()
+            try await session.setCategory(.record, mode: .default)
+            try await session.setActive(true)
+
+            // Create temporary file for recording
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileName = "voice-\(UUID().uuidString).m4a"
+            let fileURL = tempDir.appendingPathComponent(fileName)
+            currentRecordingURL = fileURL
+
+            // Audio settings optimized for speech
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 16000,  // Whisper works best with 16kHz
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+            ]
+
+            audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
+            audioRecorder?.record()
+
+            AppLogger.shared.log("[Voice] Recording started: \(fileName)", level: .debug, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] Recording failed: \(error.localizedDescription)", level: .error, category: "Voice")
+            state = .listening
+        }
+    }
+
+    private func stopRecordingAndTranscribe() async {
+        audioRecorder?.stop()
+        audioRecorder = nil
+
+        guard let audioURL = currentRecordingURL else {
+            state = .listening
+            return
+        }
+
+        state = .transcribing
+        transcriptionProgress = "Transcribing..."
+
+        do {
+            let text = try await transcription.transcribe(audioURL: audioURL)
+
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: audioURL)
+            currentRecordingURL = nil
+
+            guard !text.isEmpty else {
+                AppLogger.shared.log("[Voice] Transcription empty, ignoring", level: .debug, category: "Voice")
+                state = .listening
+                return
+            }
+
+            state = .sending
+            onTranscription?(text)
+
+            AppLogger.shared.log("[Voice] Transcription delivered: \(text)", level: .info, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
+            state = .listening
+
+            // Clean up temp file on error
+            try? FileManager.default.removeItem(at: audioURL)
+            currentRecordingURL = nil
+        }
+    }
+
+    // MARK: - TTS
+
+    func speakStatus(_ status: String) {
+        tts.speakStatus(status)
+    }
+
+    func speakMessage(_ message: String) {
+        tts.speakMessage(message)
+    }
+
+    // MARK: - Configuration
+
+    func setSensitivity(_ sensitivity: Float) {
+        vad.setSensitivity(sensitivity)
+    }
+
+    func setStatusSpeakingRate(_ rate: Float) {
+        tts.setStatusRate(rate)
+    }
+
+    func setMessageSpeakingRate(_ rate: Float) {
+        tts.setMessageRate(rate)
+    }
+}
