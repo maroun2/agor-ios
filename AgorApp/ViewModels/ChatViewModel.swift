@@ -841,22 +841,30 @@ final class ChatViewModel {
     private func handleVoiceStatusChange(from oldStatus: SessionStatus?, to newStatus: SessionStatus) {
         guard voiceModeEnabled else { return }
 
+        AppLogger.shared.log("[Voice] 📊 Session status change: \(oldStatus?.rawValue ?? "nil") → \(newStatus.rawValue)", level: .info, category: "Voice")
+
         switch newStatus {
         case .running:
+            AppLogger.shared.log("[Voice] 🤔 Agent started running - speaking 'Thinking'", level: .info, category: "Voice")
             voiceService?.speakStatus("Thinking")
         case .idle:
             // Check if there's a new final message
             if hasNewAssistantMessage(since: oldStatus) {
+                AppLogger.shared.log("[Voice] ✅ Agent finished with new message - speaking final message", level: .info, category: "Voice")
                 speakFinalMessage()
             } else if oldStatus == .running {
                 // Went from running → idle without new message (aborted/cancelled)
+                AppLogger.shared.log("[Voice] 🛑 Agent stopped without message - speaking 'Stopped'", level: .info, category: "Voice")
                 voiceService?.speakStatus("Stopped")
             }
         case .awaitingPermission:
+            AppLogger.shared.log("[Voice] 🔐 Agent awaiting permission - speaking 'I need permission'", level: .info, category: "Voice")
             voiceService?.speakStatus("I need permission")
         case .awaitingInput:
+            AppLogger.shared.log("[Voice] ⌨️ Agent awaiting input - speaking 'I need input'", level: .info, category: "Voice")
             voiceService?.speakStatus("I need input")
         default:
+            AppLogger.shared.log("[Voice] ℹ️ Unhandled status: \(newStatus.rawValue)", level: .debug, category: "Voice")
             break
         }
     }

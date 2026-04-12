@@ -44,6 +44,7 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     func speakStatus(_ text: String) {
         // Cancel any currently speaking status (skip-to-latest)
         if synthesizer.isSpeaking && currentType == .status {
+            AppLogger.shared.log("[Voice] 🔄 Canceling previous status to speak new status", level: .debug, category: "Voice")
             synthesizer.stopSpeaking(at: .immediate)
         }
 
@@ -59,12 +60,13 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
         synthesizer.speak(utterance)
 
-        AppLogger.shared.log("[Voice] Speaking status: \(text)", level: .debug, category: "Voice")
+        AppLogger.shared.log("[Voice] 🔊 Speaking status: \"\(text)\" (rate: \(String(format: "%.2f", statusRate)))", level: .info, category: "Voice")
     }
 
     func speakMessage(_ text: String) {
         // Cancel status if speaking, then speak message
         if synthesizer.isSpeaking {
+            AppLogger.shared.log("[Voice] 🔄 Canceling previous speech to speak final message", level: .debug, category: "Voice")
             synthesizer.stopSpeaking(at: .immediate)
         }
 
@@ -80,7 +82,7 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
         synthesizer.speak(utterance)
 
-        AppLogger.shared.log("[Voice] Speaking message: \(text.prefix(50))...", level: .debug, category: "Voice")
+        AppLogger.shared.log("[Voice] 💬 Speaking final message: \"\(text.prefix(50))\(text.count > 50 ? "..." : "")\" (\(text.count) chars, rate: \(String(format: "%.2f", messageRate)))", level: .info, category: "Voice")
     }
 
     func stop() {

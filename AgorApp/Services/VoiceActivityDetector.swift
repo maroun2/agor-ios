@@ -109,8 +109,8 @@ final class VoiceActivityDetector {
             Task { @MainActor in
                 self.speechStartTime = Date()
                 self.state = .speechDetected
+                AppLogger.shared.log("[Voice] 🎤 Speech START detected (RMS: \(String(format: "%.4f", rms)) > threshold: \(String(format: "%.4f", self.energyThreshold)))", level: .info, category: "Voice")
                 self.onSpeechStart?()
-                AppLogger.shared.log("[Voice] Speech detected (RMS: \(rms))", level: .debug, category: "Voice")
             }
         }
 
@@ -132,10 +132,11 @@ final class VoiceActivityDetector {
         let silenceDuration = Date().timeIntervalSince(lastSoundTime)
         if silenceDuration >= self.silenceDuration {
             // Silence detected - end of speech
+            let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
             Task { @MainActor in
                 self.state = .listening
+                AppLogger.shared.log("[Voice] 🔇 Speech END detected (silence: \(String(format: "%.1f", silenceDuration))s, total speech: \(String(format: "%.1f", totalDuration))s)", level: .info, category: "Voice")
                 self.onSpeechEnd?()
-                AppLogger.shared.log("[Voice] Silence detected, speech ended", level: .debug, category: "Voice")
             }
         }
     }
