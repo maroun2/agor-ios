@@ -89,6 +89,18 @@ final class ChatViewModel {
     private let pageSize = 50
     private var messagePollingTimer: Timer?
 
+    // Voice mode
+    var voiceService: ContinuousVoiceService?
+    var voiceModeEnabled: Bool = false {
+        didSet {
+            if voiceModeEnabled {
+                enableVoiceMode()
+            } else {
+                disableVoiceMode()
+            }
+        }
+    }
+
     // Dependencies
     var userId: String
     let client: AgorClient
@@ -661,6 +673,12 @@ final class ChatViewModel {
             let oldStatus = self.currentSession?.status
             self.currentSession = session
             AppLogger.shared.log("[Scroll] onSessionPatched: \(oldStatus?.rawValue ?? "nil") → \(session.status.rawValue)", level: .debug, category: "Scroll")
+
+            // Voice mode: speak status changes
+            if voiceModeEnabled && oldStatus != session.status {
+                handleVoiceStatusChange(from: oldStatus, to: session.status)
+            }
+
             // Clear stale streams when session becomes idle (handles missed thinking:end)
             if session.status == .idle {
                 self.streamingService.clearStreams(for: session.sessionId)
@@ -679,6 +697,9 @@ final class ChatViewModel {
                     AppLogger.shared.log("[Scroll] ⚠️ no pending permission/input message found in \(self.messages.count) messages", level: .warning, category: "Scroll")
                 }
             }
+
+            // Update voice listening state
+            updateVoiceListening()
         }
     }
 
@@ -755,5 +776,139 @@ final class ChatViewModel {
         socketService.onMessageCreated { [weak self] message in
             self?.streamingService.handleMessageCreated(messageId: message.messageId)
         }
+    }
+
+    // MARK: - Voice Mode
+
+    func enableVoiceMode() {
+        guard voiceService == nil else { return }
+
+        let service = ContinuousVoiceService()
+        service.onTranscription = { [weak self] text in
+            self?.handleVoiceInput(text)
+        }
+
+        voiceService = service
+
+        // Initialize transcription service in background
+        Task {
+            do {
+                try await service.transcription.initialize()
+                service.startListening()
+                AppLogger.shared.log("[Voice] Voice mode enabled", level: .info, category: "Voice")
+            } catch {
+                AppLogger.shared.log("[Voice] Failed to enable voice mode: \(error.localizedDescription)", level: .error, category: "Voice")
+                self.error = "Failed to enable voice mode: \(error.localizedDescription)"
+                self.voiceService = nil
+                self.voiceModeEnabled = false
+            }
+        }
+    }
+
+    func disableVoiceMode() {
+        voiceService?.stopListening()
+        voiceService = nil
+        AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
+    }
+
+    private func handleVoiceInput(_ text: String) {
+        // Text appears briefly, then auto-sends
+        promptText = text
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500)) // Show what was transcribed
+            if promptText == text { // User didn't edit
+                sendPrompt()
+            }
+        }
+    }
+
+    private func updateVoiceListening() {
+        guard let voice = voiceService else { return }
+
+        // Only listen when session is truly idle (not running/awaiting)
+        if currentSession?.status == .idle && isSessionPromptable {
+            if voice.state == .disabled {
+                voice.startListening()
+            }
+        } else {
+            if voice.state == .listening || voice.state == .recording {
+                voice.stopListening()
+            }
+        }
+    }
+
+    private func handleVoiceStatusChange(from oldStatus: SessionStatus?, to newStatus: SessionStatus) {
+        guard voiceModeEnabled else { return }
+
+        switch newStatus {
+        case .running:
+            voiceService?.speakStatus("Thinking")
+        case .idle:
+            // Check if there's a new final message
+            if hasNewAssistantMessage(since: oldStatus) {
+                speakFinalMessage()
+            } else if oldStatus == .running {
+                // Went from running → idle without new message (aborted/cancelled)
+                voiceService?.speakStatus("Stopped")
+            }
+        case .awaitingPermission:
+            voiceService?.speakStatus("I need permission")
+        case .awaitingInput:
+            voiceService?.speakStatus("I need input")
+        default:
+            break
+        }
+    }
+
+    private func hasNewAssistantMessage(since oldStatus: SessionStatus?) -> Bool {
+        // Check if last message is from assistant and relatively recent
+        guard let lastMessage = messages.last,
+              lastMessage.role == .assistant else {
+            return false
+        }
+
+        // If we have a recent assistant message, consider it new
+        return true
+    }
+
+    private func speakFinalMessage() {
+        guard voiceModeEnabled, let lastMessage = messages.last else { return }
+
+        // Extract text content from assistant message
+        let text = extractTextFromMessage(lastMessage)
+
+        guard !text.isEmpty else { return }
+
+        // Summarize if too long
+        let spokenText = text.count > 500 ? summarizeText(text) : text
+
+        voiceService?.speakMessage(spokenText)
+    }
+
+    private func extractTextFromMessage(_ message: Message) -> String {
+        // Parse message.content for text blocks only
+        switch message.content {
+        case .text(let text):
+            return text
+        case .blocks(let blocks):
+            var textParts: [String] = []
+            for block in blocks {
+                if case .text(let textBlock) = block {
+                    textParts.append(textBlock.text)
+                }
+            }
+            return textParts.joined(separator: " ")
+        default:
+            return ""
+        }
+    }
+
+    private func summarizeText(_ text: String) -> String {
+        // Take first 400 chars + "..."
+        if text.count <= 400 {
+            return text
+        }
+        return String(text.prefix(400)) + "..."
     }
 }

@@ -14,67 +14,97 @@ struct PromptInputBar: View {
             Divider()
 
             HStack(alignment: .bottom, spacing: 8) {
-                // Attachment menu
-                Menu {
-                    Button {
-                        viewModel.uploadDebugLog()
-                    } label: {
-                        Label("Attach Debug Log", systemImage: "ant")
-                    }
+                if viewModel.voiceModeEnabled {
+                    // Voice mode active - show voice status
+                    voiceStatusView
+                        .frame(maxWidth: .infinity)
 
+                    // Disable voice button
                     Button {
-                        showPhotoPicker = true
+                        HapticFeedback.light()
+                        viewModel.voiceModeEnabled = false
                     } label: {
-                        Label("Attach Photo", systemImage: "photo")
-                    }
-
-                    Button {
-                        showFilePicker = true
-                    } label: {
-                        Label("Attach File", systemImage: "doc")
-                    }
-                } label: {
-                    if viewModel.isUploading {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 28, height: 28)
-                    } else {
-                        Image(systemName: "paperclip")
+                        Image(systemName: "mic.slash.fill")
                             .font(.system(size: 20))
                             .foregroundStyle(.secondary)
                             .frame(width: 28, height: 28)
                     }
-                }
-                .disabled(viewModel.isUploading || viewModel.currentSessionId == nil)
+                } else {
+                    // Text mode - normal UI
+                    // Attachment menu
+                    Menu {
+                        Button {
+                            viewModel.uploadDebugLog()
+                        } label: {
+                            Label("Attach Debug Log", systemImage: "ant")
+                        }
 
-                // Text input
-                TextField(placeholder, text: Binding(
-                    get: { viewModel.promptText },
-                    set: { viewModel.promptText = $0 }
-                ), axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.plain)
-                    .focused($isFocused)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
+                        Button {
+                            showPhotoPicker = true
+                        } label: {
+                            Label("Attach Photo", systemImage: "photo")
+                        }
 
-                // Send button
-                Button {
-                    HapticFeedback.light()
-                    viewModel.sendPrompt()
-                } label: {
-                    if viewModel.isSendingPrompt {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 32, height: 32)
-                    } else {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 36))
-                            .symbolRenderingMode(.hierarchical)
+                        Button {
+                            showFilePicker = true
+                        } label: {
+                            Label("Attach File", systemImage: "doc")
+                        }
+                    } label: {
+                        if viewModel.isUploading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 28, height: 28)
+                        } else {
+                            Image(systemName: "paperclip")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, height: 28)
+                        }
                     }
+                    .disabled(viewModel.isUploading || viewModel.currentSessionId == nil)
+
+                    // Text input
+                    TextField(placeholder, text: Binding(
+                        get: { viewModel.promptText },
+                        set: { viewModel.promptText = $0 }
+                    ), axis: .vertical)
+                        .lineLimit(1...4)
+                        .textFieldStyle(.plain)
+                        .focused($isFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
+
+                    // Voice mode toggle
+                    Button {
+                        HapticFeedback.light()
+                        viewModel.voiceModeEnabled = true
+                    } label: {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.blue)
+                            .frame(width: 28, height: 28)
+                    }
+                    .disabled(viewModel.currentSessionId == nil)
+
+                    // Send button
+                    Button {
+                        HapticFeedback.light()
+                        viewModel.sendPrompt()
+                    } label: {
+                        if viewModel.isSendingPrompt {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 32, height: 32)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 36))
+                                .symbolRenderingMode(.hierarchical)
+                        }
+                    }
+                    .disabled(!canSend)
                 }
-                .disabled(!canSend)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -87,6 +117,51 @@ struct PromptInputBar: View {
         .onChange(of: selectedPhoto) { _, newValue in
             handlePhotoSelection(newValue)
         }
+    }
+
+    private var voiceStatusView: some View {
+        HStack(spacing: 8) {
+            // Status icon
+            if let state = viewModel.voiceService?.state {
+                switch state {
+                case .listening:
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.blue)
+                    Text("Listening...")
+                        .foregroundStyle(.secondary)
+                case .recording:
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.red)
+                    Text("Recording...")
+                        .foregroundStyle(.primary)
+                case .transcribing:
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Transcribing...")
+                        .foregroundStyle(.secondary)
+                case .sending:
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Sending...")
+                        .foregroundStyle(.secondary)
+                case .speaking:
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(.blue)
+                    Text("Speaking...")
+                        .foregroundStyle(.secondary)
+                case .disabled:
+                    Text("Voice mode disabled")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Initializing...")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
     }
 
     private var canSend: Bool {
