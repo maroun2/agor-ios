@@ -37,8 +37,9 @@ enum GitVersion {
 EOF
 
 # Build (no signing)
-echo "Building..."
-BUILD_OUTPUT=$(xcodebuild \
+BUILD_LOG=$(mktemp /tmp/agor-build-XXXXXX)
+echo "Building... (log: $BUILD_LOG)"
+xcodebuild \
   -project AgorApp.xcodeproj \
   -scheme AgorApp \
   -configuration Release \
@@ -46,16 +47,17 @@ BUILD_OUTPUT=$(xcodebuild \
   -derivedDataPath .build/DerivedData \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
-  build 2>&1)
+  build 2>&1 | tee "$BUILD_LOG"
 
-echo "$BUILD_OUTPUT" | grep -E "error:|warning:|BUILD SUCCEEDED|BUILD FAILED"
-
-if ! echo "$BUILD_OUTPUT" | grep -q "BUILD SUCCEEDED"; then
+if grep -q "BUILD SUCCEEDED" "$BUILD_LOG"; then
+  echo "Build succeeded (git: $GIT_HASH)."
+else
   echo "ERROR: Build failed. Not deploying."
   exit 1
 fi
 
 # Extract entitlements
+echo "Signing..."
 security cms -D -i "$PROFILE" 2>/dev/null \
   | plutil -extract Entitlements xml1 -o "$ENTITLEMENTS" -
 
@@ -66,9 +68,11 @@ codesign --force \
   --entitlements "$ENTITLEMENTS" \
   --timestamp=none \
   "$APP"
+echo "Signed."
 
 # Install
 echo "Installing on device..."
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP"
 
-echo "Done."
+echo ""
+echo "Done. Installed git:$GIT_HASH on device $DEVICE_ID."
