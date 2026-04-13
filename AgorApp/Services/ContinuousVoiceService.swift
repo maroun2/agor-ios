@@ -70,16 +70,12 @@ final class ContinuousVoiceService {
 
     // MARK: - Control
 
-    func startListening() {
+    func startListening() throws {
         guard state == .disabled else { return }
 
-        do {
-            try vad.startListening()
-            state = .listening
-            AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
-        } catch {
-            AppLogger.shared.log("[Voice] Failed to start listening: \(error.localizedDescription)", level: .error, category: "Voice")
-        }
+        try vad.startListening()
+        state = .listening
+        AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
     }
 
     func stopListening() {
