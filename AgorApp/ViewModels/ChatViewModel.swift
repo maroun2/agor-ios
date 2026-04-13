@@ -831,7 +831,11 @@ final class ChatViewModel {
         // Only listen when session is truly idle (not running/awaiting)
         if currentSession?.status == .idle && isSessionPromptable {
             if voice.state == .disabled {
-                voice.startListening()
+                do {
+                    try voice.startListening()
+                } catch {
+                    AppLogger.shared.log("[Voice] Failed to resume listening: \(error.localizedDescription)", level: .error, category: "Voice")
+                }
             }
         } else {
             if voice.state == .listening || voice.state == .recording {
