@@ -15,7 +15,7 @@ final class TranscriptionService {
     private var whisperKit: WhisperKit?
     private let modelName: String
 
-    init(modelName: String = "base-en") {
+    init(modelName: String = "openai_whisper-base.en") {
         self.modelName = modelName
     }
 
