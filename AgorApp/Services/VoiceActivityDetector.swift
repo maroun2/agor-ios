@@ -23,6 +23,7 @@ final class VoiceActivityDetector {
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
     private var silenceCheckTimer: Timer?
+    private var bufferCount: Int = 0  // For periodic logging
 
     // Callbacks
     var onSpeechStart: (() -> Void)?
@@ -114,7 +115,10 @@ final class VoiceActivityDetector {
     // MARK: - Audio Processing
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let floatData = buffer.floatChannelData?[0] else { return }
+        guard let floatData = buffer.floatChannelData?[0] else {
+            AppLogger.shared.log("[Voice] ⚠️ No audio data in buffer", level: .warning, category: "Voice")
+            return
+        }
         let frameLength = Int(buffer.frameLength)
 
         // Calculate RMS (root mean square) of audio
@@ -126,6 +130,12 @@ final class VoiceActivityDetector {
 
         Task { @MainActor in
             self.currentAudioLevel = rms
+        }
+
+        // Log RMS periodically (every ~100 buffers = ~2 seconds at 48kHz)
+        bufferCount += 1
+        if bufferCount % 100 == 0 {
+            AppLogger.shared.log("[Voice] 📊 Audio level: RMS=\(String(format: "%.4f", rms)), energyThresh=\(String(format: "%.4f", self.energyThreshold)), state=\(self.state)", level: .info, category: "Voice")
         }
 
         // Speech detection logic
