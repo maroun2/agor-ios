@@ -22,19 +22,12 @@ final class TranscriptionService {
     // MARK: - Initialization
 
     func initialize() async throws {
-        guard state == .notInitialized else { return }
+        guard case .notInitialized = state else { return }
 
         state = .downloading(progress: 0.0)
 
         do {
-            // Initialize WhisperKit with specified model
-            // Model downloads automatically on first use
-            whisperKit = try await WhisperKit(model: modelName, downloadProgressHandler: { [weak self] progress in
-                Task { @MainActor in
-                    self?.state = .downloading(progress: progress.fractionCompleted)
-                }
-            })
-
+            whisperKit = try await WhisperKit(model: modelName)
             state = .ready
             AppLogger.shared.log("[Voice] WhisperKit initialized with model: \(modelName)", level: .info, category: "Voice")
         } catch {
@@ -48,12 +41,11 @@ final class TranscriptionService {
     // MARK: - Transcription
 
     func transcribe(audioPath: String) async throws -> String {
-        guard let whisperKit else {
-            // Auto-initialize if not done yet
+        if whisperKit == nil {
             try await initialize()
-            guard let whisperKit else {
-                throw TranscriptionError.notInitialized
-            }
+        }
+        guard let whisperKit else {
+            throw TranscriptionError.notInitialized
         }
 
         state = .transcribing
@@ -61,10 +53,10 @@ final class TranscriptionService {
         AppLogger.shared.log("[Voice] 📝 Starting transcription for: \(audioPath)", level: .info, category: "Voice")
 
         do {
-            let result = try await whisperKit.transcribe(audioPath: audioPath)
+            let results = try await whisperKit.transcribe(audioPath: audioPath)
             state = .ready
 
-            let text = result?.text ?? ""
+            let text = results.map(\.text).joined(separator: " ")
             let duration = Date().timeIntervalSince(startTime)
             AppLogger.shared.log("[Voice] ✅ Transcription complete in \(String(format: "%.1f", duration))s: \"\(text)\" (\(text.count) chars)", level: .info, category: "Voice")
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
