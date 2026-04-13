@@ -794,13 +794,15 @@ final class ChatViewModel {
         Task {
             do {
                 try await service.transcription.initialize()
-                service.startListening()
+                try service.startListening()
                 AppLogger.shared.log("[Voice] Voice mode enabled", level: .info, category: "Voice")
             } catch {
                 AppLogger.shared.log("[Voice] Failed to enable voice mode: \(error.localizedDescription)", level: .error, category: "Voice")
-                self.error = "Failed to enable voice mode: \(error.localizedDescription)"
-                self.voiceService = nil
-                self.voiceModeEnabled = false
+                await MainActor.run {
+                    self.error = "Voice mode failed: \(error.localizedDescription)"
+                    self.voiceService = nil
+                    self.voiceModeEnabled = false
+                }
             }
         }
     }

@@ -42,8 +42,33 @@ final class VoiceActivityDetector {
     func startListening() throws {
         guard state == .idle else { return }
 
-        // Setup audio session
+        // Request microphone permission
         let session = AVAudioSession.sharedInstance()
+
+        // Check permission status
+        switch session.recordPermission {
+        case .denied:
+            throw VADError.microphonePermissionDenied
+        case .undetermined:
+            // Request permission synchronously (blocks until user responds)
+            var granted = false
+            let semaphore = DispatchSemaphore(value: 0)
+            session.requestRecordPermission { allowed in
+                granted = allowed
+                semaphore.signal()
+            }
+            semaphore.wait()
+
+            if !granted {
+                throw VADError.microphonePermissionDenied
+            }
+        case .granted:
+            break
+        @unknown default:
+            break
+        }
+
+        // Setup audio session
         try session.setCategory(.record, mode: .measurement)
         try session.setActive(true)
 
@@ -138,6 +163,19 @@ final class VoiceActivityDetector {
                 AppLogger.shared.log("[Voice] 🔇 Speech END detected (silence: \(String(format: "%.1f", silenceDuration))s, total speech: \(String(format: "%.1f", totalDuration))s)", level: .info, category: "Voice")
                 self.onSpeechEnd?()
             }
+        }
+    }
+}
+
+// MARK: - Error Types
+
+enum VADError: LocalizedError {
+    case microphonePermissionDenied
+
+    var errorDescription: String? {
+        switch self {
+        case .microphonePermissionDenied:
+            return "Microphone permission denied. Please enable microphone access in Settings."
         }
     }
 }
