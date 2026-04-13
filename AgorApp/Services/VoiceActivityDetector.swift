@@ -16,9 +16,9 @@ final class VoiceActivityDetector {
     private var inputNode: AVAudioInputNode?
 
     // VAD configuration
-    private var energyThreshold: Float = 0.02  // Speech start threshold
-    private var silenceThreshold: Float = 0.01  // Silence threshold
-    private let silenceDuration: TimeInterval = 1.5  // Seconds of silence to detect end
+    private var energyThreshold: Float = 0.015  // Speech start threshold (lowered for better detection)
+    private var silenceThreshold: Float = 0.005  // Silence threshold (lowered to detect quiet rooms)
+    private let silenceDuration: TimeInterval = 1.0  // Seconds of silence to detect end (faster response)
 
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
@@ -142,6 +142,12 @@ final class VoiceActivityDetector {
         // Update last sound time if audio is above silence threshold
         if rms > silenceThreshold {
             lastSoundTime = Date()
+        }
+
+        // Debug: Log RMS values when recording
+        if state == .speechDetected {
+            let silenceDur = Date().timeIntervalSince(lastSoundTime)
+            AppLogger.shared.log("[Voice] 🎙️ Recording: RMS=\(String(format: "%.4f", rms)), silence=\(String(format: "%.1f", silenceDur))s", level: .debug, category: "Voice")
         }
     }
 
