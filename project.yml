@@ -41,6 +41,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        NSMicrophoneUsageDescription: Agor uses your microphone for hands-free voice conversations with AI agents
+        NSSpeechRecognitionUsageDescription: Agor transcribes your speech locally on-device for voice prompts
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp
       SWIFT_VERSION: "5.0"
