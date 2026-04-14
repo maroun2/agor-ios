@@ -195,13 +195,20 @@ final class ContinuousVoiceService {
 
             state = .sending
             AppLogger.shared.log("[Voice] 📤 STATE: transcribing → sending", level: .info, category: "Voice")
-            AppLogger.shared.log("[Voice] ✅ Delivering transcription: \"\(text)\"", level: .info, category: "Voice")
+            AppLogger.shared.log("[Voice] ✅ Raw transcription: \"\(text)\"", level: .info, category: "Voice")
 
-            // Filter out WhisperKit special tokens
-            if !text.isEmpty && !text.hasPrefix("[") && !text.hasSuffix("]") {
-                onTranscription?(text)
+            // Strip WhisperKit special tokens (e.g., [BLANK_AUDIO], [MUSIC], etc.)
+            let cleanedText = text.replacingOccurrences(
+                of: "\\[[A-Z_]+\\]",
+                with: "",
+                options: .regularExpression
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !cleanedText.isEmpty {
+                AppLogger.shared.log("[Voice] ✅ Delivering cleaned transcription: \"\(cleanedText)\"", level: .info, category: "Voice")
+                onTranscription?(cleanedText)
             } else {
-                AppLogger.shared.log("[Voice] ⚠️ Ignoring special token or empty transcription: \"\(text)\"", level: .warning, category: "Voice")
+                AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
             }
 
             // Return to listening state
