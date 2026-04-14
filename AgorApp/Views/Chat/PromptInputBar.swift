@@ -96,11 +96,12 @@ struct PromptInputBar: View {
                         if viewModel.isSendingPrompt {
                             ProgressView()
                                 .controlSize(.small)
-                                .frame(width: 32, height: 32)
+                                .frame(width: 28, height: 28)
                         } else {
                             Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 36))
+                                .font(.system(size: 28))
                                 .symbolRenderingMode(.hierarchical)
+                                .frame(width: 28, height: 28)
                         }
                     }
                     .disabled(!canSend)
