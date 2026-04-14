@@ -162,8 +162,10 @@ final class VoiceActivityDetector {
     }
 
     private func startSilenceCheckTimer() {
-        silenceCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.checkForSilence()
+        DispatchQueue.main.async { [weak self] in
+            self?.silenceCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                self?.checkForSilence()
+            }
         }
     }
 
