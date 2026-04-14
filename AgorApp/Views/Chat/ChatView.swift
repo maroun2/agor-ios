@@ -44,6 +44,12 @@ struct ChatView: View {
                     Task { await vm.loadFiles() }
                 }
             }
+            .onChange(of: viewModel.connectionState) { _, state in
+                // Retry file list load when socket connects (initial load may have failed before socket was ready)
+                if state == .connected, let vm = fileBrowserVM, vm.files.isEmpty {
+                    Task { await vm.loadFiles() }
+                }
+            }
             .alert("Reset Session?", isPresented: $showResetAlert) {
                 Button("Cancel", role: .cancel) {}
                 Button("Archive & Reset", role: .destructive) {
