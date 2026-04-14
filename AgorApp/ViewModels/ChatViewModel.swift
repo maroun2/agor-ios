@@ -846,11 +846,11 @@ final class ChatViewModel {
     }
 
     private func handleVoiceInput(_ text: String) {
-        // Text appears briefly, then auto-sends
+        // Text appears for 5s, then auto-sends if not edited
         promptText = text
 
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500)) // Show what was transcribed
+            try? await Task.sleep(for: .milliseconds(5000)) // Give user time to review
             if promptText == text { // User didn't edit
                 sendPrompt()
             }
