@@ -69,8 +69,8 @@ final class VoiceActivityDetector {
             break
         }
 
-        // Setup audio session
-        try session.setCategory(.record, mode: .measurement)
+        // Setup audio session for recording + playback (for TTS)
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true)
 
         // Setup audio engine

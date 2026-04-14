@@ -212,6 +212,11 @@ struct ChatView: View {
                     withAnimation(.easeOut(duration: 0.25)) {
                         proxy.scrollTo(targetId, anchor: .center)
                     }
+                    // Clear flag after animation completes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        viewModel.scrollToMessageInProgress = false
+                        AppLogger.shared.log("[Scroll] scrollToMessageInProgress cleared", level: .debug, category: "Scroll")
+                    }
                 }
             }
         }
@@ -292,7 +297,7 @@ private struct AttentionBar: View {
 
     var body: some View {
         Button {
-            let targetId = viewModel.firstPendingPermissionId ?? viewModel.firstPendingInputId
+            let targetId = viewModel.currentPendingPermissionId ?? viewModel.currentPendingInputId
             if let targetId {
                 withAnimation {
                     scrollProxy?.scrollTo("msg-\(targetId)", anchor: .center)

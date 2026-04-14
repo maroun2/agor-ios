@@ -50,6 +50,15 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
         guard !text.isEmpty else { return }
 
+        // Ensure audio session supports playback
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setActive(true)
+            AppLogger.shared.log("[Voice] ✅ Audio session activated for TTS", level: .debug, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] ⚠️ Failed to activate audio session: \(error.localizedDescription)", level: .warning, category: "Voice")
+        }
+
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = statusRate
@@ -71,6 +80,15 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
         }
 
         guard !text.isEmpty else { return }
+
+        // Ensure audio session supports playback
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setActive(true)
+            AppLogger.shared.log("[Voice] ✅ Audio session activated for TTS", level: .debug, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] ⚠️ Failed to activate audio session: \(error.localizedDescription)", level: .warning, category: "Voice")
+        }
 
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
