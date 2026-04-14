@@ -123,7 +123,16 @@ final class ChatViewModel {
     // MARK: - Session Selection
 
     func selectSession(_ sessionId: String) {
-        guard sessionId != currentSessionId else { return }
+        if sessionId == currentSessionId {
+            // Same session re-selected — do a soft refresh to pick up any missed events
+            AppLogger.shared.log("[Chat] selectSession \(sessionId) (soft refresh)", level: .debug, category: "Chat")
+            Task {
+                await loadSession(sessionId)
+                await loadTasks(sessionId)
+                await checkForNewMessages(sessionId)
+            }
+            return
+        }
         AppLogger.shared.log("[Chat] selectSession \(sessionId)", level: .info, category: "Chat")
         stopMessagePolling()
         currentSessionId = sessionId
@@ -314,6 +323,13 @@ final class ChatViewModel {
                     "/sessions/\(sessionId)/prompt",
                     body: PromptBody(prompt: text)
                 )
+                // Proactively refresh in case socket events were missed
+                try? await Task.sleep(for: .milliseconds(300))
+                guard currentSessionId == sessionId else { return }
+                AppLogger.shared.log("[Chat] sendPrompt: proactive refresh after send", level: .debug, category: "Chat")
+                await loadSession(sessionId)
+                await loadTasks(sessionId)
+                await checkForNewMessages(sessionId)
             } catch {
                 AppLogger.shared.log("[Chat] sendPrompt ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
                 self.error = "Failed to send prompt: \(error.localizedDescription)"
@@ -472,6 +488,16 @@ final class ChatViewModel {
     private func checkForNewMessages(_ sessionId: String) async {
         guard sessionId == currentSessionId else { return }
         do {
+            // Check for new tasks (user's prompt appears as a task header)
+            let taskCount: PaginatedResponse<AgorTask> = try await client.getPaginated(
+                "/tasks",
+                query: ["session_id": sessionId, "$limit": "1"]
+            )
+            guard sessionId == currentSessionId else { return }
+            if taskCount.total > tasks.count {
+                await loadTasks(sessionId)
+            }
+
             let count: PaginatedResponse<Message> = try await client.getPaginated(
                 "/messages",
                 query: ["session_id": sessionId, "$limit": "1"]
