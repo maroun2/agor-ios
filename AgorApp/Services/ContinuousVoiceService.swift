@@ -85,12 +85,19 @@ final class ContinuousVoiceService {
         state = .listening
         AudioServicesPlaySystemSound(SoundID.listeningReady)
         AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
+
+        // Start pre-roll recorder immediately so first word is never cut off
+        startPreRollRecorder()
     }
 
     func stopListening() {
         vad.stopListening()
         audioRecorder?.stop()
         audioRecorder = nil
+        if let url = currentRecordingURL {
+            try? FileManager.default.removeItem(at: url)
+            currentRecordingURL = nil
+        }
         tts.stop()
         state = .disabled
         AppLogger.shared.log("[Voice] Continuous voice mode stopped", level: .info, category: "Voice")
@@ -104,7 +111,7 @@ final class ContinuousVoiceService {
             return
         }
 
-        AppLogger.shared.log("[Voice] 🎬 Speech start triggered - preparing to record", level: .info, category: "Voice")
+        AppLogger.shared.log("[Voice] 🎬 Speech detected - recorder already running (pre-roll active)", level: .info, category: "Voice")
 
         // Stop TTS if speaking (user can interrupt)
         if tts.isSpeaking {
@@ -112,10 +119,10 @@ final class ContinuousVoiceService {
             tts.stop()
         }
 
-        // Start recording
-        Task {
-            await startRecording()
-        }
+        // Recorder is already running from pre-roll — just transition state
+        state = .recording
+        AudioServicesPlaySystemSound(SoundID.recordingStart)
+        AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
     }
 
     private func handleSpeechEnd() {
@@ -126,7 +133,6 @@ final class ContinuousVoiceService {
 
         AppLogger.shared.log("[Voice] 🎬 Speech end triggered - stopping recording and transcribing", level: .info, category: "Voice")
 
-        // Stop recording and transcribe
         Task {
             await stopRecordingAndTranscribe()
         }
@@ -134,38 +140,25 @@ final class ContinuousVoiceService {
 
     // MARK: - Recording
 
-    private func startRecording() async {
-        state = .recording
-        AudioServicesPlaySystemSound(SoundID.recordingStart)
-        AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
+    private func startPreRollRecorder() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "voice-\(UUID().uuidString).m4a"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 16000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+        ]
 
         do {
-            // Setup audio session for recording + playback (for TTS)
-            let session = AVAudioSession.sharedInstance()
-            try await session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-            try await session.setActive(true)
-
-            // Create temporary file for recording
-            let tempDir = FileManager.default.temporaryDirectory
-            let fileName = "voice-\(UUID().uuidString).m4a"
-            let fileURL = tempDir.appendingPathComponent(fileName)
-            currentRecordingURL = fileURL
-
-            // Audio settings optimized for speech
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 16000,  // Whisper works best with 16kHz
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-            ]
-
             audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
             audioRecorder?.record()
-
-            AppLogger.shared.log("[Voice] ✅ Recording started: \(fileName) at \(fileURL.path)", level: .info, category: "Voice")
+            currentRecordingURL = fileURL
+            AppLogger.shared.log("[Voice] ✅ Pre-roll recorder started: \(fileName)", level: .info, category: "Voice")
         } catch {
-            AppLogger.shared.log("[Voice] ❌ Recording failed: \(error.localizedDescription)", level: .error, category: "Voice")
-            state = .listening
+            AppLogger.shared.log("[Voice] ❌ Pre-roll recorder failed: \(error.localizedDescription)", level: .error, category: "Voice")
         }
     }
 
@@ -222,9 +215,10 @@ final class ContinuousVoiceService {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
             }
 
-            // Return to listening state
+            // Return to listening state and start new pre-roll recorder
             state = .listening
             AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening", level: .info, category: "Voice")
+            startPreRollRecorder()
         } catch {
             AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
             state = .listening
@@ -233,6 +227,7 @@ final class ContinuousVoiceService {
             // Clean up temp file on error
             try? FileManager.default.removeItem(at: audioURL)
             currentRecordingURL = nil
+            startPreRollRecorder()
         }
     }
 
