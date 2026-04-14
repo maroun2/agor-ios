@@ -62,6 +62,10 @@ final class ChatViewModel {
     var userIsNearBottom = true
     // Scroll to a specific message ID (for permission cards)
     var scrollToMessageId: String?
+    private var scrollToMessageInProgress = false
+
+    // Track permission resolution for auto-scroll restoration
+    private var lastResolvedPermissionTime: Date?
 
     private var rebuildTask: Task<Void, Never>?
     private var scrollDebounceTask: Task<Void, Never>?
@@ -519,6 +523,7 @@ final class ChatViewModel {
                     decidedBy: userId
                 )
                 _ = try await client.postRaw("/sessions/\(sessionId)/permission-decision", body: decision)
+                lastResolvedPermissionTime = Date()
             } catch {
                 self.error = "Failed to approve: \(error.localizedDescription)"
             }
@@ -539,6 +544,7 @@ final class ChatViewModel {
                     decidedBy: userId
                 )
                 _ = try await client.postRaw("/sessions/\(sessionId)/permission-decision", body: decision)
+                lastResolvedPermissionTime = Date()
             } catch {
                 self.error = "Failed to deny: \(error.localizedDescription)"
             }
@@ -558,6 +564,7 @@ final class ChatViewModel {
                     respondedBy: userId
                 )
                 _ = try await client.postRaw("/sessions/\(sessionId)/input-response", body: response)
+                lastResolvedPermissionTime = Date()
             } catch {
                 self.error = "Failed to submit: \(error.localizedDescription)"
             }
@@ -612,6 +619,10 @@ final class ChatViewModel {
     /// Debounced scroll-to-bottom: coalesces rapid socket messages into one scroll
     private var scrollRequestCount = 0
     private func requestScrollToBottom() {
+        if scrollToMessageInProgress {
+            AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — scrollToMessageInProgress=true", level: .debug, category: "Scroll")
+            return
+        }
         guard userIsNearBottom else {
             AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — userIsNearBottom=false", level: .debug, category: "Scroll")
             return
@@ -635,6 +646,14 @@ final class ChatViewModel {
             guard let self, message.sessionId == self.currentSessionId else { return }
             // Remove from streaming (handoff)
             self.activeStreams.removeValue(forKey: message.messageId)
+            // If permission was just resolved, restore auto-scroll on first new assistant message
+            if let resolvedTime = lastResolvedPermissionTime,
+               Date().timeIntervalSince(resolvedTime) < 5.0, // Within 5s window
+               message.role == .assistant {
+                AppLogger.shared.log("[Scroll] First message after permission → restoring userIsNearBottom", level: .debug, category: "Scroll")
+                userIsNearBottom = true
+                lastResolvedPermissionTime = nil
+            }
             // Add to messages if not already there
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
@@ -674,6 +693,16 @@ final class ChatViewModel {
             self.currentSession = session
             AppLogger.shared.log("[Scroll] onSessionPatched: \(oldStatus?.rawValue ?? "nil") → \(session.status.rawValue)", level: .debug, category: "Scroll")
 
+            // Restore auto-scroll after permission resolution
+            if let resolvedTime = lastResolvedPermissionTime,
+               Date().timeIntervalSince(resolvedTime) < 2.0, // Within 2s of resolution
+               (oldStatus == .awaitingPermission || oldStatus == .awaitingInput),
+               session.status == .running {
+                AppLogger.shared.log("[Scroll] Permission resolved → restoring userIsNearBottom", level: .debug, category: "Scroll")
+                userIsNearBottom = true
+                lastResolvedPermissionTime = nil
+            }
+
             // Voice mode: speak status changes
             if voiceModeEnabled && oldStatus != session.status {
                 handleVoiceStatusChange(from: oldStatus, to: session.status)
@@ -685,12 +714,13 @@ final class ChatViewModel {
                 self.activeStreams = self.streamingService.activeStreams
                 self.rebuildDisplayItems()
             }
-            // Auto-scroll to pending permission/input card when session needs attention
+            // Auto-scroll to current pending permission/input card when session needs attention
             if session.status == .awaitingPermission || session.status == .awaitingInput {
-                let permId = self.firstPendingPermissionId
-                let inputId = self.firstPendingInputId
+                let permId = self.currentPendingPermissionId
+                let inputId = self.currentPendingInputId
                 AppLogger.shared.log("[Scroll] session needs attention — permId: \(permId?.prefix(8) ?? "nil"), inputId: \(inputId?.prefix(8) ?? "nil"), msgs: \(self.messages.count)", level: .debug, category: "Scroll")
                 if let msgId = permId ?? inputId {
+                    self.scrollToMessageInProgress = true
                     self.scrollToMessageId = "msg-\(msgId)"
                     AppLogger.shared.log("[Scroll] → scrollToMessageId = msg-\(msgId.prefix(8))", level: .debug, category: "Scroll")
                 } else {
@@ -717,8 +747,9 @@ final class ChatViewModel {
         currentSession?.status.needsAttention ?? false
     }
 
-    var firstPendingPermissionId: String? {
-        for msg in messages {
+    var currentPendingPermissionId: String? {
+        // Find LAST pending permission (highest index = most recent)
+        for msg in messages.reversed() {
             if case .permissionRequest(let perm) = msg.content, perm.isPending {
                 return msg.messageId
             }
@@ -726,8 +757,9 @@ final class ChatViewModel {
         return nil
     }
 
-    var firstPendingInputId: String? {
-        for msg in messages {
+    var currentPendingInputId: String? {
+        // Find LAST pending input (highest index = most recent)
+        for msg in messages.reversed() {
             if case .inputRequest(let input) = msg.content, input.isPending {
                 return msg.messageId
             }

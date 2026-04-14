@@ -130,9 +130,9 @@ final class ContinuousVoiceService {
         AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
 
         do {
-            // Setup audio session
+            // Setup audio session for recording + playback (for TTS)
             let session = AVAudioSession.sharedInstance()
-            try await session.setCategory(.record, mode: .default)
+            try await session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
             try await session.setActive(true)
 
             // Create temporary file for recording

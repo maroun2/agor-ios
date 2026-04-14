@@ -61,7 +61,7 @@ struct MessageBubble: View {
                 case .permissionRequest(let perm):
                     PermissionCardView(
                         content: perm,
-                        isFirstPending: message.messageId == viewModel.firstPendingPermissionId,
+                        isFirstPending: message.messageId == viewModel.currentPendingPermissionId,
                         onApprove: { scope in
                             viewModel.approvePermission(
                                 requestId: perm.requestId,
@@ -80,7 +80,7 @@ struct MessageBubble: View {
                 case .inputRequest(let input):
                     InputRequestCardView(
                         content: input,
-                        isFirstPending: message.messageId == viewModel.firstPendingInputId,
+                        isFirstPending: message.messageId == viewModel.currentPendingInputId,
                         onSubmit: { answers in
                             viewModel.submitInput(
                                 requestId: input.requestId,
