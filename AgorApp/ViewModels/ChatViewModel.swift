@@ -62,7 +62,7 @@ final class ChatViewModel {
     var userIsNearBottom = true
     // Scroll to a specific message ID (for permission cards)
     var scrollToMessageId: String?
-    private var scrollToMessageInProgress = false
+    var scrollToMessageInProgress = false
 
     // Track permission resolution for auto-scroll restoration
     private var lastResolvedPermissionTime: Date?
