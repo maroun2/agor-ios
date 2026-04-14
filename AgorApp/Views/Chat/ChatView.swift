@@ -181,8 +181,9 @@ struct ChatView: View {
                     }
                 }
                 .padding(.vertical, 8)
+                // Bottom spacer to ensure last message scrolls above input bar
                 Color.clear
-                    .frame(height: 1)
+                    .frame(height: 60)
                     .id("bottom")
                     .onAppear {
                         viewModel.userIsNearBottom = true
