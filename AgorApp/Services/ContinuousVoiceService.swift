@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 
 @Observable
 final class ContinuousVoiceService {
@@ -10,6 +11,13 @@ final class ContinuousVoiceService {
         case transcribing   // Processing with Whisper
         case sending        // Sending to agent
         case speaking       // TTS speaking to user
+    }
+
+    // System sound IDs for audio feedback
+    private enum SoundID {
+        static let listeningReady: SystemSoundID = 1057  // SMS received tone
+        static let recordingStart: SystemSoundID = 1113  // Begin recording
+        static let messageSent: SystemSoundID = 1016     // Tock/sent sound
     }
 
     var state: State = .disabled
@@ -75,6 +83,7 @@ final class ContinuousVoiceService {
 
         try vad.startListening()
         state = .listening
+        AudioServicesPlaySystemSound(SoundID.listeningReady)
         AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
     }
 
@@ -127,6 +136,7 @@ final class ContinuousVoiceService {
 
     private func startRecording() async {
         state = .recording
+        AudioServicesPlaySystemSound(SoundID.recordingStart)
         AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
 
         do {
@@ -206,6 +216,7 @@ final class ContinuousVoiceService {
 
             if !cleanedText.isEmpty {
                 AppLogger.shared.log("[Voice] ✅ Delivering cleaned transcription: \"\(cleanedText)\"", level: .info, category: "Voice")
+                AudioServicesPlaySystemSound(SoundID.messageSent)
                 onTranscription?(cleanedText)
             } else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
