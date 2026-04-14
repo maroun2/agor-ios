@@ -32,6 +32,11 @@ final class ContinuousVoiceService {
 
     // Callbacks
     var onTranscription: ((String) -> Void)?
+    var onTTSFinished: (() -> Void)?
+
+    // Pause state (VAD stopped but mode still active, e.g. while agent is running)
+    private(set) var isPaused = false
+    var isTTSSpeaking: Bool { tts.isSpeaking }
 
     init(transcriptionService: TranscriptionService, ttsService: TextToSpeechService) {
         self.vad = VoiceActivityDetector()
@@ -68,10 +73,11 @@ final class ContinuousVoiceService {
 
         tts.onSpeechFinished = { [weak self] in
             Task { @MainActor in
-                // Resume listening after TTS finishes
                 if self?.state == .speaking {
                     self?.state = .listening
                 }
+                // Notify ChatViewModel so it can resume listening now that TTS is done
+                self?.onTTSFinished?()
             }
         }
     }
@@ -99,8 +105,32 @@ final class ContinuousVoiceService {
             currentRecordingURL = nil
         }
         tts.stop()
+        isPaused = false
         state = .disabled
         AppLogger.shared.log("[Voice] Continuous voice mode stopped", level: .info, category: "Voice")
+    }
+
+    // Pause VAD while agent is running — keeps voice mode active, no beep on resume
+    func pauseListening() {
+        guard !isPaused, state != .disabled else { return }
+        vad.stopListening()
+        audioRecorder?.stop()
+        audioRecorder = nil
+        if let url = currentRecordingURL {
+            try? FileManager.default.removeItem(at: url)
+            currentRecordingURL = nil
+        }
+        isPaused = true
+        AppLogger.shared.log("[Voice] ⏸️ Voice paused (agent running)", level: .info, category: "Voice")
+    }
+
+    func resumeListening() throws {
+        guard isPaused else { return }
+        try vad.startListening()
+        isPaused = false
+        state = .listening
+        startPreRollRecorder()
+        AppLogger.shared.log("[Voice] ▶️ Voice resumed", level: .info, category: "Voice")
     }
 
     // MARK: - Speech Handlers
