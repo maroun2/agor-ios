@@ -819,6 +819,11 @@ final class ChatViewModel {
         service.onTranscription = { [weak self] text in
             self?.handleVoiceInput(text)
         }
+        service.onTTSFinished = { [weak self] in
+            Task { @MainActor in
+                self?.updateVoiceListening()
+            }
+        }
 
         voiceService = service
 
@@ -860,18 +865,26 @@ final class ChatViewModel {
     private func updateVoiceListening() {
         guard let voice = voiceService else { return }
 
-        // Only listen when session is truly idle (not running/awaiting)
         if currentSession?.status == .idle && isSessionPromptable {
             if voice.state == .disabled {
+                // Fresh start
                 do {
                     try voice.startListening()
+                } catch {
+                    AppLogger.shared.log("[Voice] Failed to start listening: \(error.localizedDescription)", level: .error, category: "Voice")
+                }
+            } else if voice.isPaused && !voice.isTTSSpeaking {
+                // Resume after agent finished — wait for TTS to finish first
+                do {
+                    try voice.resumeListening()
                 } catch {
                     AppLogger.shared.log("[Voice] Failed to resume listening: \(error.localizedDescription)", level: .error, category: "Voice")
                 }
             }
-        } else {
-            if voice.state == .listening || voice.state == .recording {
-                voice.stopListening()
+        } else if currentSession?.status != .idle {
+            // Agent is running — pause VAD without disrupting TTS or showing disabled state
+            if !voice.isPaused && voice.state != .disabled {
+                voice.pauseListening()
             }
         }
     }
