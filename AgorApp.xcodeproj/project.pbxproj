@@ -26,6 +26,10 @@
 		38342D91F7D87DC1A7F7FFE8 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0CDC85C039C7D69A1305C0 /* ToastView.swift */; };
 		3DD0DA4774269186359639D2 /* PromptInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */; };
 		3FBE1AFF46BB42289D8889C3 /* BackgroundSessionPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEBA1235255D4661A11859A0 /* BackgroundSessionPoller.swift */; };
+		AA01BB02CC03DD04EE05FF06 /* ContinuousVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF07 /* ContinuousVoiceService.swift */; };
+		AA01BB02CC03DD04EE05FF08 /* TextToSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF09 /* TextToSpeechService.swift */; };
+		AA01BB02CC03DD04EE05FF0A /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0B /* TranscriptionService.swift */; };
+		AA01BB02CC03DD04EE05FF0C /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0D /* VoiceActivityDetector.swift */; };
 		4395876846626D278B46261F /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E42D02A86522D0471F54DF /* Session.swift */; };
 		43F3D54B37DC2E553E992772 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2A809CA0C2D762495B8F4A /* ChatView.swift */; };
 		466DD4C435A58213DD5E0AEC /* PermissionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */; };
@@ -35,6 +39,7 @@
 		64D1ACBE30C5C6763E589138 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */; };
 		721D00CB4C4DC42A91178927 /* BoardRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */; };
 		7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */ = {isa = PBXBuildFile; productRef = B88AC8BE0A5D228075CE47D6 /* Highlightr */; };
+		WK01WK02WK03WK04WK05WK06 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = WK01WK02WK03WK04WK05WK07 /* WhisperKit */; };
 		788B792D2FACD468116E54D8 /* CodeBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE62BC7B4EDAD8B23FCF60E9 /* CodeBlockView.swift */; };
 		7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF029D8E2E4880084975A69 /* SessionRow.swift */; };
 		7B97982EC9440B7AFC4F0423 /* StreamingMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51574B49ACC01F5A6753C37D /* StreamingMessageView.swift */; };
@@ -118,6 +123,10 @@
 		ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptInputBar.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF6600AB /* ServerProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProfileManager.swift; sourceTree = "<group>"; };
 		BEBA1235255D4661A11859A0 /* BackgroundSessionPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSessionPoller.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF07 /* ContinuousVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousVoiceService.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF09 /* TextToSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextToSpeechService.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF0B /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF0D /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivityDetector.swift; sourceTree = "<group>"; };
 		BF287F9448D07BFE1237380C /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
 		BF72FBB9974FDE5788C1260A /* DateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatting.swift; sourceTree = "<group>"; };
 		C0769CCEA40D22DDA6010D42 /* InputRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputRequest.swift; sourceTree = "<group>"; };
@@ -158,6 +167,7 @@
 				A6D79B6661690381A79C5F6D /* Textual in Frameworks */,
 				C836E615CD25F252F2639596 /* SocketIO in Frameworks */,
 				7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */,
+				WK01WK02WK03WK04WK05WK06 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -322,6 +332,10 @@
 				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
 				BEBA1235255D4661A11859A0 /* BackgroundSessionPoller.swift */,
 				6E5D4C3B2A1F0E9D8C7B6A59 /* NotificationManager.swift */,
+				AA01BB02CC03DD04EE05FF07 /* ContinuousVoiceService.swift */,
+				AA01BB02CC03DD04EE05FF09 /* TextToSpeechService.swift */,
+				AA01BB02CC03DD04EE05FF0B /* TranscriptionService.swift */,
+				AA01BB02CC03DD04EE05FF0D /* VoiceActivityDetector.swift */,
 				BB22CC33DD44EE55FF6600AB /* ServerProfileManager.swift */,
 				94BBC8D6E79846FC3770B9F6 /* SidebarCache.swift */,
 				ED3C6C8A44F09215C1E9387E /* SocketService.swift */,
@@ -386,6 +400,7 @@
 				CCF002A5A41C9F07F7F17C60 /* Textual */,
 				D1D99525620248594DB52F1B /* SocketIO */,
 				B88AC8BE0A5D228075CE47D6 /* Highlightr */,
+				WK01WK02WK03WK04WK05WK07 /* WhisperKit */,
 			);
 			productName = AgorApp;
 			productReference = 9D7E4A344E99EB593C21C406 /* AgorApp.app */;
@@ -418,6 +433,7 @@
 				7724A280542B506D96244CFC /* XCRemoteSwiftPackageReference "Highlightr" */,
 				8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
 				ABC65789A1D3FDBFE299A3DF /* XCRemoteSwiftPackageReference "textual" */,
+				WK01WK02WK03WK04WK05WK08 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D00AFC90AD6CE126C9E4E2F9 /* Products */;
@@ -495,6 +511,10 @@
 				7A98A092285AE19E30AE6F11 /* SessionRow.swift in Sources */,
 				90DAF3F23E00CA2933BEF56C /* SettingsView.swift in Sources */,
 				3FBE1AFF46BB42289D8889C3 /* BackgroundSessionPoller.swift in Sources */,
+				AA01BB02CC03DD04EE05FF06 /* ContinuousVoiceService.swift in Sources */,
+				AA01BB02CC03DD04EE05FF08 /* TextToSpeechService.swift in Sources */,
+				AA01BB02CC03DD04EE05FF0A /* TranscriptionService.swift in Sources */,
+				AA01BB02CC03DD04EE05FF0C /* VoiceActivityDetector.swift in Sources */,
 				C00B51517A0485922665FC80 /* SidebarCache.swift in Sources */,
 				AD80BBC81E53D8B32913256C /* SidebarView.swift in Sources */,
 				05C095D4C93E72284978C4B0 /* SocketService.swift in Sources */,
@@ -735,6 +755,14 @@
 				minimumVersion = 0.3.0;
 			};
 		};
+		WK01WK02WK03WK04WK05WK08 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -752,6 +780,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
 			productName = SocketIO;
+		};
+		WK01WK02WK03WK04WK05WK07 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = WK01WK02WK03WK04WK05WK08 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
