@@ -196,7 +196,17 @@ final class ContinuousVoiceService {
             state = .sending
             AppLogger.shared.log("[Voice] 📤 STATE: transcribing → sending", level: .info, category: "Voice")
             AppLogger.shared.log("[Voice] ✅ Delivering transcription: \"\(text)\"", level: .info, category: "Voice")
-            onTranscription?(text)
+
+            // Filter out WhisperKit special tokens
+            if !text.isEmpty && !text.hasPrefix("[") && !text.hasSuffix("]") {
+                onTranscription?(text)
+            } else {
+                AppLogger.shared.log("[Voice] ⚠️ Ignoring special token or empty transcription: \"\(text)\"", level: .warning, category: "Voice")
+            }
+
+            // Return to listening state
+            state = .listening
+            AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening", level: .info, category: "Voice")
         } catch {
             AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
             state = .listening
