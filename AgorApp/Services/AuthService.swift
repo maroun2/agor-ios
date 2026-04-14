@@ -197,7 +197,11 @@ final class AuthService {
             }
         } catch {
             AppLogger.shared.log("[Auth] fetchCurrentUser failed: \(error.localizedDescription)", level: .error, category: "Auth")
-            // Non-fatal — we still have the cached info
+            // Token refresh failed — session is dead, force logout
+            if case AgorAPIError.tokenRefreshFailed = error {
+                AppLogger.shared.log("[Auth] token refresh failed on startup — forcing logout", level: .error, category: "Auth")
+                logout()
+            }
         }
     }
 }
