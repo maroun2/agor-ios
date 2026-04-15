@@ -201,12 +201,10 @@ final class AuthService {
     // MARK: - Fetch Current User
 
     func fetchCurrentUser() async {
-        guard isAuthenticated else { return }
+        guard isAuthenticated, let userId = currentUser?.userId else { return }
         do {
-            let response: PaginatedResponse<User> = try await client.getPaginated("/users", query: ["$limit": "1"])
-            if let user = response.data.first {
-                currentUser = user
-            }
+            let user: User = try await client.get("/users/\(userId)")
+            currentUser = user
         } catch {
             // Stay authenticated regardless — network issues, server restarts, token problems
             // Manual logout only (user-initiated via logout button)
