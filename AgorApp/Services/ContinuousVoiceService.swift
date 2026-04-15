@@ -89,6 +89,7 @@ final class ContinuousVoiceService {
 
         try vad.startListening()
         state = .listening
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady (id=\(SoundID.listeningReady))", level: .info, category: "Voice")
         AudioServicesPlaySystemSound(SoundID.listeningReady)
         AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
 
@@ -151,6 +152,7 @@ final class ContinuousVoiceService {
 
         // Recorder is already running from pre-roll — just transition state
         state = .recording
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart (id=\(SoundID.recordingStart))", level: .info, category: "Voice")
         AudioServicesPlaySystemSound(SoundID.recordingStart)
         AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
     }
@@ -239,6 +241,7 @@ final class ContinuousVoiceService {
 
             if !cleanedText.isEmpty {
                 AppLogger.shared.log("[Voice] ✅ Delivering cleaned transcription: \"\(cleanedText)\"", level: .info, category: "Voice")
+                AppLogger.shared.log("[Voice] 🔔 Playing beep: messageSent (id=\(SoundID.messageSent))", level: .info, category: "Voice")
                 AudioServicesPlaySystemSound(SoundID.messageSent)
                 onTranscription?(cleanedText)
             } else {
