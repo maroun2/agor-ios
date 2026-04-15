@@ -118,6 +118,11 @@ struct MainNavigationView: View {
         }
         .task {
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
+            socketService.onAuthFailure = {
+                guard appViewModel.authService.isAuthenticated else { return }
+                AppLogger.shared.log("[App] socket auth failure — soft logout", level: .error, category: "App")
+                appViewModel.authService.softLogout()
+            }
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
 

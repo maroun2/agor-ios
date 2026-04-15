@@ -23,9 +23,10 @@ enum KeychainHelper {
         // Delete existing
         SecItemDelete(query as CFDictionary)
 
-        // Add new
+        // Add new — accessible after first unlock so tokens survive device reboot
         var addQuery = query
         addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(addQuery as CFDictionary, nil)
     }
 
