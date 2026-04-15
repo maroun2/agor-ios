@@ -91,10 +91,18 @@ final class SocketService {
         ])
 
         socket = manager?.defaultSocket
-        AppLogger.shared.log("[Socket] Socket object created: \(socket != nil)", level: .debug, category: "Socket")
+        AppLogger.shared.log("[Socket] Socket object created: \(socket != nil), status: \(socket?.status.rawValue ?? "nil")", level: .debug, category: "Socket")
         setupEventHandlers()
         AppLogger.shared.log("[Socket] Calling socket.connect()...", level: .debug, category: "Socket")
         socket?.connect()
+        
+        // Handshake timeout probe
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self = self else { return }
+            if self.connectionState == .connecting {
+                AppLogger.shared.log("[Socket] ⚠️ Handshake Timeout: Socket is still in .connecting state after 10s", level: .warning, category: "Socket")
+            }
+        }
     }
 
     func disconnect() {
@@ -208,9 +216,7 @@ final class SocketService {
         guard let socket else { return }
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            // Transport connected — now authenticate with FeathersJS to join the
-            // "authenticated" channel and receive real-time broadcast events.
-            AppLogger.shared.log("[Socket] transport connected — authenticating with FeathersJS", level: .debug, category: "Socket")
+            AppLogger.shared.log("[Socket] ✅ Transport connected! Transitioning to FeathersJS auth...", level: .info, category: "Socket")
             self?.authenticateWithFeathers()
         }
 
