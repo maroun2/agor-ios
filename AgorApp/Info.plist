@@ -25,6 +25,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Agor uses your microphone for hands-free voice conversations with AI agents</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Agor transcribes your speech locally on-device for voice prompts</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -32,16 +36,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>audio</string>
-	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Agor uses your microphone for hands-free voice conversations with AI agents</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Agor transcribes your speech locally on-device for voice prompts</string>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.agor.AgorApp.session-poll</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string></string>
