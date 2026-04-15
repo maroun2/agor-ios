@@ -208,14 +208,9 @@ final class AuthService {
                 currentUser = user
             }
         } catch {
-            if case AgorAPIError.tokenRefreshFailed = error {
-                // Both access and refresh tokens are expired — session is dead, force re-login
-                AppLogger.shared.log("[Auth] fetchCurrentUser: token refresh failed — soft logout", level: .error, category: "Auth")
-                softLogout()
-            } else {
-                // Network issue or server restart — stay authenticated, don't log out
-                AppLogger.shared.log("[Auth] fetchCurrentUser failed: \(error.localizedDescription)", level: .error, category: "Auth")
-            }
+            // Stay authenticated regardless — network issues, server restarts, token problems
+            // Manual logout only (user-initiated via logout button)
+            AppLogger.shared.log("[Auth] fetchCurrentUser failed: \(error.localizedDescription)", level: .error, category: "Auth")
         }
     }
 }
