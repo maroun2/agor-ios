@@ -78,31 +78,35 @@ final class SocketService {
         AppLogger.shared.log("Connecting to \(client.baseURL)", category: "Socket")
         connectionState = .connecting
 
-        // No auth in connection headers — server allows all connections for the login flow.
-        // Authentication is done AFTER connect via FeathersJS auth service (create "authentication").
-        // This is the correct FeathersJS auth pattern and ensures the connection joins the
-        // "authenticated" channel to receive real-time broadcast events.
-        manager = SocketManager(socketURL: url, config: [
+        // Send JWT in extraHeaders so the server middleware can attach socket.feathers.user
+        // at connection time. This is required for FeathersJS service calls (find/create/etc.)
+        // to have params.user populated on the socket.
+        //
+        // ALSO call authenticateWithFeathers() after .connect to emit 'create authentication'
+        // via the FeathersJS auth service — this fires the server 'login' event which joins
+        // the connection to the 'authenticated' channel for real-time broadcast events.
+        //
+        // Both are needed:
+        //   extraHeaders  → service calls work (socket.feathers.user set by middleware)
+        //   create auth   → real-time events work (connection in 'authenticated' channel)
+        var config: SocketIOClientConfiguration = [
             .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(2),
             .reconnectWaitMax(30),
-            .log(true),
-        ])
-
-        socket = manager?.defaultSocket
-        AppLogger.shared.log("[Socket] Socket object created: \(socket != nil), status: \(socket?.status.rawValue ?? "nil")", level: .debug, category: "Socket")
-        setupEventHandlers()
-        AppLogger.shared.log("[Socket] Calling socket.connect()...", level: .debug, category: "Socket")
-        socket?.connect()
-        
-        // Handshake timeout probe
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self = self else { return }
-            if self.connectionState == .connecting {
-                AppLogger.shared.log("[Socket] ⚠️ Handshake Timeout: Socket is still in .connecting state after 10s", level: .warning, category: "Socket")
-            }
+            .log(false),
+        ]
+        if let token = client.accessToken {
+            config.insert(.extraHeaders(["Authorization": "Bearer \(token)"]))
+            AppLogger.shared.log("[Socket] connecting with token \(String(token.prefix(8)))...", level: .debug, category: "Socket")
+        } else {
+            AppLogger.shared.log("[Socket] connecting without token (no accessToken)", level: .debug, category: "Socket")
         }
+
+        manager = SocketManager(socketURL: url, config: config)
+        socket = manager?.defaultSocket
+        setupEventHandlers()
+        socket?.connect()
     }
 
     func disconnect() {
@@ -238,12 +242,34 @@ final class SocketService {
             self?.connectionState = .reconnecting
         }
 
-        socket.on("connect_error") { data, _ in
+        socket.on("connect_error") { [weak self] data, _ in
+            guard let self else { return }
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
                 return d as? String
             }.joined(separator: ", ")
             AppLogger.shared.log("[Socket] connect_error: \(errStr)", level: .error, category: "Socket")
+
+            // Server rejected connection — likely expired token in extraHeaders.
+            // Try refreshing the token then reconnect with the new token.
+            let isAuthError = errStr.lowercased().contains("invalid") ||
+                              errStr.lowercased().contains("expired") ||
+                              errStr.lowercased().contains("token") ||
+                              errStr.lowercased().contains("auth")
+            if isAuthError {
+                AppLogger.shared.log("[Socket] connect_error looks auth-related — refreshing token and reconnecting", level: .info, category: "Socket")
+                Task {
+                    let refreshed = await self.client.tryRefreshToken()
+                    DispatchQueue.main.async {
+                        if refreshed {
+                            AppLogger.shared.log("[Socket] token refreshed — reconnecting", level: .info, category: "Socket")
+                            self.reconnect()
+                        } else {
+                            AppLogger.shared.log("[Socket] token refresh failed — no reconnect", level: .error, category: "Socket")
+                        }
+                    }
+                }
+            }
         }
 
         socket.on(clientEvent: .error) { data, _ in
