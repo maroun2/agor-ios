@@ -87,11 +87,13 @@ final class SocketService {
             .reconnects(true),
             .reconnectWait(2),
             .reconnectWaitMax(30),
-            .log(false),
+            .log(true),
         ])
 
         socket = manager?.defaultSocket
+        AppLogger.shared.log("[Socket] Socket object created: \(socket != nil)", level: .debug, category: "Socket")
         setupEventHandlers()
+        AppLogger.shared.log("[Socket] Calling socket.connect()...", level: .debug, category: "Socket")
         socket?.connect()
     }
 
