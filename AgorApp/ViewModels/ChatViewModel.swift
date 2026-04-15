@@ -474,9 +474,14 @@ final class ChatViewModel {
 
     func startMessagePolling() {
         stopMessagePolling()
-        messagePollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
-            guard let self, let sessionId = self.currentSessionId else { return }
-            Task { await self.checkForNewMessages(sessionId) }
+        // Must schedule on main RunLoop — Timer.scheduledTimer called from a Swift Task
+        // (cooperative thread pool) has no RunLoop and the timer never fires
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.messagePollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+                guard let self, let sessionId = self.currentSessionId else { return }
+                Task { await self.checkForNewMessages(sessionId) }
+            }
         }
     }
 
