@@ -684,7 +684,7 @@ final class ChatViewModel {
             self.activeStreams.removeValue(forKey: message.messageId)
             // If permission was just resolved, restore auto-scroll on first new assistant message
             if let resolvedTime = lastResolvedPermissionTime,
-               Date().timeIntervalSince(resolvedTime) <<  5.0, // Within 5s window
+               Date().timeIntervalSince(resolvedTime) < 5.0, // Within 5s window
                message.role == .assistant {
                 AppLogger.shared.log("[Scroll] First message after permission → restoring userIsNearBottom", level: .debug, category: "Scroll")
                 userIsNearBottom = true
@@ -698,14 +698,6 @@ final class ChatViewModel {
                 self.requestScrollToBottom()
             } else {
                 AppLogger.shared.log("[ChatVM] Message \(message.messageId.prefix(8)) already exists in local list", level: .debug, category: "Chat")
-            }
-        }
-            // Add to messages if not already there
-            if !self.messages.contains(where: { $0.messageId == message.messageId }) {
-                self.messages.append(message)
-                self.rebuildDisplayItems()
-                AppLogger.shared.log("[Scroll] onMessageCreated → requestScrollToBottom (msg: \(message.messageId.prefix(8)), total: \(self.messages.count))", level: .debug, category: "Scroll")
-                self.requestScrollToBottom()
             }
         }
 
