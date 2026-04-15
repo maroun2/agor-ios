@@ -280,6 +280,17 @@ final class AgorClient {
         return try decoder.decode(UploadResponse.self, from: data)
     }
 
+    // MARK: - Token Refresh (public — used by SocketService to refresh after socket auth failure)
+
+    func tryRefreshToken() async -> Bool {
+        do {
+            try await refreshAccessToken()
+            return true
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Health Check (silent — no logging since it polls frequently)
 
     func healthCheck() async -> Bool {
