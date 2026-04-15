@@ -122,9 +122,19 @@ struct PromptInputBar: View {
 
     private var voiceStatusView: some View {
         HStack(spacing: 8) {
-            // Status icon
-            if let state = viewModel.voiceService?.state {
-                switch state {
+            if let service = viewModel.voiceService {
+                switch service.state {
+                case .disabled:
+                    // Model is loading — show progress from TranscriptionService
+                    ProgressView()
+                        .controlSize(.small)
+                    if case .downloading(let progress) = service.transcription.state, progress > 0 {
+                        Text("Loading model… \(Int(progress * 100))%")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Loading voice model…")
+                            .foregroundStyle(.secondary)
+                    }
                 case .listening:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.blue)
@@ -149,9 +159,6 @@ struct PromptInputBar: View {
                     Image(systemName: "speaker.wave.2.fill")
                         .foregroundStyle(.blue)
                     Text("Speaking...")
-                        .foregroundStyle(.secondary)
-                case .disabled:
-                    Text("Voice mode disabled")
                         .foregroundStyle(.secondary)
                 }
             } else {
