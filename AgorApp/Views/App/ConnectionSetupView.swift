@@ -93,6 +93,10 @@ struct ConnectionSetupView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if daemonURL.isEmpty, let url = KeychainHelper.load(.daemonURL) { daemonURL = url }
+            if email.isEmpty, let savedEmail = KeychainHelper.load(.userEmail) { email = savedEmail }
+        }
         }
     }
 

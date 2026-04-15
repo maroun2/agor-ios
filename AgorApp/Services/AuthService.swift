@@ -197,10 +197,16 @@ final class AuthService {
             }
         } catch {
             AppLogger.shared.log("[Auth] fetchCurrentUser failed: \(error.localizedDescription)", level: .error, category: "Auth")
-            // Token refresh failed — session is dead, force logout
+            // Token refresh failed — session is dead, clear tokens and force re-login
+            // Keep daemonURL and email in keychain so the login form can pre-populate them
             if case AgorAPIError.tokenRefreshFailed = error {
-                AppLogger.shared.log("[Auth] token refresh failed on startup — forcing logout", level: .error, category: "Auth")
-                logout()
+                AppLogger.shared.log("[Auth] token refresh failed on startup — clearing tokens, forcing re-login", level: .error, category: "Auth")
+                client.accessToken = nil
+                client.refreshToken = nil
+                currentUser = nil
+                isAuthenticated = false
+                KeychainHelper.delete(.accessToken)
+                KeychainHelper.delete(.refreshToken)
             }
         }
     }
