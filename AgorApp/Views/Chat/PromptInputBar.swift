@@ -13,7 +13,7 @@ struct PromptInputBar: View {
         VStack(spacing: 0) {
             Divider()
 
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 if viewModel.voiceModeEnabled {
                     // Voice mode active - show voice status
                     voiceStatusView
@@ -27,7 +27,7 @@ struct PromptInputBar: View {
                         Image(systemName: "mic.slash.fill")
                             .font(.system(size: 20))
                             .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 36, height: 36)
                     }
                 } else {
                     // Text mode - normal UI
@@ -54,12 +54,12 @@ struct PromptInputBar: View {
                         if viewModel.isUploading {
                             ProgressView()
                                 .controlSize(.small)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 36, height: 36)
                         } else {
                             Image(systemName: "paperclip")
                                 .font(.system(size: 20))
                                 .foregroundStyle(.secondary)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 36, height: 36)
                         }
                     }
                     .disabled(viewModel.isUploading || viewModel.currentSessionId == nil)
@@ -84,7 +84,7 @@ struct PromptInputBar: View {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundStyle(.blue)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 36, height: 36)
                     }
                     .disabled(viewModel.currentSessionId == nil)
 
@@ -96,12 +96,12 @@ struct PromptInputBar: View {
                         if viewModel.isSendingPrompt {
                             ProgressView()
                                 .controlSize(.small)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 36, height: 36)
                         } else {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 28))
                                 .symbolRenderingMode(.hierarchical)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 36, height: 36)
                         }
                     }
                     .disabled(!canSend)
