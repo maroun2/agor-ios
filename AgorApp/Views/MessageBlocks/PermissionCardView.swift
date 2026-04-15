@@ -67,7 +67,7 @@ struct PermissionCardView: View {
             }
 
             // Action buttons
-            if isFirstPending {
+            if !content.isResolved {
                 HStack(spacing: 8) {
                     Button("Allow Once") {
                         HapticFeedback.light()
