@@ -674,17 +674,32 @@ final class ChatViewModel {
 
     private func setupSocketHandlers() {
         socketService.onMessageCreated { [weak self] message in
-            guard let self, message.sessionId == self.currentSessionId else { return }
+            guard let self else { return }
+            AppLogger.shared.log("[ChatVM] Received onMessageCreated: \(message.messageId.prefix(8)) session=\(message.sessionId)", level: .debug, category: "Chat")
+            guard message.sessionId == self.currentSessionId else { 
+                AppLogger.shared.log("[ChatVM] Ignoring message \(message.messageId.prefix(8)) - session mismatch (\(message.sessionId) != \(self.currentSessionId ?? "nil"))", level: .debug, category: "Chat")
+                return 
+            }
             // Remove from streaming (handoff)
             self.activeStreams.removeValue(forKey: message.messageId)
             // If permission was just resolved, restore auto-scroll on first new assistant message
             if let resolvedTime = lastResolvedPermissionTime,
-               Date().timeIntervalSince(resolvedTime) < 5.0, // Within 5s window
+               Date().timeIntervalSince(resolvedTime) <<  5.0, // Within 5s window
                message.role == .assistant {
                 AppLogger.shared.log("[Scroll] First message after permission → restoring userIsNearBottom", level: .debug, category: "Scroll")
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
+            // Add to messages if not already there
+            if !self.messages.contains(where: { $0.messageId == message.messageId }) {
+                self.messages.append(message)
+                self.rebuildDisplayItems()
+                AppLogger.shared.log("[Scroll] onMessageCreated → requestScrollToBottom (msg: \(message.messageId.prefix(8)), total: \(self.messages.count))", level: .debug, category: "Scroll")
+                self.requestScrollToBottom()
+            } else {
+                AppLogger.shared.log("[ChatVM] Message \(message.messageId.prefix(8)) already exists in local list", level: .debug, category: "Chat")
+            }
+        }
             // Add to messages if not already there
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)

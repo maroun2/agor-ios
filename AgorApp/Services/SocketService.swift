@@ -145,21 +145,25 @@ final class SocketService {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             AppLogger.shared.log("Socket connected", category: "Socket")
+            AppLogger.shared.log("[Socket] Socket state transition: .connecting -> .connected", level: .debug, category: "Socket")
             self?.connectionState = .connected
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             AppLogger.shared.log("Socket disconnected", category: "Socket")
+            AppLogger.shared.log("[Socket] Socket state transition: .connected -> .disconnected", level: .debug, category: "Socket")
             self?.connectionState = .disconnected
         }
 
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
             AppLogger.shared.log("Socket reconnecting", category: "Socket")
+            AppLogger.shared.log("[Socket] Socket state transition: .disconnected -> .reconnecting", level: .debug, category: "Socket")
             self?.connectionState = .reconnecting
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
             AppLogger.shared.log("Socket reconnect attempt", level: .debug, category: "Socket")
+            AppLogger.shared.log("[Socket] Socket state transition: .reconnecting (attempt)", level: .debug, category: "Socket")
             self?.connectionState = .reconnecting
         }
 
@@ -233,15 +237,17 @@ final class SocketService {
         }
 
         socket.on("messages created") { [weak self] data, _ in
+            AppLogger.shared.log("[Socket] 🔔 Raw event \"messages created\" received. Data count: \(data.count)", level: .debug, category: "Socket")
             self?.handleDecodable(data) { (message: Message) in
-                AppLogger.shared.log("[Socket] ← event \"messages created\" messageId=\(message.id)", level: .debug, category: "Socket")
+                AppLogger.shared.log("[Socket] ← event \"messages created\" messageId=\(message.messageId) session=\(message.sessionId)", level: .debug, category: "Socket")
                 self?.messageCreatedHandlers.forEach { $0(message) }
             }
         }
 
         socket.on("messages patched") { [weak self] data, _ in
+            AppLogger.shared.log("[Socket] 🔔 Raw event \"messages patched\" received. Data count: \(data.count)", level: .debug, category: "Socket")
             self?.handleDecodable(data) { (message: Message) in
-                AppLogger.shared.log("[Socket] ← event \"messages patched\" messageId=\(message.id)", level: .debug, category: "Socket")
+                AppLogger.shared.log("[Socket] ← event \"messages patched\" messageId=\(message.messageId) session=\(message.sessionId)", level: .debug, category: "Socket")
                 self?.messagePatchedHandlers.forEach { $0(message) }
             }
         }
