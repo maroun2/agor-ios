@@ -70,20 +70,19 @@ final class SocketService {
     // MARK: - Connection
 
     func connect() {
-        guard let token = client.accessToken,
-              let url = URL(string: client.baseURL) else {
-            AppLogger.shared.log("Cannot connect: missing token or URL", level: .warning, category: "Socket")
+        guard let url = URL(string: client.baseURL), !client.baseURL.isEmpty else {
+            AppLogger.shared.log("Cannot connect: missing URL", level: .warning, category: "Socket")
             return
         }
 
         AppLogger.shared.log("Connecting to \(client.baseURL)", category: "Socket")
         connectionState = .connecting
 
-        let tokenPrefix = String(token.prefix(8))
-        AppLogger.shared.log("[Socket] Authenticating socket with token \(tokenPrefix)...", level: .debug, category: "Socket")
-
+        // No auth in connection headers — server allows all connections for the login flow.
+        // Authentication is done AFTER connect via FeathersJS auth service (create "authentication").
+        // This is the correct FeathersJS auth pattern and ensures the connection joins the
+        // "authenticated" channel to receive real-time broadcast events.
         manager = SocketManager(socketURL: url, config: [
-            .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(2),
@@ -108,6 +107,69 @@ final class SocketService {
     func reconnect() {
         disconnect()
         connect()
+    }
+
+    // MARK: - FeathersJS Authentication
+
+    /// Authenticate the socket connection with FeathersJS by calling the authentication service.
+    /// This is required AFTER the socket transport connects to join the "authenticated" channel
+    /// and receive real-time broadcast events (session patches, messages, streaming, etc.).
+    ///
+    /// FeathersJS auth flow:
+    ///   1. Socket connects (no auth at transport level)
+    ///   2. Client sends: create "authentication" { strategy: "jwt", accessToken: token }
+    ///   3. Server validates token → fires "login" event → joins "authenticated" channel
+    ///   4. All real-time service events now flow to this connection
+    private func authenticateWithFeathers() {
+        guard let socket else { return }
+        guard let token = client.accessToken else {
+            AppLogger.shared.log("[Socket] FeathersJS auth: no token — triggering re-login", level: .warning, category: "Socket")
+            DispatchQueue.main.async { self.onAuthFailure?() }
+            return
+        }
+
+        let prefix = String(token.prefix(8))
+        AppLogger.shared.log("[Socket] → FeathersJS authenticate (token: \(prefix)...)", level: .debug, category: "Socket")
+
+        socket.emitWithAck("create", "authentication", ["strategy": "jwt", "accessToken": token], [:])
+            .timingOut(after: 15) { [weak self] data in
+                guard let self else { return }
+
+                // Timeout
+                if let first = data.first as? String, first == "NO ACK" {
+                    AppLogger.shared.log("[Socket] FeathersJS auth timed out", level: .error, category: "Socket")
+                    return
+                }
+
+                // FeathersJS error format: [{code: 401, message: "..."}]
+                if let errorDict = data.first as? [String: Any], let code = errorDict["code"] as? Int {
+                    let message = errorDict["message"] as? String ?? "unknown"
+                    AppLogger.shared.log("[Socket] FeathersJS auth failed (\(code)): \(message)", level: .error, category: "Socket")
+
+                    if code == 401 || code == 403 {
+                        // Token expired — try HTTP refresh then re-authenticate socket
+                        Task {
+                            AppLogger.shared.log("[Socket] token expired — attempting HTTP refresh", level: .info, category: "Socket")
+                            let refreshed = await self.client.tryRefreshToken()
+                            if refreshed {
+                                AppLogger.shared.log("[Socket] token refreshed — re-authenticating socket", level: .info, category: "Socket")
+                                DispatchQueue.main.async { self.authenticateWithFeathers() }
+                            } else {
+                                AppLogger.shared.log("[Socket] token refresh failed — triggering re-login", level: .error, category: "Socket")
+                                DispatchQueue.main.async { self.onAuthFailure?() }
+                            }
+                        }
+                    }
+                    return
+                }
+
+                // Success: [null, {accessToken: "...", user: {...}}]
+                AppLogger.shared.log("Socket connected", category: "Socket")
+                AppLogger.shared.log("[Socket] FeathersJS auth success — joined authenticated channel, real-time events active", level: .info, category: "Socket")
+                DispatchQueue.main.async {
+                    self.connectionState = .connected
+                }
+            }
     }
 
     // MARK: - Health Check
@@ -144,9 +206,10 @@ final class SocketService {
         guard let socket else { return }
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            AppLogger.shared.log("Socket connected", category: "Socket")
-            AppLogger.shared.log("[Socket] Socket state transition: .connecting -> .connected", level: .debug, category: "Socket")
-            self?.connectionState = .connected
+            // Transport connected — now authenticate with FeathersJS to join the
+            // "authenticated" channel and receive real-time broadcast events.
+            AppLogger.shared.log("[Socket] transport connected — authenticating with FeathersJS", level: .debug, category: "Socket")
+            self?.authenticateWithFeathers()
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
@@ -167,51 +230,20 @@ final class SocketService {
             self?.connectionState = .reconnecting
         }
 
-        // connect_error: fired when server rejects the connection (e.g. expired JWT)
-        socket.on("connect_error") { [weak self] data, _ in
+        socket.on("connect_error") { data, _ in
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
                 return d as? String
             }.joined(separator: ", ")
             AppLogger.shared.log("[Socket] connect_error: \(errStr)", level: .error, category: "Socket")
-
-            let isAuthFailure = data.contains { d in
-                if let dict = d as? [String: Any] {
-                    let code = dict["code"] as? Int ?? 0
-                    let name = (dict["name"] as? String ?? "").lowercased()
-                    return code == 401 || code == 403 || name.contains("notauthenticated")
-                }
-                if let str = d as? String {
-                    let lower = str.lowercased()
-                    return lower.contains("notauthenticated") || lower.contains("jwt") || lower.contains("token expired")
-                }
-                return false
-            }
-            if isAuthFailure {
-                AppLogger.shared.log("[Socket] auth failure detected — triggering re-login", level: .error, category: "Socket")
-                DispatchQueue.main.async { self?.onAuthFailure?() }
-            }
         }
 
-        socket.on(clientEvent: .error) { [weak self] data, _ in
+        socket.on(clientEvent: .error) { data, _ in
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
                 return d as? String
             }.joined(separator: ", ")
             AppLogger.shared.log("[Socket] error: \(errStr)", level: .error, category: "Socket")
-
-            let isAuthFailure = data.contains { d in
-                if let dict = d as? [String: Any] {
-                    let code = dict["code"] as? Int ?? 0
-                    let name = (dict["name"] as? String ?? "").lowercased()
-                    return code == 401 || code == 403 || name.contains("notauthenticated")
-                }
-                return false
-            }
-            if isAuthFailure {
-                AppLogger.shared.log("[Socket] auth failure (error event) — triggering re-login", level: .error, category: "Socket")
-                DispatchQueue.main.async { self?.onAuthFailure?() }
-            }
         }
 
         // FeathersJS CRUD events: "<service> <action>"
