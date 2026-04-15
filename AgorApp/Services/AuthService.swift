@@ -137,6 +137,18 @@ final class AuthService {
         }
     }
 
+    // MARK: - Soft Logout (expired token — keep URL/email for re-login)
+
+    func softLogout() {
+        AppLogger.shared.log("[Auth] soft logout — clearing expired tokens, keeping URL", level: .info, category: "Auth")
+        client.accessToken = nil
+        client.refreshToken = nil
+        currentUser = nil
+        isAuthenticated = false
+        KeychainHelper.delete(.accessToken)
+        KeychainHelper.delete(.refreshToken)
+    }
+
     // MARK: - Logout
 
     func logout() {

@@ -32,6 +32,9 @@ final class SocketService {
     var onThinkingChunk: ((ThinkingChunkEvent) -> Void)?
     var onThinkingEnd: ((ThinkingEndEvent) -> Void)?
 
+    // Auth failure callback — fired when server rejects connection with 401
+    var onAuthFailure: (() -> Void)?
+
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let client: AgorClient
@@ -111,16 +114,19 @@ final class SocketService {
 
     func startHealthCheck(client: AgorClient) {
         stopHealthCheck()
-        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            Task {
-                let isHealthy = await client.healthCheck()
-                await MainActor.run {
-                    if !isHealthy && self.connectionState == .connected {
-                        self.connectionState = .disconnected
-                        self.reconnect()
-                    } else if isHealthy && self.connectionState == .disconnected {
-                        self.reconnect()
+            self.healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                Task {
+                    let isHealthy = await client.healthCheck()
+                    await MainActor.run {
+                        if !isHealthy && self.connectionState == .connected {
+                            self.connectionState = .disconnected
+                            self.reconnect()
+                        } else if isHealthy && self.connectionState == .disconnected {
+                            self.reconnect()
+                        }
                     }
                 }
             }
@@ -155,6 +161,53 @@ final class SocketService {
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
             AppLogger.shared.log("Socket reconnect attempt", level: .debug, category: "Socket")
             self?.connectionState = .reconnecting
+        }
+
+        // connect_error: fired when server rejects the connection (e.g. expired JWT)
+        socket.on("connect_error") { [weak self] data, _ in
+            let errStr = data.compactMap { d -> String? in
+                if let dict = d as? [String: Any] { return "\(dict)" }
+                return d as? String
+            }.joined(separator: ", ")
+            AppLogger.shared.log("[Socket] connect_error: \(errStr)", level: .error, category: "Socket")
+
+            let isAuthFailure = data.contains { d in
+                if let dict = d as? [String: Any] {
+                    let code = dict["code"] as? Int ?? 0
+                    let name = (dict["name"] as? String ?? "").lowercased()
+                    return code == 401 || code == 403 || name.contains("notauthenticated")
+                }
+                if let str = d as? String {
+                    let lower = str.lowercased()
+                    return lower.contains("notauthenticated") || lower.contains("jwt") || lower.contains("token expired")
+                }
+                return false
+            }
+            if isAuthFailure {
+                AppLogger.shared.log("[Socket] auth failure detected — triggering re-login", level: .error, category: "Socket")
+                DispatchQueue.main.async { self?.onAuthFailure?() }
+            }
+        }
+
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            let errStr = data.compactMap { d -> String? in
+                if let dict = d as? [String: Any] { return "\(dict)" }
+                return d as? String
+            }.joined(separator: ", ")
+            AppLogger.shared.log("[Socket] error: \(errStr)", level: .error, category: "Socket")
+
+            let isAuthFailure = data.contains { d in
+                if let dict = d as? [String: Any] {
+                    let code = dict["code"] as? Int ?? 0
+                    let name = (dict["name"] as? String ?? "").lowercased()
+                    return code == 401 || code == 403 || name.contains("notauthenticated")
+                }
+                return false
+            }
+            if isAuthFailure {
+                AppLogger.shared.log("[Socket] auth failure (error event) — triggering re-login", level: .error, category: "Socket")
+                DispatchQueue.main.async { self?.onAuthFailure?() }
+            }
         }
 
         // FeathersJS CRUD events: "<service> <action>"
