@@ -247,10 +247,7 @@ final class SocketService {
             self?.connectionState = .reconnecting
         }
 
-        // socket.on(clientEvent: .connectError) captures Socket.IO protocol-level connection
-        // errors (e.g. server rejection, TLS failure). Using the string "connect_error" would
-        // only catch a custom event with that literal name — not actual connect failures.
-        socket.on(clientEvent: .connectError) { [weak self] data, _ in
+        socket.on("connect_error") { [weak self] data, _ in
             guard let self else { return }
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
