@@ -690,6 +690,20 @@ final class ChatViewModel {
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
+            // Voice: announce tool use as agent works
+            if self.voiceModeEnabled, message.role == .assistant {
+                if case .blocks(let blocks) = message.content {
+                    for block in blocks {
+                        if case .toolUse(let tool) = block {
+                            let phrase = self.voicePhrase(for: tool.name)
+                            AppLogger.shared.log("[Voice] 🔧 Tool use detected: \(tool.name) → speaking '\(phrase)'", level: .info, category: "Voice")
+                            self.voiceService?.speakStatus(phrase)
+                            break
+                        }
+                    }
+                }
+            }
+
             // Add to messages if not already there
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
@@ -1002,10 +1016,23 @@ final class ChatViewModel {
     }
 
     private func summarizeText(_ text: String) -> String {
-        // Take first 400 chars + "..."
         if text.count <= 400 {
             return text
         }
         return String(text.prefix(400)) + "..."
+    }
+
+    private func voicePhrase(for toolName: String) -> String {
+        let name = toolName.lowercased()
+        if name.contains("read")                                    { return "Reading" }
+        if name.contains("write")                                   { return "Writing" }
+        if name.contains("edit")                                    { return "Editing" }
+        if name.contains("bash") || name.contains("exec") || name.contains("run") { return "Running command" }
+        if name.contains("grep") || name.contains("search")        { return "Searching" }
+        if name.contains("glob") || name.contains("list")          { return "Listing files" }
+        if name.contains("web")                                     { return "Searching web" }
+        if name.contains("agent") || name.contains("spawn")        { return "Spawning agent" }
+        if name.contains("todo")                                    { return "Updating tasks" }
+        return "Working"
     }
 }

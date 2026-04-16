@@ -7,6 +7,7 @@ final class ContinuousVoiceService {
     enum State {
         case disabled
         case listening      // VAD active, waiting for speech
+        case paused         // VAD stopped while agent is running
         case recording      // User speaking, capturing
         case transcribing   // Processing with Whisper
         case sending        // Sending to agent
@@ -122,6 +123,7 @@ final class ContinuousVoiceService {
             currentRecordingURL = nil
         }
         isPaused = true
+        state = .paused
         AppLogger.shared.log("[Voice] ⏸️ Voice paused (agent running)", level: .info, category: "Voice")
     }
 
