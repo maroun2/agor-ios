@@ -6,6 +6,7 @@ final class TranscriptionService {
     enum State {
         case notInitialized
         case downloading(progress: Double)
+        case warming          // CoreML model compilation after download
         case ready
         case transcribing
         case error(String)
@@ -27,9 +28,15 @@ final class TranscriptionService {
         state = .downloading(progress: 0.0)
 
         do {
-            whisperKit = try await WhisperKit(model: modelName)
+            whisperKit = try await WhisperKit(model: modelName, prewarm: false)
+            AppLogger.shared.log("[Voice] WhisperKit loaded model: \(modelName)", level: .info, category: "Voice")
+
+            // Prewarm separately so we can show "Warming up..." state
+            state = .warming
+            AppLogger.shared.log("[Voice] Prewarming CoreML model (first-run compilation)...", level: .info, category: "Voice")
+            try await whisperKit?.prewarmModels()
             state = .ready
-            AppLogger.shared.log("[Voice] WhisperKit initialized with model: \(modelName)", level: .info, category: "Voice")
+            AppLogger.shared.log("[Voice] WhisperKit ready", level: .info, category: "Voice")
         } catch {
             let errorMsg = "Failed to initialize WhisperKit: \(error.localizedDescription)"
             state = .error(errorMsg)

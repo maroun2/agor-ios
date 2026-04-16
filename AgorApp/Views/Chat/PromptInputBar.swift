@@ -125,13 +125,16 @@ struct PromptInputBar: View {
             if let service = viewModel.voiceService {
                 switch service.state {
                 case .disabled:
-                    // Model is loading — show progress from TranscriptionService
                     ProgressView()
                         .controlSize(.small)
-                    if case .downloading(let progress) = service.transcription.state, progress > 0 {
-                        Text("Loading model… \(Int(progress * 100))%")
+                    switch service.transcription.state {
+                    case .downloading(let progress) where progress > 0:
+                        Text("Downloading model… \(Int(progress * 100))%")
                             .foregroundStyle(.secondary)
-                    } else {
+                    case .warming:
+                        Text("Compiling model (first run)…")
+                            .foregroundStyle(.secondary)
+                    default:
                         Text("Loading voice model…")
                             .foregroundStyle(.secondary)
                     }
@@ -156,7 +159,7 @@ struct PromptInputBar: View {
                 case .transcribing:
                     ProgressView()
                         .controlSize(.small)
-                    Text("Transcribing...")
+                    Text(service.transcriptionProgress.isEmpty ? "Transcribing..." : service.transcriptionProgress)
                         .foregroundStyle(.secondary)
                 case .sending:
                     ProgressView()

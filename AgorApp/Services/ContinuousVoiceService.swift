@@ -214,8 +214,22 @@ final class ContinuousVoiceService {
         AppLogger.shared.log("[Voice] ⚙️ STATE: recording → transcribing", level: .info, category: "Voice")
         transcriptionProgress = "Transcribing..."
 
+        // Tick elapsed time so user sees progress
+        let transcribeStart = Date()
+        let tickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { break }
+                let elapsed = Int(Date().timeIntervalSince(transcribeStart))
+                if elapsed > 0 {
+                    self?.transcriptionProgress = "Transcribing... (\(elapsed)s)"
+                }
+            }
+        }
+
         do {
             let text = try await transcription.transcribe(audioURL: audioURL)
+            tickTask.cancel()
 
             // Clean up temp file
             try? FileManager.default.removeItem(at: audioURL)
@@ -253,6 +267,7 @@ final class ContinuousVoiceService {
             AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening", level: .info, category: "Voice")
             startPreRollRecorder()
         } catch {
+            tickTask.cancel()
             AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
             state = .listening
             AppLogger.shared.log("[Voice] 🔵 STATE: transcribing → listening (error)", level: .info, category: "Voice")
