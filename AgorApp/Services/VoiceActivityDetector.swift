@@ -10,7 +10,9 @@ final class VoiceActivityDetector {
     }
 
     var state: State = .idle
+    // Observable properties — updated on MainActor, safe for SwiftUI binding
     var currentAudioLevel: Float = 0.0
+    var energyThreshold: Float = 0.0   // Speech-start threshold (live, for waveform line)
 
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
@@ -19,22 +21,24 @@ final class VoiceActivityDetector {
     private(set) var sensitivityLevel: Float = 0.5
     private let silenceDuration: TimeInterval = 1.5  // Seconds of silence to end speech
 
-    // --- Moving-average / adaptive-threshold state ---
+    // --- Moving-average / adaptive-threshold state (audio-thread only) ---
+    // Marked @ObservationIgnored so mutations on the audio tap thread don't race
+    // with @Observable's MainActor-locked access tracking.
 
     // Exponential moving average of RMS (smooths out transients).
     // α controls responsiveness: higher α = faster tracking.
-    private var smoothedEnergy: Float = 0.0
+    @ObservationIgnored private var smoothedEnergy: Float = 0.0
     private let emaAlpha: Float = 0.15  // ~7 frame lag at 48 kHz / 1024 buf ≈ 47 fps
 
     // Adaptive noise floor: tracks background noise during silence.
     // Rises quickly (burst) and falls slowly (de-noise after speech).
-    private var noiseFloor: Float = 0.001
+    @ObservationIgnored private var noiseFloor: Float = 0.001
     private let noiseFloorRiseAlpha: Float = 0.05   // Fast rise (background gets louder)
     private let noiseFloorFallAlpha: Float = 0.002  // Slow fall (quiet room after noise)
 
     // Speech-start confirmation: require N consecutive frames above threshold
     // to avoid false triggers from short transients (keyboard taps, clicks).
-    private var consecutiveAboveThreshold: Int = 0
+    @ObservationIgnored private var consecutiveAboveThreshold: Int = 0
     private let confirmationFrames: Int = 4  // ~80ms at 47 fps
 
     // Speech-start threshold = noiseFloor × startMultiplier
@@ -58,10 +62,6 @@ final class VoiceActivityDetector {
         sensitivityLevel = max(0.0, min(1.0, sensitivity))
         AppLogger.shared.log("[VAD] Sensitivity set to \(String(format: "%.2f", sensitivityLevel)) → startMult=\(String(format: "%.2f", startMultiplier)) endMult=\(String(format: "%.2f", endMultiplier))", level: .debug, category: "Voice")
     }
-
-    // Expose effective thresholds for UI / debugging
-    var energyThreshold: Float { noiseFloor * startMultiplier }
-    var silenceThreshold: Float { noiseFloor * endMultiplier }
 
     // MARK: - Start/Stop
 
@@ -96,6 +96,7 @@ final class VoiceActivityDetector {
         smoothedEnergy = 0.0
         noiseFloor = 0.001
         consecutiveAboveThreshold = 0
+        energyThreshold = noiseFloor * startMultiplier
 
         audioEngine = AVAudioEngine()
         guard let engine = audioEngine else { return }
@@ -160,8 +161,11 @@ final class VoiceActivityDetector {
         let startThreshold = noiseFloor * startMultiplier
         let endThreshold   = noiseFloor * endMultiplier
 
+        // Publish to MainActor — energyThreshold drives the live threshold line in the waveform
+        let publishedThreshold = startThreshold
         Task { @MainActor in
             self.currentAudioLevel = self.smoothedEnergy
+            self.energyThreshold = publishedThreshold
         }
 
         bufferCount += 1
