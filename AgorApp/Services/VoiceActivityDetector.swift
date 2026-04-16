@@ -70,7 +70,9 @@ final class VoiceActivityDetector {
         }
 
         // Setup audio session for recording + playback (for TTS)
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+        // .mixWithOthers allows AVAudioEngine/AVAudioPlayer to play tones alongside the recorder.
+        // Without it, AudioServicesPlaySystemSound is silenced while recording is active.
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
         try session.setActive(true)
 
         // Setup audio engine

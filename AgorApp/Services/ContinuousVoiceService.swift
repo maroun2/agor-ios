@@ -14,12 +14,19 @@ final class ContinuousVoiceService {
         case speaking       // TTS speaking to user
     }
 
-    // System sound IDs for audio feedback
+    // System sound IDs for audio feedback.
+    // NOTE: AudioServicesPlaySystemSound is silenced by iOS when the audio session is active
+    // in recording mode (.playAndRecord). Only use it when the recorder is NOT running:
+    //   listeningReady → fires before startPreRollRecorder() ✓
+    //   messageSent    → fires after audioRecorder?.stop()   ✓
+    //   recordingStart → fires while recorder is active      ✗ → use playRecordingStartTone()
     private enum SoundID {
         static let listeningReady: SystemSoundID = 1057  // SMS received tone
-        static let recordingStart: SystemSoundID = 1113  // Begin recording
         static let messageSent: SystemSoundID = 1016     // Tock/sent sound
     }
+
+    // Kept alive for the tone duration
+    private var toneEngine: AVAudioEngine?
 
     var state: State = .disabled
     var currentAudioLevel: Float = 0.0
@@ -159,8 +166,8 @@ final class ContinuousVoiceService {
         // Recorder is already running from pre-roll — just transition state
         cancelPreRollTimer()
         state = .recording
-        AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart (id=\(SoundID.recordingStart))", level: .info, category: "Voice")
-        AudioServicesPlaySystemSound(SoundID.recordingStart)
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart (AVAudioEngine tone)", level: .info, category: "Voice")
+        playRecordingStartTone()
         AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
     }
 
@@ -223,6 +230,50 @@ final class ContinuousVoiceService {
     private func cancelPreRollTimer() {
         preRollRestartTimer?.invalidate()
         preRollRestartTimer = nil
+    }
+
+    /// Play a short tone while the recorder is active.
+    /// AudioServicesPlaySystemSound is silenced by iOS in .playAndRecord sessions, so we use
+    /// AVAudioEngine with .mixWithOthers to generate and play a tone alongside the recorder.
+    private func playRecordingStartTone() {
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+
+        let sampleRate: Double = 44100
+        let durationSeconds: Double = 0.07   // 70ms — short, crisp
+        let frequency: Float = 880           // A5 — same pitch as system sound 1113
+        let frames = AVAudioFrameCount(sampleRate * durationSeconds)
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+        buffer.frameLength = frames
+        let data = buffer.floatChannelData![0]
+        for i in 0..<Int(frames) {
+            // Sine wave with a short fade-out to avoid click artifacts
+            let t = Float(i) / Float(sampleRate)
+            let envelope = 1.0 - (t / Float(durationSeconds))
+            data[i] = sin(2.0 * .pi * frequency * t) * 0.4 * envelope
+        }
+
+        do {
+            try engine.start()
+        } catch {
+            AppLogger.shared.log("[Voice] ⚠️ Tone engine start failed: \(error.localizedDescription)", level: .warning, category: "Voice")
+            return
+        }
+
+        toneEngine = engine
+        player.scheduleBuffer(buffer, completionHandler: nil)
+        player.play()
+
+        // Release engine after tone completes
+        let releaseDelay = durationSeconds + 0.15
+        DispatchQueue.main.asyncAfter(deadline: .now() + releaseDelay) { [weak self] in
+            self?.toneEngine?.stop()
+            self?.toneEngine = nil
+        }
     }
 
     private func stopRecordingAndTranscribe() async {
