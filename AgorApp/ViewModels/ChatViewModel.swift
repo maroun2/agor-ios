@@ -867,6 +867,8 @@ final class ChatViewModel {
     func enableVoiceMode() {
         guard voiceService == nil else { return }
 
+        UIApplication.shared.isIdleTimerDisabled = true
+
         let service = ContinuousVoiceService()
         service.onTranscription = { [weak self] text in
             self?.handleVoiceInput(text)
@@ -888,6 +890,7 @@ final class ChatViewModel {
             } catch {
                 AppLogger.shared.log("[Voice] Failed to enable voice mode: \(error.localizedDescription)", level: .error, category: "Voice")
                 await MainActor.run {
+                    UIApplication.shared.isIdleTimerDisabled = false
                     self.error = "Voice mode failed: \(error.localizedDescription)"
                     self.voiceService = nil
                     self.voiceModeEnabled = false
@@ -897,6 +900,7 @@ final class ChatViewModel {
     }
 
     func disableVoiceMode() {
+        UIApplication.shared.isIdleTimerDisabled = false
         voiceService?.stopListening()
         voiceService = nil
         AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
