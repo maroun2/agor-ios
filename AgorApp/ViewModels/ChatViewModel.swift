@@ -95,6 +95,7 @@ final class ChatViewModel {
 
     // Voice mode
     var voiceService: ContinuousVoiceService?
+    private var lastSpokenMessageId: String?
     var voiceModeEnabled: Bool = false {
         didSet {
             if voiceModeEnabled {
@@ -690,9 +691,15 @@ final class ChatViewModel {
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
-            // Voice: announce tool use as agent works
+            // Voice: speak text content immediately; fall back to tool-use phrase if no text
             if self.voiceModeEnabled, message.role == .assistant {
-                if case .blocks(let blocks) = message.content {
+                let text = self.extractTextFromMessage(message)
+                if !text.isEmpty {
+                    let spokenText = text.count > 500 ? self.summarizeText(text) : text
+                    AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
+                    self.voiceService?.speakMessage(spokenText)
+                    self.lastSpokenMessageId = message.messageId
+                } else if case .blocks(let blocks) = message.content {
                     for block in blocks {
                         if case .toolUse(let tool) = block {
                             let phrase = self.voicePhrase(for: tool.name)
@@ -990,14 +997,17 @@ final class ChatViewModel {
     private func speakFinalMessage() {
         guard voiceModeEnabled, let lastMessage = messages.last else { return }
 
-        // Extract text content from assistant message
-        let text = extractTextFromMessage(lastMessage)
+        // Already spoken when it arrived via onMessageCreated — don't double-speak
+        if lastMessage.messageId == lastSpokenMessageId {
+            AppLogger.shared.log("[Voice] ⏭️ Final message already spoken — skipping", level: .info, category: "Voice")
+            lastSpokenMessageId = nil
+            return
+        }
 
+        let text = extractTextFromMessage(lastMessage)
         guard !text.isEmpty else { return }
 
-        // Summarize if too long
         let spokenText = text.count > 500 ? summarizeText(text) : text
-
         voiceService?.speakMessage(spokenText)
     }
 
