@@ -15,15 +15,38 @@ final class VoiceActivityDetector {
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
 
-    // VAD configuration
-    private(set) var energyThreshold: Float = 0.008  // Speech start threshold
-    private var silenceThreshold: Float = 0.003  // Silence threshold
-    private let silenceDuration: TimeInterval = 3.0  // Seconds of silence to detect end of speech
+    // VAD configuration — base sensitivity (0.0 low → 1.0 high)
+    private(set) var sensitivityLevel: Float = 0.5
+    private let silenceDuration: TimeInterval = 1.5  // Seconds of silence to end speech
+
+    // --- Moving-average / adaptive-threshold state ---
+
+    // Exponential moving average of RMS (smooths out transients).
+    // α controls responsiveness: higher α = faster tracking.
+    private var smoothedEnergy: Float = 0.0
+    private let emaAlpha: Float = 0.15  // ~7 frame lag at 48 kHz / 1024 buf ≈ 47 fps
+
+    // Adaptive noise floor: tracks background noise during silence.
+    // Rises quickly (burst) and falls slowly (de-noise after speech).
+    private var noiseFloor: Float = 0.001
+    private let noiseFloorRiseAlpha: Float = 0.05   // Fast rise (background gets louder)
+    private let noiseFloorFallAlpha: Float = 0.002  // Slow fall (quiet room after noise)
+
+    // Speech-start confirmation: require N consecutive frames above threshold
+    // to avoid false triggers from short transients (keyboard taps, clicks).
+    private var consecutiveAboveThreshold: Int = 0
+    private let confirmationFrames: Int = 4  // ~80ms at 47 fps
+
+    // Speech-start threshold = noiseFloor × startMultiplier
+    // Speech-end threshold   = noiseFloor × endMultiplier
+    // Multipliers are adjusted by sensitivityLevel.
+    private var startMultiplier: Float { 3.5 - sensitivityLevel * 1.5 }  // 3.5 (low) → 2.0 (high)
+    private var endMultiplier: Float   { 2.0 - sensitivityLevel * 0.8 }  // 2.0 (low) → 1.2 (high)
 
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
     private var silenceCheckTimer: Timer?
-    private var bufferCount: Int = 0  // For periodic logging
+    private var bufferCount: Int = 0
 
     // Callbacks
     var onSpeechStart: (() -> Void)?
@@ -32,26 +55,25 @@ final class VoiceActivityDetector {
     // MARK: - Configuration
 
     func setSensitivity(_ sensitivity: Float) {
-        // sensitivity: 0.0 (low) to 1.0 (high)
-        // Adjust thresholds based on sensitivity
-        energyThreshold = 0.01 + (sensitivity * 0.05)  // 0.01 - 0.06
-        silenceThreshold = 0.005 + (sensitivity * 0.015)  // 0.005 - 0.02
+        sensitivityLevel = max(0.0, min(1.0, sensitivity))
+        AppLogger.shared.log("[VAD] Sensitivity set to \(String(format: "%.2f", sensitivityLevel)) → startMult=\(String(format: "%.2f", startMultiplier)) endMult=\(String(format: "%.2f", endMultiplier))", level: .debug, category: "Voice")
     }
+
+    // Expose effective thresholds for UI / debugging
+    var energyThreshold: Float { noiseFloor * startMultiplier }
+    var silenceThreshold: Float { noiseFloor * endMultiplier }
 
     // MARK: - Start/Stop
 
     func startListening() throws {
         guard state == .idle else { return }
 
-        // Request microphone permission
         let session = AVAudioSession.sharedInstance()
 
-        // Check permission status
         switch session.recordPermission {
         case .denied:
             throw VADError.microphonePermissionDenied
         case .undetermined:
-            // Request permission synchronously (blocks until user responds)
             var granted = false
             let semaphore = DispatchSemaphore(value: 0)
             session.requestRecordPermission { allowed in
@@ -59,43 +81,38 @@ final class VoiceActivityDetector {
                 semaphore.signal()
             }
             semaphore.wait()
-
-            if !granted {
-                throw VADError.microphonePermissionDenied
-            }
+            if !granted { throw VADError.microphonePermissionDenied }
         case .granted:
             break
         @unknown default:
             break
         }
 
-        // Setup audio session for recording + playback (for TTS)
-        // .mixWithOthers allows AVAudioEngine/AVAudioPlayer to play tones alongside the recorder.
-        // Without it, AudioServicesPlaySystemSound is silenced while recording is active.
+        // .mixWithOthers lets AVAudioEngine/AVAudioPlayer play tones alongside the active recorder.
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
         try session.setActive(true)
 
-        // Setup audio engine
+        // Reset adaptive state so we calibrate to the new room on each start
+        smoothedEnergy = 0.0
+        noiseFloor = 0.001
+        consecutiveAboveThreshold = 0
+
         audioEngine = AVAudioEngine()
         guard let engine = audioEngine else { return }
 
         inputNode = engine.inputNode
         guard let input = inputNode else { return }
 
-        // Install tap on input node
         let format = input.outputFormat(forBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.processAudioBuffer(buffer)
         }
 
-        // Start engine
         try engine.start()
         state = .listening
 
-        // Start silence check timer
         startSilenceCheckTimer()
-
-        AppLogger.shared.log("[Voice] VAD started listening", level: .info, category: "Voice")
+        AppLogger.shared.log("[VAD] Started listening (adaptive threshold, EMA smoothing)", level: .info, category: "Voice")
     }
 
     func stopListening() {
@@ -110,56 +127,74 @@ final class VoiceActivityDetector {
         inputNode = nil
 
         state = .idle
-
-        AppLogger.shared.log("[Voice] VAD stopped listening", level: .info, category: "Voice")
+        AppLogger.shared.log("[VAD] Stopped listening", level: .info, category: "Voice")
     }
 
     // MARK: - Audio Processing
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let floatData = buffer.floatChannelData?[0] else {
-            AppLogger.shared.log("[Voice] ⚠️ No audio data in buffer", level: .warning, category: "Voice")
-            return
-        }
+        guard let floatData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
 
-        // Calculate RMS (root mean square) of audio
+        // 1. Calculate RMS for this frame
         var sum: Float = 0
         for i in 0..<frameLength {
             sum += floatData[i] * floatData[i]
         }
         let rms = sqrt(sum / Float(frameLength))
 
-        Task { @MainActor in
-            self.currentAudioLevel = rms
+        // 2. Exponential moving average — smooth out transients
+        smoothedEnergy = emaAlpha * rms + (1.0 - emaAlpha) * smoothedEnergy
+
+        // 3. Update adaptive noise floor (only during silence, not while speech is active)
+        if state == .listening {
+            if smoothedEnergy > noiseFloor {
+                noiseFloor = noiseFloorRiseAlpha * smoothedEnergy + (1.0 - noiseFloorRiseAlpha) * noiseFloor
+            } else {
+                noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
+            }
+            // Clamp noise floor to a sensible minimum so thresholds stay meaningful in very quiet rooms
+            noiseFloor = max(noiseFloor, 0.0005)
         }
 
-        // Log RMS periodically (every ~100 buffers = ~2 seconds at 48kHz)
+        let startThreshold = noiseFloor * startMultiplier
+        let endThreshold   = noiseFloor * endMultiplier
+
+        Task { @MainActor in
+            self.currentAudioLevel = self.smoothedEnergy
+        }
+
         bufferCount += 1
         if bufferCount % 100 == 0 {
-            AppLogger.shared.log("[Voice] 📊 Audio level: RMS=\(String(format: "%.4f", rms)), energyThresh=\(String(format: "%.4f", self.energyThreshold)), state=\(self.state)", level: .info, category: "Voice")
+            AppLogger.shared.log("[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) noise=\(String(format: "%.4f", noiseFloor)) start>\(String(format: "%.4f", startThreshold)) end>\(String(format: "%.4f", endThreshold)) state=\(state)", level: .info, category: "Voice")
         }
 
-        // Speech detection logic
-        if state == .listening && rms > energyThreshold {
-            // Speech detected!
-            Task { @MainActor in
-                self.speechStartTime = Date()
-                self.state = .speechDetected
-                AppLogger.shared.log("[Voice] 🎤 Speech START detected (RMS: \(String(format: "%.4f", rms)) > threshold: \(String(format: "%.4f", self.energyThreshold)))", level: .info, category: "Voice")
-                self.onSpeechStart?()
+        // 4. Speech-start detection with multi-frame confirmation
+        if state == .listening {
+            if smoothedEnergy > startThreshold {
+                consecutiveAboveThreshold += 1
+                if consecutiveAboveThreshold >= confirmationFrames {
+                    consecutiveAboveThreshold = 0
+                    Task { @MainActor in
+                        self.speechStartTime = Date()
+                        self.state = .speechDetected
+                        AppLogger.shared.log("[VAD] 🎤 Speech START (smoothed=\(String(format: "%.4f", self.smoothedEnergy)) > threshold=\(String(format: "%.4f", startThreshold)), noise=\(String(format: "%.4f", self.noiseFloor)))", level: .info, category: "Voice")
+                        self.onSpeechStart?()
+                    }
+                }
+            } else {
+                consecutiveAboveThreshold = 0
             }
         }
 
-        // Update last sound time if audio is above silence threshold
-        if rms > silenceThreshold {
+        // 5. Update last-sound time for silence duration tracking
+        if smoothedEnergy > endThreshold {
             lastSoundTime = Date()
         }
 
-        // Debug: Log RMS values when recording
         if state == .speechDetected {
             let silenceDur = Date().timeIntervalSince(lastSoundTime)
-            AppLogger.shared.log("[Voice] 🎙️ Recording: RMS=\(String(format: "%.4f", rms)), silence=\(String(format: "%.1f", silenceDur))s", level: .debug, category: "Voice")
+            AppLogger.shared.log("[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy)) silence=\(String(format: "%.1f", silenceDur))s endThresh=\(String(format: "%.4f", endThreshold))", level: .debug, category: "Voice")
         }
     }
 
@@ -174,13 +209,12 @@ final class VoiceActivityDetector {
     private func checkForSilence() {
         guard state == .speechDetected else { return }
 
-        let silenceDuration = Date().timeIntervalSince(lastSoundTime)
-        if silenceDuration >= self.silenceDuration {
-            // Silence detected - end of speech
+        let silenceElapsed = Date().timeIntervalSince(lastSoundTime)
+        if silenceElapsed >= silenceDuration {
             let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
             Task { @MainActor in
                 self.state = .listening
-                AppLogger.shared.log("[Voice] 🔇 Speech END detected (silence: \(String(format: "%.1f", silenceDuration))s, total speech: \(String(format: "%.1f", totalDuration))s)", level: .info, category: "Voice")
+                AppLogger.shared.log("[VAD] 🔇 Speech END (silence=\(String(format: "%.1f", silenceElapsed))s, total=\(String(format: "%.1f", totalDuration))s)", level: .info, category: "Voice")
                 self.onSpeechEnd?()
             }
         }
