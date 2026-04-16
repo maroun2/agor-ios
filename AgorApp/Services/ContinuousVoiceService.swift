@@ -260,14 +260,19 @@ final class ContinuousVoiceService {
                 AppLogger.shared.log("[Voice] 🔔 Playing beep: messageSent (id=\(SoundID.messageSent))", level: .info, category: "Voice")
                 AudioServicesPlaySystemSound(SoundID.messageSent)
                 onTranscription?(cleanedText)
+
+                // Auto-pause after sending — wait for agent to respond.
+                // updateVoiceListening() will resume once session goes idle.
+                isPaused = true
+                state = .paused
+                AppLogger.shared.log("[Voice] ⏸️ STATE: sending → paused (waiting for agent)", level: .info, category: "Voice")
             } else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
+                // Nothing was sent — return to listening normally
+                state = .listening
+                AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening (nothing sent)", level: .info, category: "Voice")
+                startPreRollRecorder()
             }
-
-            // Return to listening state and start new pre-roll recorder
-            state = .listening
-            AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening", level: .info, category: "Voice")
-            startPreRollRecorder()
         } catch {
             tickTask.cancel()
             AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
