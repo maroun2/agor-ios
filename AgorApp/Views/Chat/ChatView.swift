@@ -193,6 +193,7 @@ struct ChatView: View {
                     .id("bottom")
                     .onAppear {
                         viewModel.userIsNearBottom = true
+                        viewModel.lastNearBottomTime = Date()
                         AppLogger.shared.log("[Scroll] bottom marker appeared — userIsNearBottom=true", level: .debug, category: "Scroll")
                     }
                     .onDisappear {

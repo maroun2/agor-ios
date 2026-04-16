@@ -60,6 +60,9 @@ final class ChatViewModel {
     var isReconnectScroll = false
     // Tracks whether user is scrolled near the bottom — new messages only auto-scroll when true
     var userIsNearBottom = true
+    // Last time the bottom marker was visible — used to allow scroll even if onDisappear
+    // fires spuriously during layout expansion (LazyVStack adding new items)
+    var lastNearBottomTime: Date = .distantPast
     // Scroll to a specific message ID (for permission cards)
     var scrollToMessageId: String?
     var scrollToMessageInProgress = false
@@ -167,6 +170,9 @@ final class ChatViewModel {
         streamingService.clearStreams(for: sessionId)
         activeStreams = streamingService.activeStreams
         isReconnectScroll = true
+        // Re-enable auto-scroll on reconnect — the bottom marker state may be stale
+        userIsNearBottom = true
+        lastNearBottomTime = Date()
         Task {
             await loadSession(sessionId)
             await loadTasks(sessionId)
@@ -655,8 +661,12 @@ final class ChatViewModel {
             AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — scrollToMessageInProgress=true", level: .debug, category: "Scroll")
             return
         }
-        guard userIsNearBottom else {
-            AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — userIsNearBottom=false", level: .debug, category: "Scroll")
+        // Allow scroll if near bottom, OR if bottom marker was visible within last 2s.
+        // The 2s grace period covers the LazyVStack layout race: when new items are appended,
+        // the list expands and onDisappear fires on the bottom marker before the scroll runs.
+        let recentlyNearBottom = Date().timeIntervalSince(lastNearBottomTime) < 2.0
+        guard userIsNearBottom || recentlyNearBottom else {
+            AppLogger.shared.log("[Scroll] requestScrollToBottom skipped — userIsNearBottom=false, lastNearBottom=\(Int(-lastNearBottomTime.timeIntervalSinceNow))s ago", level: .debug, category: "Scroll")
             return
         }
         scrollRequestCount += 1
