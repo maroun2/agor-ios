@@ -30,6 +30,8 @@ final class ContinuousVoiceService {
     private let tts: TextToSpeechService
     private var audioRecorder: AVAudioRecorder?
     private var currentRecordingURL: URL?
+    private var preRollRestartTimer: Timer?
+    private let preRollMaxDuration: TimeInterval = 2.0  // Max pre-roll buffer before speech
 
     // Callbacks
     var onTranscription: ((String) -> Void)?
@@ -99,6 +101,7 @@ final class ContinuousVoiceService {
     }
 
     func stopListening() {
+        cancelPreRollTimer()
         vad.stopListening()
         audioRecorder?.stop()
         audioRecorder = nil
@@ -115,6 +118,7 @@ final class ContinuousVoiceService {
     // Pause VAD while agent is running — keeps voice mode active, no beep on resume
     func pauseListening() {
         guard !isPaused, state != .disabled else { return }
+        cancelPreRollTimer()
         vad.stopListening()
         audioRecorder?.stop()
         audioRecorder = nil
@@ -153,6 +157,7 @@ final class ContinuousVoiceService {
         }
 
         // Recorder is already running from pre-roll — just transition state
+        cancelPreRollTimer()
         state = .recording
         AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart (id=\(SoundID.recordingStart))", level: .info, category: "Voice")
         AudioServicesPlaySystemSound(SoundID.recordingStart)
@@ -175,6 +180,14 @@ final class ContinuousVoiceService {
     // MARK: - Recording
 
     private func startPreRollRecorder() {
+        // Stop previous pre-roll file and clean up
+        audioRecorder?.stop()
+        if let old = currentRecordingURL {
+            try? FileManager.default.removeItem(at: old)
+            currentRecordingURL = nil
+        }
+        audioRecorder = nil
+
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = "voice-\(UUID().uuidString).m4a"
         let fileURL = tempDir.appendingPathComponent(fileName)
@@ -194,6 +207,22 @@ final class ContinuousVoiceService {
         } catch {
             AppLogger.shared.log("[Voice] ❌ Pre-roll recorder failed: \(error.localizedDescription)", level: .error, category: "Voice")
         }
+
+        // Rolling restart: keep pre-roll buffer short to avoid capturing TTS or old audio
+        preRollRestartTimer?.invalidate()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.preRollRestartTimer = Timer.scheduledTimer(withTimeInterval: self.preRollMaxDuration, repeats: false) { [weak self] _ in
+                guard let self, self.state == .listening else { return }
+                AppLogger.shared.log("[Voice] 🔄 Rolling pre-roll restart (keeps buffer ≤ \(self.preRollMaxDuration)s)", level: .debug, category: "Voice")
+                self.startPreRollRecorder()
+            }
+        }
+    }
+
+    private func cancelPreRollTimer() {
+        preRollRestartTimer?.invalidate()
+        preRollRestartTimer = nil
     }
 
     private func stopRecordingAndTranscribe() async {
