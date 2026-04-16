@@ -138,13 +138,21 @@ struct PromptInputBar: View {
                 case .listening:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.blue)
-                    Text("Listening...")
-                        .foregroundStyle(.secondary)
+                    AudioLevelBar(
+                        audioLevel: service.vad.currentAudioLevel,
+                        threshold: service.vad.energyThreshold,
+                        isRecording: false
+                    )
+                    .frame(height: 24)
                 case .recording:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.red)
-                    Text("Recording...")
-                        .foregroundStyle(.primary)
+                    AudioLevelBar(
+                        audioLevel: service.vad.currentAudioLevel,
+                        threshold: service.vad.energyThreshold,
+                        isRecording: true
+                    )
+                    .frame(height: 24)
                 case .transcribing:
                     ProgressView()
                         .controlSize(.small)

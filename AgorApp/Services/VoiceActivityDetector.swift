@@ -16,7 +16,7 @@ final class VoiceActivityDetector {
     private var inputNode: AVAudioInputNode?
 
     // VAD configuration
-    private var energyThreshold: Float = 0.008  // Speech start threshold
+    private(set) var energyThreshold: Float = 0.008  // Speech start threshold
     private var silenceThreshold: Float = 0.003  // Silence threshold
     private let silenceDuration: TimeInterval = 1.0  // Seconds of silence to detect end (faster response)
 
