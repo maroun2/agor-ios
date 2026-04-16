@@ -89,8 +89,13 @@ final class SocketService {
         // Both are needed:
         //   extraHeaders  → service calls work (socket.feathers.user set by middleware)
         //   create auth   → real-time events work (connection in 'authenticated' channel)
+        //
+        // NOTE: Do NOT use forceWebsockets(true). After iOS background transitions the network
+        // stack takes a moment to restore. Forcing WebSocket immediately causes silent failures
+        // with no connect_error emitted. Socket.IO's default behaviour (HTTP polling first,
+        // then upgrade to WebSocket) is resilient to this — polling connects immediately and
+        // the upgrade happens once the network is stable.
         var config: SocketIOClientConfiguration = [
-            .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(2),
             .reconnectWaitMax(30),
@@ -242,13 +247,16 @@ final class SocketService {
             self?.connectionState = .reconnecting
         }
 
-        socket.on("connect_error") { [weak self] data, _ in
+        // socket.on(clientEvent: .connectError) captures Socket.IO protocol-level connection
+        // errors (e.g. server rejection, TLS failure). Using the string "connect_error" would
+        // only catch a custom event with that literal name — not actual connect failures.
+        socket.on(clientEvent: .connectError) { [weak self] data, _ in
             guard let self else { return }
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
                 return d as? String
             }.joined(separator: ", ")
-            AppLogger.shared.log("[Socket] connect_error: \(errStr)", level: .error, category: "Socket")
+            AppLogger.shared.log("[Socket] connect_error: \(errStr.isEmpty ? "(no details)" : errStr)", level: .error, category: "Socket")
 
             // Server rejected connection — likely expired token in extraHeaders.
             // Try refreshing the token then reconnect with the new token.
