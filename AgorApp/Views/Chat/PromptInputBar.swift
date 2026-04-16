@@ -139,7 +139,10 @@ struct PromptInputBar: View {
                             .foregroundStyle(.secondary)
                     }
                 case .paused:
-                    EmptyView()
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.secondary)
+                    Text("Waiting for agent...")
+                        .foregroundStyle(.secondary)
                 case .listening:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.blue)
