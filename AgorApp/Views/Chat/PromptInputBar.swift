@@ -138,6 +138,8 @@ struct PromptInputBar: View {
                         Text("Loading voice model…")
                             .foregroundStyle(.secondary)
                     }
+                case .paused:
+                    EmptyView()
                 case .listening:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.blue)
