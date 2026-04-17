@@ -99,6 +99,7 @@ final class ChatViewModel {
     // Voice mode
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
+    var voiceSessionId: String?
     var voiceModeEnabled: Bool = false {
         didSet {
             if voiceModeEnabled {
@@ -127,6 +128,12 @@ final class ChatViewModel {
     // MARK: - Session Selection
 
     func selectSession(_ sessionId: String) {
+        // Disable voice mode when switching away from the voice session
+        if voiceModeEnabled, voiceSessionId != sessionId {
+            disableVoiceMode()
+            voiceModeEnabled = false
+        }
+
         if sessionId == currentSessionId {
             // Same session re-selected — do a soft refresh to pick up any missed events
             AppLogger.shared.log("[Chat] selectSession \(sessionId) (soft refresh)", level: .debug, category: "Chat")
@@ -884,6 +891,7 @@ final class ChatViewModel {
     func enableVoiceMode() {
         guard voiceService == nil else { return }
 
+        voiceSessionId = currentSessionId
         UIApplication.shared.isIdleTimerDisabled = true
 
         let service = ContinuousVoiceService()
@@ -920,6 +928,7 @@ final class ChatViewModel {
         UIApplication.shared.isIdleTimerDisabled = false
         voiceService?.stopListening()
         voiceService = nil
+        voiceSessionId = nil
         AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
     }
 
