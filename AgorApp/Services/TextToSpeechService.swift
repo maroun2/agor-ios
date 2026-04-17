@@ -73,9 +73,9 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func speakMessage(_ text: String) {
-        // Cancel status if speaking, then speak message
-        if synthesizer.isSpeaking {
-            AppLogger.shared.log("[Voice] 🔄 Canceling previous speech to speak final message", level: .debug, category: "Voice")
+        // Only interrupt status speech; queue naturally behind other messages
+        if synthesizer.isSpeaking && currentType == .status {
+            AppLogger.shared.log("[Voice] 🔄 Canceling status to speak message", level: .debug, category: "Voice")
             synthesizer.stopSpeaking(at: .immediate)
         }
 
@@ -97,6 +97,35 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
         currentUtterance = utterance
         currentType = .finalMessage
+
+        synthesizer.speak(utterance)
+
+        AppLogger.shared.log("[Voice] 💬 Speaking message: \"\(text.prefix(50))\(text.count > 50 ? "..." : "")\" (\(text.count) chars, rate: \(String(format: "%.2f", messageRate)))", level: .info, category: "Voice")
+    }
+
+    func speakFinalMessage(_ text: String, type: SpeechType = .finalMessage) {
+        // Clear queue and speak immediately — used for the final response
+        if synthesizer.isSpeaking {
+            AppLogger.shared.log("[Voice] 🔄 Clearing queue to speak final message", level: .debug, category: "Voice")
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        guard !text.isEmpty else { return }
+
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setActive(true)
+        } catch {
+            AppLogger.shared.log("[Voice] ⚠️ Failed to activate audio session: \(error.localizedDescription)", level: .warning, category: "Voice")
+        }
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = messageRate
+        utterance.volume = 1.0
+
+        currentUtterance = utterance
+        currentType = type
 
         synthesizer.speak(utterance)
 

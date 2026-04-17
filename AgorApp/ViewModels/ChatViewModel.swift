@@ -1028,7 +1028,7 @@ final class ChatViewModel {
         guard !text.isEmpty else { return }
 
         let spokenText = text.count > 500 ? summarizeText(text) : text
-        voiceService?.speakMessage(spokenText)
+        voiceService?.speakFinalMessage(spokenText)
     }
 
     private func extractTextFromMessage(_ message: Message) -> String {
