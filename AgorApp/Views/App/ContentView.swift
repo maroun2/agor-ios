@@ -14,7 +14,7 @@ struct ContentView: View {
         if appViewModel.isAuthenticated {
             MainNavigationView(appViewModel: appViewModel)
         } else {
-            ConnectionSetupView(authService: appViewModel.authService)
+            ConnectionSetupView(appViewModel: appViewModel)
         }
     }
 }

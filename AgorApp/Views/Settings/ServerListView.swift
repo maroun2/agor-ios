@@ -30,6 +30,11 @@ struct ServerListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        if !profile.email.isEmpty {
+                            Text(profile.email)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
 
                     Spacer()
@@ -104,6 +109,7 @@ struct ServerEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""
     @State private var url: String = ""
+    @State private var email: String = ""
 
     var isEditing: Bool { existingProfile != nil }
 
@@ -114,6 +120,10 @@ struct ServerEditView: View {
                     TextField("Name (e.g. Home, Work)", text: $name)
                     TextField("URL (e.g. https://agor.example.com)", text: $url)
                         .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -128,14 +138,16 @@ struct ServerEditView: View {
                     Button(isEditing ? "Save" : "Add") {
                         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmedName.isEmpty, !trimmedURL.isEmpty else { return }
 
                         if var profile = existingProfile {
                             profile.name = trimmedName
                             profile.url = trimmedURL
+                            profile.email = trimmedEmail
                             profileManager.updateProfile(profile)
                         } else {
-                            let profile = ServerProfile(name: trimmedName, url: trimmedURL)
+                            let profile = ServerProfile(name: trimmedName, url: trimmedURL, email: trimmedEmail)
                             profileManager.addProfile(profile)
                         }
                         dismiss()
@@ -148,6 +160,7 @@ struct ServerEditView: View {
                 if let profile = existingProfile {
                     name = profile.name
                     url = profile.url
+                    email = profile.email
                 }
             }
         }

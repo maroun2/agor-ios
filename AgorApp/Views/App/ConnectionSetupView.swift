@@ -1,13 +1,16 @@
 import SwiftUI
 
 struct ConnectionSetupView: View {
-    let authService: AuthService
+    let appViewModel: AppViewModel
 
+    @State private var profileName: String = ""
     @State private var daemonURL: String = ""
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var errorMessage: String?
     @State private var isConnecting = false
+
+    private var profileManager: ServerProfileManager { .shared }
 
     var body: some View {
         NavigationStack {
@@ -24,8 +27,23 @@ struct ConnectionSetupView: View {
                     }
                     .padding(.top, 40)
 
+                    // Saved servers
+                    if !profileManager.profiles.isEmpty {
+                        savedServersSection
+                    }
+
                     // Form
                     VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Server Name")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            TextField("e.g. Home, Work", text: $profileName)
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.words)
+                        }
+
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Daemon URL")
                                 .font(.caption)
@@ -93,12 +111,65 @@ struct ConnectionSetupView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if daemonURL.isEmpty, let url = KeychainHelper.load(.daemonURL) { daemonURL = url }
-            if email.isEmpty, let savedEmail = KeychainHelper.load(.userEmail) { email = savedEmail }
-        }
+            .task {
+                // Pre-fill from active profile or flat keychain
+                if let profile = profileManager.activeProfile {
+                    if daemonURL.isEmpty { daemonURL = profile.url }
+                    if email.isEmpty { email = profile.email }
+                    if profileName.isEmpty { profileName = profile.name }
+                } else {
+                    if daemonURL.isEmpty, let url = KeychainHelper.load(.daemonURL) { daemonURL = url }
+                    if email.isEmpty, let savedEmail = KeychainHelper.load(.userEmail) { email = savedEmail }
+                }
+            }
         }
     }
+
+    // MARK: - Saved Servers
+
+    private var savedServersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Saved Servers")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
+            ForEach(profileManager.profiles) { profile in
+                Button {
+                    daemonURL = profile.url
+                    email = profile.email
+                    profileName = profile.name
+                    password = ""
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(profile.name)
+                                .font(.subheadline.weight(.medium))
+                            Text(profile.url)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if !profile.email.isEmpty {
+                                Text(profile.email)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    // MARK: - Connect
 
     private func connect() {
         isConnecting = true
@@ -106,10 +177,11 @@ struct ConnectionSetupView: View {
 
         Task {
             do {
-                try await authService.login(
-                    daemonURL: daemonURL,
+                try await appViewModel.loginToProfile(
+                    url: daemonURL,
                     email: email,
-                    password: password
+                    password: password,
+                    profileName: profileName
                 )
             } catch {
                 errorMessage = error.localizedDescription
