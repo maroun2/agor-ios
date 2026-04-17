@@ -978,8 +978,9 @@ final class ChatViewModel {
 
         switch newStatus {
         case .running:
-            AppLogger.shared.log("[Voice] 🤔 Agent started running - speaking 'Thinking'", level: .info, category: "Voice")
-            voiceService?.speakStatus("Thinking")
+            let phrase = workingStatusPhrase()
+            AppLogger.shared.log("[Voice] 🤔 Agent started running - speaking '\(phrase)'", level: .info, category: "Voice")
+            voiceService?.speakStatus(phrase)
         case .idle:
             // Check if there's a new final message
             if hasNewAssistantMessage(since: oldStatus) {
@@ -1053,6 +1054,13 @@ final class ChatViewModel {
             return text
         }
         return String(text.prefix(400)) + "..."
+    }
+
+    private func workingStatusPhrase() -> String {
+        if let prompt = tasks.last?.prompt.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
+            return prompt.count <= 60 ? "Working on: \(prompt)" : "Working on: \(prompt.prefix(50))..."
+        }
+        return "Working..."
     }
 
     private func voicePhrase(for toolName: String) -> String {
