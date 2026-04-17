@@ -84,6 +84,16 @@ struct MainNavigationView: View {
                 )
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if chatVM.voiceModeEnabled, selectedSessionId != chatVM.voiceSessionId {
+                VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
+                    selectedSessionId = chatVM.voiceSessionId
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 24)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
         .toastOverlay(manager: toastManager) { sessionId in
             selectedSessionId = sessionId
         }
@@ -184,11 +194,21 @@ struct MainNavigationView: View {
             socketService.stopHealthCheck()
             chatVM.stopMessagePolling()
             navigationVM.stopPolling()
+            // Pause voice listening in background (keeps audio session alive for TTS)
+            if chatVM.voiceModeEnabled {
+                chatVM.voiceService?.pauseListening()
+            }
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling)", level: .info, category: "App")
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
             notificationManager.isBackgrounded = false
+            // Resume voice listening if voice mode active and session is idle
+            if chatVM.voiceModeEnabled,
+               chatVM.currentSession?.status == .idle,
+               let voice = chatVM.voiceService, voice.isPaused, !voice.isTTSSpeaking {
+                try? voice.resumeListening()
+            }
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
                 // Phase 1: Reconnecting
