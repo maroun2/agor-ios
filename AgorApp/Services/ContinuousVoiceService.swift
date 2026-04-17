@@ -376,6 +376,10 @@ final class ContinuousVoiceService {
         tts.speakMessage(message)
     }
 
+    func speakFinalMessage(_ message: String) {
+        tts.speakFinalMessage(message)
+    }
+
     // MARK: - Configuration
 
     func setSensitivity(_ sensitivity: Float) {
