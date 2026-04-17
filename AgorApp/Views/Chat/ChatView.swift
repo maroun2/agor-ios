@@ -99,22 +99,27 @@ struct ChatView: View {
     @ViewBuilder private var toolbarButtons: some View {
         if let session = viewModel.currentSession {
             HStack(spacing: 8) {
-                if !session.worktreeId.isEmpty {
-                    Button { showFileBrowser = true } label: {
-                        Image(systemName: "folder").foregroundStyle(.secondary).font(.system(size: 16))
+                Menu {
+                    if !session.worktreeId.isEmpty {
+                        Button { showFileBrowser = true } label: {
+                            Label("Files", systemImage: "folder")
+                        }
                     }
-                }
-                Button { showSessionSettings = true } label: {
-                    Image(systemName: "gearshape").foregroundStyle(.secondary).font(.system(size: 16))
-                }
-                Button { showMCPServers = true } label: {
-                    Image(systemName: "server.rack").foregroundStyle(.secondary).font(.system(size: 16))
-                }
-                Button { viewModel.archiveCurrentSession() } label: {
-                    Image(systemName: "archivebox").foregroundStyle(.secondary).font(.system(size: 16))
-                }
-                Button { showResetAlert = true } label: {
-                    Image(systemName: "arrow.counterclockwise").foregroundStyle(.secondary).font(.system(size: 16))
+                    Button { showSessionSettings = true } label: {
+                        Label("Session Settings", systemImage: "gearshape")
+                    }
+                    Button { showMCPServers = true } label: {
+                        Label("MCP Servers", systemImage: "server.rack")
+                    }
+                    Divider()
+                    Button { viewModel.archiveCurrentSession() } label: {
+                        Label("Archive", systemImage: "archivebox")
+                    }
+                    Button { showResetAlert = true } label: {
+                        Label("Reset Session", systemImage: "arrow.counterclockwise")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary).font(.system(size: 16))
                 }
                 if session.isPlanMode { PlanModeBadge() }
                 if viewModel.canStopSession {
