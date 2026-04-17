@@ -2,16 +2,16 @@
 
 ## Bugs
 
-- [ ] **Agent listening while working** — During agent tool execution/working phase, the app should not be listening for user input. It should transition from "agent working" directly to "speaking about what is doing" (and nothing else) until the agent has finished its task.
-- [ ] **Session context mismatch for Voice Mode** — Voice mode should be exclusive to the active voice session. If the user switches to a different session, that session must behave as a normal text-based chat mode.
+- [x] **Agent listening while working** — During agent tool execution/working phase, the app should not be listening for user input. It should transition from "agent working" directly to "speaking about what is doing" (and nothing else) until the agent has finished its task. Fixed: TTS onSpeechFinished now respects isPaused state.
+- [x] **Session context mismatch for Voice Mode** — Voice mode should be exclusive to the active voice session. If the user switches to a different session, that session must behave as a normal text-based chat mode. Fixed: voiceSessionId tracking with auto-disable on session switch.
 - [x] **Beep sound timing** — The beep sound should trigger exactly when the state switches from listening to recording, rather than when the message is sent. Fixed in d3465d9c.
-- [ ] **Interrupted intermediate messages** — During the working phase, agent intermediate messages are being cut short (e.g., reading only a few words before stopping to perform a tool action like "search" or "grab"). Intermediate messages should be read in full without being interrupted by subsequent tool calls.
+- [x] **Interrupted intermediate messages** — During the working phase, agent intermediate messages are being cut short (e.g., reading only a few words before stopping to perform a tool action like "search" or "grab"). Intermediate messages should be read in full without being interrupted by subsequent tool calls. Fixed: speakMessage() now queues naturally; speakFinalMessage() clears queue for final response.
 
 ## Features
 
-- [ ] **Background Voice Session & Floating Entry** — When voice mode is active, the session should continue working in the background. A floating button should appear on all other screens in the app, allowing the user to jump back into the active voice session and resume voice interaction.
-- [ ] **UI Refactor: Minimalist Top Bar** — Remove most buttons from the top toolbar. The top bar should only contain a Settings (gear) icon and a Status/Stop button. Other controls (R-HIF, MCP, etc.) should be moved into a menu under the Settings icon.
-- [ ] **Improved Agent Status Verbiage** — Refine the status text/voice cues used when an agent starts a task. Instead of always starting with "thinking", use more descriptive terms like "working on..." or "processing..." to better reflect the state after a message is sent.
+- [x] **Background Voice Session & Floating Entry** — When voice mode is active, the session should continue working in the background. A floating button should appear on all other screens in the app, allowing the user to jump back into the active voice session and resume voice interaction. Fixed: background audio mode, pause/resume on lifecycle, VoiceFloatingButton overlay.
+- [x] **UI Refactor: Minimalist Top Bar** — Remove most buttons from the top toolbar. The top bar should only contain a Settings (gear) icon and a Status/Stop button. Other controls (R-HIF, MCP, etc.) should be moved into a menu under the Settings icon. Fixed: consolidated into ellipsis.circle menu.
+- [x] **Improved Agent Status Verbiage** — Refine the status text/voice cues used when an agent starts a task. Instead of always starting with "thinking", use more descriptive terms like "working on..." or "processing..." to better reflect the state after a message is sent. Fixed: workingStatusPhrase() uses last task prompt.
 - [ ] **Authentic Agent Icons** — Display the official logos for Claude Code, Gemini, and OpenCode next to the session title (under the tree) and as mini-icons next to the status in the important list. Board icons should remain unchanged.
 - [x] **Duplicate notifications for same session** — Socket reconnect + missed transition check both fire for the same running→idle transition. Fixed with `lastNotifiedStatus` tracking per session + stable notification ID (`session-{id}-idle` instead of timestamp-based). Clears on next running transition.
 - [x] **No links or images in chat messages** — Three issues fixed:

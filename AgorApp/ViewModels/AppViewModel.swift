@@ -16,7 +16,8 @@ final class AppViewModel {
 
         // Migrate existing keychain URL to server profiles
         if let url = KeychainHelper.load(.daemonURL) {
-            ServerProfileManager.shared.migrateFromKeychain(url: url)
+            let email = KeychainHelper.load(.userEmail) ?? ""
+            ServerProfileManager.shared.migrateFromKeychain(url: url, email: email)
         }
     }
 
@@ -47,13 +48,6 @@ final class AppViewModel {
             client.refreshToken = ServerProfileManager.shared.loadToken(key: .refreshToken, profileId: profile.id)
             authService.isAuthenticated = true
 
-            // Also save to standard keychain keys for compatibility
-            KeychainHelper.save(profile.url, for: .daemonURL)
-            KeychainHelper.save(token, for: .accessToken)
-            if let refresh = client.refreshToken {
-                KeychainHelper.save(refresh, for: .refreshToken)
-            }
-
             // Reconnect socket and fetch user
             socketService.connect()
             await authService.fetchCurrentUser()
@@ -63,6 +57,38 @@ final class AppViewModel {
             client.refreshToken = nil
             authService.isAuthenticated = false
             authService.currentUser = nil
+        }
+    }
+
+    func loginToProfile(url: String, email: String, password: String, profileName: String) async throws {
+        try await authService.login(daemonURL: url, email: email, password: password)
+
+        let pm = ServerProfileManager.shared
+        let profileId: UUID
+
+        if let existing = pm.profiles.first(where: { $0.url == authService.resolvedURL && $0.email == email }) {
+            profileId = existing.id
+            var updated = existing
+            if !profileName.isEmpty { updated.name = profileName }
+            pm.updateProfile(updated)
+        } else {
+            let profile = ServerProfile(name: profileName.isEmpty ? url : profileName, url: authService.resolvedURL, email: email)
+            pm.addProfile(profile)
+            profileId = profile.id
+        }
+
+        pm.setActive(profileId)
+        if let token = client.accessToken {
+            pm.saveToken(token, key: .accessToken, profileId: profileId)
+        }
+        if let refresh = client.refreshToken {
+            pm.saveToken(refresh, key: .refreshToken, profileId: profileId)
+        }
+        if let userId = authService.currentUser?.userId {
+            pm.saveToken(userId, key: .userId, profileId: profileId)
+        }
+        if let userEmail = authService.currentUser?.email {
+            pm.saveToken(userEmail, key: .userEmail, profileId: profileId)
         }
     }
 

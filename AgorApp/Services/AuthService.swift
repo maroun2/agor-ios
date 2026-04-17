@@ -36,6 +36,7 @@ final class AuthService {
     var currentUser: User?
     var isLoading = false
     var error: String?
+    var resolvedURL: String = ""
 
     private let client: AgorClient
 
@@ -119,28 +120,19 @@ final class AuthService {
         client.refreshToken = response.refreshToken
         currentUser = response.user
         isAuthenticated = true
+        resolvedURL = url
         AppLogger.shared.log("Login successful for \(email)", category: "Auth")
-
-        // Persist
-        KeychainHelper.save(url, for: .daemonURL)
-        KeychainHelper.save(response.accessToken, for: .accessToken)
-        AppLogger.shared.log("[Auth] token saved to keychain", level: .info, category: "Auth")
-        if let refresh = response.refreshToken {
-            KeychainHelper.save(refresh, for: .refreshToken)
-            AppLogger.shared.log("[Auth] refresh token saved to keychain", level: .debug, category: "Auth")
-        }
-        if let userId = response.user?.userId {
-            KeychainHelper.save(userId, for: .userId)
-        }
-        if let email = response.user?.email {
-            KeychainHelper.save(email, for: .userEmail)
-        }
     }
 
     // MARK: - Soft Logout (expired token — keep URL/email for re-login)
 
     func softLogout() {
         AppLogger.shared.log("[Auth] soft logout — clearing expired tokens, keeping URL", level: .info, category: "Auth")
+        if let profileId = ServerProfileManager.shared.activeProfileId {
+            let pm = ServerProfileManager.shared
+            KeychainHelper.deleteRaw(pm.keychainKey(for: profileId, key: .accessToken))
+            KeychainHelper.deleteRaw(pm.keychainKey(for: profileId, key: .refreshToken))
+        }
         client.accessToken = nil
         client.refreshToken = nil
         currentUser = nil
@@ -153,6 +145,9 @@ final class AuthService {
 
     func logout() {
         AppLogger.shared.log("User logged out", category: "Auth")
+        if let profileId = ServerProfileManager.shared.activeProfileId {
+            ServerProfileManager.shared.deleteTokens(profileId: profileId)
+        }
         client.accessToken = nil
         client.refreshToken = nil
         client.baseURL = ""
@@ -165,6 +160,24 @@ final class AuthService {
     // MARK: - Session Restore
 
     private func restoreSession() {
+        let pm = ServerProfileManager.shared
+
+        // Try active profile first
+        if let profile = pm.activeProfile,
+           let token = pm.loadToken(key: .accessToken, profileId: profile.id) {
+            client.baseURL = profile.url
+            client.accessToken = token
+            client.refreshToken = pm.loadToken(key: .refreshToken, profileId: profile.id)
+            isAuthenticated = true
+            if let userId = pm.loadToken(key: .userId, profileId: profile.id),
+               let email = pm.loadToken(key: .userEmail, profileId: profile.id) {
+                AppLogger.shared.log("[Auth] profile: loaded session for \(email)", level: .info, category: "Auth")
+                currentUser = User(userId: userId, email: email, name: nil, emoji: nil, avatar: nil, role: nil, onboardingCompleted: nil, mustChangePassword: nil, createdAt: nil, updatedAt: nil, unixUsername: nil)
+            }
+            return
+        }
+
+        // Fallback: flat keychain (first run after update, before migration ran)
         guard let url = KeychainHelper.load(.daemonURL),
               let token = KeychainHelper.load(.accessToken) else {
             AppLogger.shared.log("[Auth] keychain: no saved session found", level: .debug, category: "Auth")
@@ -176,23 +189,10 @@ final class AuthService {
         client.refreshToken = KeychainHelper.load(.refreshToken)
         isAuthenticated = true
 
-        // Restore user from keychain (minimal info)
         if let userId = KeychainHelper.load(.userId),
            let email = KeychainHelper.load(.userEmail) {
             AppLogger.shared.log("[Auth] keychain: loaded saved session for \(email)", level: .info, category: "Auth")
-            currentUser = User(
-                userId: userId,
-                email: email,
-                name: nil,
-                emoji: nil,
-                avatar: nil,
-                role: nil,
-                onboardingCompleted: nil,
-                mustChangePassword: nil,
-                createdAt: nil,
-                updatedAt: nil,
-                unixUsername: nil
-            )
+            currentUser = User(userId: userId, email: email, name: nil, emoji: nil, avatar: nil, role: nil, onboardingCompleted: nil, mustChangePassword: nil, createdAt: nil, updatedAt: nil, unixUsername: nil)
         } else {
             AppLogger.shared.log("[Auth] keychain: session restored for \(url) (no user info cached)", level: .debug, category: "Auth")
         }

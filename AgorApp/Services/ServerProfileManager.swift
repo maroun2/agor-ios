@@ -87,14 +87,26 @@ final class ServerProfileManager {
     // MARK: - Migration
 
     /// Called on first launch to create a profile from existing keychain URL
-    func migrateFromKeychain(url: String, name: String = "Default") {
+    func migrateFromKeychain(url: String, email: String = "", name: String = "Default") {
         guard profiles.isEmpty, !url.isEmpty else { return }
-        let profile = ServerProfile(name: name, url: url, isDefault: true)
+        let profile = ServerProfile(name: name, url: url, email: email, isDefault: true)
         profiles.append(profile)
         activeProfileId = profile.id
+        if let token = KeychainHelper.load(.accessToken) {
+            saveToken(token, key: .accessToken, profileId: profile.id)
+        }
+        if let refresh = KeychainHelper.load(.refreshToken) {
+            saveToken(refresh, key: .refreshToken, profileId: profile.id)
+        }
+        if let userId = KeychainHelper.load(.userId) {
+            saveToken(userId, key: .userId, profileId: profile.id)
+        }
+        if let userEmail = KeychainHelper.load(.userEmail) {
+            saveToken(userEmail, key: .userEmail, profileId: profile.id)
+        }
         saveProfiles()
         saveActiveId()
-        AppLogger.shared.log("[ServerProfile] migrated existing URL as '\(name)' profile", level: .info, category: "Auth")
+        AppLogger.shared.log("[ServerProfile] migrated existing URL as '\(name)' profile (email: \(email))", level: .info, category: "Auth")
     }
 
     // MARK: - Per-Server Keychain Keys
@@ -114,9 +126,8 @@ final class ServerProfileManager {
     }
 
     func deleteTokens(profileId: UUID) {
-        for key in [KeychainHelper.Key.accessToken, .refreshToken] {
-            let fullKey = keychainKey(for: profileId, key: key)
-            KeychainHelper.deleteRaw(fullKey)
+        for key in KeychainHelper.Key.allCases {
+            KeychainHelper.deleteRaw(keychainKey(for: profileId, key: key))
         }
     }
 }

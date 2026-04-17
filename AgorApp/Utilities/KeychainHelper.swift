@@ -4,7 +4,7 @@ import Security
 enum KeychainHelper {
     private static let service = "live.agor.ios"
 
-    enum Key: String {
+    enum Key: String, CaseIterable {
         case accessToken = "access_token"
         case refreshToken = "refresh_token"
         case daemonURL = "daemon_url"
