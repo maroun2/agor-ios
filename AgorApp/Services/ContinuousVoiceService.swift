@@ -84,7 +84,7 @@ final class ContinuousVoiceService {
         tts.onSpeechFinished = { [weak self] in
             Task { @MainActor in
                 if self?.state == .speaking {
-                    self?.state = .listening
+                    self?.state = (self?.isPaused == true) ? .paused : .listening
                 }
                 // Notify ChatViewModel so it can resume listening now that TTS is done
                 self?.onTTSFinished?()
