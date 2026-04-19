@@ -70,7 +70,7 @@ struct InputRequestCardView: View {
             if let answers = content.answers {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(answers.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
-                        Text("\(key): \(value)")
+                        Text(verbatim: "\(key): \(value)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -83,7 +83,7 @@ struct InputRequestCardView: View {
                 Text("Answered")
                     .font(.caption.weight(.medium))
                 if let first = content.answers?.values.first {
-                    Text(first)
+                    Text(verbatim: first)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -114,7 +114,7 @@ private struct QuestionView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header chip
             if !question.header.isEmpty {
-                Text(question.header.uppercased())
+                Text(verbatim: question.header.uppercased())
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -123,7 +123,7 @@ private struct QuestionView: View {
             }
 
             // Question text
-            Text(question.question)
+            Text(verbatim: question.question)
                 .font(.subheadline)
 
             // Options
@@ -140,11 +140,11 @@ private struct QuestionView: View {
                             .font(.body)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label)
+                            Text(verbatim: option.label)
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
                             if !option.description.isEmpty {
-                                Text(option.description)
+                                Text(verbatim: option.description)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

@@ -9,7 +9,7 @@ struct SessionRow: View {
             AgentIcon(agenticTool: session.agenticTool, size: 24)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(session.displayTitle)
+                Text(verbatim: session.displayTitle)
                     .font(.subheadline)
                     .lineLimit(1)
 

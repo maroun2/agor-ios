@@ -22,7 +22,7 @@ struct TaskHeader: View {
                         .font(.caption2)
                         .foregroundStyle(.tint)
 
-                    Text(task.promptPreview)
+                    Text(verbatim: task.promptPreview)
                         .font(.caption)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
