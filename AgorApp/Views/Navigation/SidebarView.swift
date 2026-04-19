@@ -147,7 +147,7 @@ struct SidebarView: View {
                 ContentUnavailableView {
                     Label("Connection Error", systemImage: "wifi.exclamationmark")
                 } description: {
-                    Text(error)
+                    Text(verbatim: error)
                 } actions: {
                     Button("Retry") {
                         Task { await viewModel.refresh() }
@@ -183,7 +183,7 @@ private struct ImportantSessionRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(session.displayTitle)
+                Text(verbatim: session.displayTitle)
                     .font(.subheadline)
                     .lineLimit(1)
 
@@ -205,7 +205,7 @@ private struct ImportantSessionRow: View {
                 }
 
                 if let boardName, let worktreeName {
-                    Text("\(boardName) · \(worktreeName)")
+                    Text(verbatim: "\(boardName) · \(worktreeName)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -247,7 +247,7 @@ private struct AttentionSessionRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(session.displayTitle)
+                Text(verbatim: session.displayTitle)
                     .font(.subheadline)
                     .lineLimit(1)
 

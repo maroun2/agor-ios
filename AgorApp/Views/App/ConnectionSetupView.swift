@@ -81,7 +81,7 @@ struct ConnectionSetupView: View {
 
                     // Error
                     if let errorMessage {
-                        Text(errorMessage)
+                        Text(verbatim: errorMessage)
                             .font(.caption)
                             .foregroundStyle(.red)
                             .multilineTextAlignment(.center)
@@ -143,13 +143,13 @@ struct ConnectionSetupView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(profile.name)
+                            Text(verbatim: profile.name)
                                 .font(.subheadline.weight(.medium))
-                            Text(profile.url)
+                            Text(verbatim: profile.url)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if !profile.email.isEmpty {
-                                Text(profile.email)
+                                Text(verbatim: profile.email)
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }

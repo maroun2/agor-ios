@@ -26,12 +26,12 @@ struct ServerListView: View {
                                     .foregroundStyle(.blue)
                             }
                         }
-                        Text(profile.url)
+                        Text(verbatim: profile.url)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         if !profile.email.isEmpty {
-                            Text(profile.email)
+                            Text(verbatim: profile.email)
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
