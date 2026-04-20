@@ -39,6 +39,11 @@ final class VoiceActivityDetector {
     // Without this, loud sustained background raises noiseFloor until VAD can never fire.
     private let maxNoiseFloor: Float = 0.010        // startThreshold cap = 0.010 × 2.75 = 0.0275
 
+    // Calibration: suppress speech detection for the first N frames so the noise
+    // floor can adapt to ambient levels before we start listening for speech.
+    @ObservationIgnored private var calibrationFramesRemaining: Int = 0
+    private let calibrationFrames: Int = 60  // ~1.3s at 47 fps
+
     // Speech-start confirmation: require N consecutive frames above threshold
     // to avoid false triggers from short transients (keyboard taps, clicks).
     @ObservationIgnored private var consecutiveAboveThreshold: Int = 0
@@ -99,6 +104,7 @@ final class VoiceActivityDetector {
         smoothedEnergy = 0.0
         noiseFloor = 0.001
         consecutiveAboveThreshold = 0
+        calibrationFramesRemaining = calibrationFrames
         energyThreshold = noiseFloor * startMultiplier
 
         audioEngine = AVAudioEngine()
@@ -188,7 +194,10 @@ final class VoiceActivityDetector {
 
         // 4. Speech-start detection with multi-frame confirmation
         if state == .listening {
-            if smoothedEnergy > startThreshold {
+            if calibrationFramesRemaining > 0 {
+                calibrationFramesRemaining -= 1
+                consecutiveAboveThreshold = 0
+            } else if smoothedEnergy > startThreshold {
                 consecutiveAboveThreshold += 1
                 if consecutiveAboveThreshold >= confirmationFrames {
                     consecutiveAboveThreshold = 0
