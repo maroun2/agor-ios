@@ -97,6 +97,7 @@ final class ChatViewModel {
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
+    private var voiceStreamBuffer = ""  // Accumulates streaming text for live TTS
     var voiceModeEnabled: Bool = false {
         didSet {
             if voiceModeEnabled {
@@ -145,6 +146,7 @@ final class ChatViewModel {
         tasks = []
         displayItems = []
         activeStreams = [:]
+        voiceStreamBuffer = ""
         collapsedTaskIds = []
         currentSkip = 0
         hasMore = true
@@ -703,19 +705,30 @@ final class ChatViewModel {
             }
             // Voice: speak text content immediately; fall back to tool-use phrase if no text
             if self.voiceModeEnabled, message.role == .assistant {
-                let text = self.extractTextFromMessage(message)
-                if !text.isEmpty {
-                    let spokenText = text.count > 500 ? self.summarizeText(text) : text
-                    AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
-                    self.voiceService?.speakMessage(spokenText)
+                if !self.voiceStreamBuffer.isEmpty {
+                    // We were streaming-speaking — flush remaining buffer, skip re-speaking full message
+                    let remaining = self.voiceStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.voiceStreamBuffer = ""
+                    if !remaining.isEmpty {
+                        AppLogger.shared.log("[Voice] 💬 Flushing stream buffer (\(remaining.count) chars)", level: .info, category: "Voice")
+                        self.voiceService?.speakStatus(remaining)
+                    }
                     self.lastSpokenMessageId = message.messageId
-                } else if case .blocks(let blocks) = message.content {
-                    for block in blocks {
-                        if case .toolUse(let tool) = block {
-                            let phrase = self.voicePhrase(for: tool.name)
-                            AppLogger.shared.log("[Voice] 🔧 Tool use detected: \(tool.name) → speaking '\(phrase)'", level: .info, category: "Voice")
-                            self.voiceService?.speakStatus(phrase)
-                            break
+                } else {
+                    let text = self.extractTextFromMessage(message)
+                    if !text.isEmpty {
+                        let spokenText = text.count > 500 ? self.summarizeText(text) : text
+                        AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
+                        self.voiceService?.speakMessage(spokenText)
+                        self.lastSpokenMessageId = message.messageId
+                    } else if case .blocks(let blocks) = message.content {
+                        for block in blocks {
+                            if case .toolUse(let tool) = block {
+                                let phrase = self.voicePhrase(for: tool.name)
+                                AppLogger.shared.log("[Voice] 🔧 Tool use detected: \(tool.name) → speaking '\(phrase)'", level: .info, category: "Voice")
+                                self.voiceService?.speakStatus(phrase)
+                                break
+                            }
                         }
                     }
                 }
@@ -849,6 +862,7 @@ final class ChatViewModel {
         }
         socketService.onStreamingChunk = { [weak self] event in
             self?.streamingService.handleStreamingChunk(event)
+            self?.handleStreamingChunkForVoice(event)
         }
         socketService.onStreamingEnd = { [weak self] event in
             self?.streamingService.handleStreamingEnd(event)
@@ -905,6 +919,13 @@ final class ChatViewModel {
                 try await service.transcription.initialize()
                 try service.startListening()
                 AppLogger.shared.log("[Voice] Voice mode enabled", level: .info, category: "Voice")
+                // If agent is already working when voice is opened, announce it immediately
+                await MainActor.run {
+                    if let status = self.currentSession?.status, status != .idle {
+                        self.handleVoiceStatusChange(from: nil, to: status)
+                    }
+                    self.updateVoiceListening()
+                }
             } catch {
                 AppLogger.shared.log("[Voice] Failed to enable voice mode: \(error.localizedDescription)", level: .error, category: "Voice")
                 await MainActor.run {
@@ -922,7 +943,55 @@ final class ChatViewModel {
         voiceService?.stopListening()
         voiceService = nil
         voiceSessionId = nil
+        voiceStreamBuffer = ""
         AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
+    }
+
+    // MARK: - Streaming TTS
+
+    private func handleStreamingChunkForVoice(_ event: StreamingChunkEvent) {
+        guard voiceModeEnabled,
+              event.sessionId == (voiceSessionId ?? currentSessionId) else { return }
+
+        voiceStreamBuffer += event.chunk
+        speakBufferedSentences()
+    }
+
+    /// Extracts and speaks any complete sentences from the stream buffer,
+    /// leaving incomplete trailing text in the buffer for the next chunk.
+    private func speakBufferedSentences() {
+        var speakUpTo = voiceStreamBuffer.startIndex
+        var i = voiceStreamBuffer.startIndex
+
+        while i < voiceStreamBuffer.endIndex {
+            let char = voiceStreamBuffer[i]
+            let next = voiceStreamBuffer.index(after: i)
+
+            if char == "." || char == "!" || char == "?" {
+                // Sentence end: speak if followed by whitespace or end-of-buffer
+                if next == voiceStreamBuffer.endIndex || voiceStreamBuffer[next].isWhitespace {
+                    speakUpTo = next
+                }
+            } else if char == "\n", next < voiceStreamBuffer.endIndex, voiceStreamBuffer[next] == "\n" {
+                // Paragraph break
+                speakUpTo = voiceStreamBuffer.index(after: next)
+            }
+
+            i = next
+        }
+
+        guard speakUpTo > voiceStreamBuffer.startIndex else { return }
+
+        let toSpeak = String(voiceStreamBuffer[..<speakUpTo])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        voiceStreamBuffer = String(voiceStreamBuffer[speakUpTo...])
+
+        // Skip pure code blocks (lines starting with 4+ spaces or backticks)
+        let isCode = toSpeak.hasPrefix("    ") || toSpeak.hasPrefix("\t") || toSpeak.hasPrefix("```")
+        guard !isCode, !toSpeak.isEmpty else { return }
+
+        AppLogger.shared.log("[Voice] 🔊 Stream speak: \(toSpeak.prefix(60))", level: .debug, category: "Voice")
+        voiceService?.speakStatus(toSpeak)
     }
 
     private func handleVoiceInput(_ text: String) {
