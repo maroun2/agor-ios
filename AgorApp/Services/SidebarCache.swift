@@ -54,6 +54,10 @@ enum SidebarCache {
         }
     }
 
+    static func clear() {
+        try? FileManager.default.removeItem(at: cacheURL)
+    }
+
     static func load() -> [BoardNode]? {
         guard let data = try? Data(contentsOf: cacheURL),
               let cached = try? JSONDecoder.agor.decode(CachedSidebar.self, from: data) else {

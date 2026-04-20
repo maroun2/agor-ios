@@ -64,13 +64,19 @@ struct MainNavigationView: View {
                 socketService: socketService,
                 onLogout: {
                     socketService.disconnect()
+                    navigationVM.clearCache()
                     appViewModel.authService.logout()
                 },
                 onServerSwitch: { profile in
                     Task {
+                        navigationVM.clearCache()
                         await appViewModel.switchServer(to: profile, socketService: socketService)
                         await navigationVM.refresh()
                     }
+                },
+                onClearCache: {
+                    navigationVM.clearCache()
+                    Task { await navigationVM.refresh() }
                 }
             )
         } detail: {

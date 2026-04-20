@@ -308,6 +308,16 @@ final class NavigationViewModel {
         await loadBoards()
     }
 
+    func clearCache() {
+        SidebarCache.clear()
+        boardNodes = []
+        favoriteSessionIds = []
+        UserDefaults.standard.removeObject(forKey: Self.collapsedBoardsKey)
+        UserDefaults.standard.removeObject(forKey: Self.collapsedWorktreesKey)
+        UserDefaults.standard.removeObject(forKey: Self.favoritesKey)
+        AppLogger.shared.log("[Nav] cache cleared", level: .info, category: "Nav")
+    }
+
     func startPolling() {
         stopPolling()
         AppLogger.shared.log("[Nav] polling started (45s)", level: .info, category: "Nav")
