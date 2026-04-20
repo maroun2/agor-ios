@@ -208,12 +208,25 @@ struct ChatView: View {
             }
             .onAppear { scrollProxy = proxy }
             .onChange(of: viewModel.scrollToBottomToken) { _, token in
+                let isInitial = viewModel.isInitialScroll
+                if viewModel.isInitialScroll { viewModel.isInitialScroll = false }
                 let delay: Double = viewModel.isReconnectScroll ? 0.3 : 0.05
                 if viewModel.isReconnectScroll { viewModel.isReconnectScroll = false }
-                AppLogger.shared.log("[Scroll] scrollToBottom executing (token=\(token), delay=\(delay))", level: .debug, category: "Scroll")
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeOut(duration: 0.15)) {
+                AppLogger.shared.log("[Scroll] scrollToBottom executing (token=\(token), delay=\(delay), initial=\(isInitial))", level: .debug, category: "Scroll")
+
+                if isInitial {
+                    // Initial session load: LazyVStack hasn't measured all items yet.
+                    // Fire immediately (no animation) to trigger layout toward the bottom,
+                    // then fire again at 500ms once layout has fully settled.
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
                     }
                 }
             }
