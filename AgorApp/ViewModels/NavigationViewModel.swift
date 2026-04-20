@@ -267,10 +267,17 @@ final class NavigationViewModel {
                     "archived": "false",
                 ]
             )
+            // Client-side guard: ensure sessions belong to this worktree (server filter may not be reliable)
+            let filteredData = response.data.filter { $0.worktreeId == worktreeNode.worktree.worktreeId }
+            if filteredData.count != response.data.count {
+                let dropped = response.data.count - filteredData.count
+                AppLogger.shared.log("[Nav] loadSessions: dropped \(dropped) sessions with wrong worktree_id", level: .warning, category: "Nav")
+            }
+
             // Incremental merge: update existing sessions in-place, add new, remove deleted
-            let newSessionIds = Set(response.data.map(\.sessionId))
+            let newSessionIds = Set(filteredData.map(\.sessionId))
             var mergedSessions: [Session] = []
-            for session in response.data {
+            for session in filteredData {
                 mergedSessions.append(session)
             }
             // Only assign if content actually changed to avoid unnecessary SwiftUI redraws
@@ -405,11 +412,22 @@ final class NavigationViewModel {
         return nil
     }
 
+    /// Look up board/worktree context by worktreeId directly — O(n), always correct.
+    func findContext(for session: Session) -> (boardName: String, worktreeName: String, boardIcon: String)? {
+        for board in boardNodes {
+            for wt in board.worktrees where wt.worktree.worktreeId == session.worktreeId {
+                return (board.board.name, wt.worktree.displayName, board.board.displayIcon)
+            }
+        }
+        return nil
+    }
+
+    /// Legacy overload for callers that only have sessionId.
     func findContext(for sessionId: String) -> (boardName: String, worktreeName: String, boardIcon: String)? {
         for board in boardNodes {
             for wt in board.worktrees {
-                if wt.sessions.contains(where: { $0.sessionId == sessionId }) {
-                    return (board.board.name, wt.worktree.displayName, board.board.displayIcon)
+                if let session = wt.sessions.first(where: { $0.sessionId == sessionId }) {
+                    return findContext(for: session)
                 }
             }
         }
