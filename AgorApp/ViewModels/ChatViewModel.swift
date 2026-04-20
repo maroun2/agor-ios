@@ -1090,6 +1090,7 @@ final class ChatViewModel {
         guard !text.isEmpty else { return }
 
         let spokenText = text.count > 500 ? summarizeText(text) : text
+        lastSpokenMessageId = lastMessage.messageId
         voiceService?.speakFinalMessage(spokenText)
     }
 

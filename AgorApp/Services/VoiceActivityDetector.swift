@@ -19,7 +19,7 @@ final class VoiceActivityDetector {
 
     // VAD configuration — base sensitivity (0.0 low → 1.0 high)
     private(set) var sensitivityLevel: Float = 0.5
-    private let silenceDuration: TimeInterval = 1.5  // Seconds of silence to end speech
+    private let silenceDuration: TimeInterval = 3.0  // Seconds of silence to end speech
 
     // --- Moving-average / adaptive-threshold state (audio-thread only) ---
     // Marked @ObservationIgnored so mutations on the audio tap thread don't race
