@@ -129,6 +129,7 @@ final class ContinuousVoiceService {
     func resumeListening() throws {
         guard isPaused else { return }
         try vad.startListening()
+        vad.skipCalibration()  // Noise floor already calibrated — detect speech immediately
         isPaused = false
         state = .listening
         startPreRollRecorder()

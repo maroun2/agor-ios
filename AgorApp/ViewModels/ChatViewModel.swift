@@ -97,7 +97,8 @@ final class ChatViewModel {
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
-    private var voiceStreamBuffer = ""  // Accumulates streaming text for live TTS
+    private var voiceStreamBuffer = ""          // Accumulates streaming text for live TTS
+    private var voiceDidStreamCurrentMessage = false  // True if any chunk was spoken for current turn
     var voiceModeEnabled: Bool = false {
         didSet {
             if voiceModeEnabled {
@@ -147,6 +148,7 @@ final class ChatViewModel {
         displayItems = []
         activeStreams = [:]
         voiceStreamBuffer = ""
+        voiceDidStreamCurrentMessage = false
         collapsedTaskIds = []
         currentSkip = 0
         hasMore = true
@@ -703,16 +705,22 @@ final class ChatViewModel {
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
-            // Voice: speak text content immediately; fall back to tool-use phrase if no text
+            // Voice: speak text content — but only once across streaming/onMessageCreated/speakFinalMessage
             if self.voiceModeEnabled, message.role == .assistant {
                 if !self.voiceStreamBuffer.isEmpty {
-                    // We were streaming-speaking — flush remaining buffer as a queued chunk
+                    // Flush any incomplete trailing sentence from the stream buffer
                     let remaining = self.voiceStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.voiceStreamBuffer = ""
+                    self.voiceDidStreamCurrentMessage = false
                     if !remaining.isEmpty {
                         AppLogger.shared.log("[Voice] 💬 Flushing stream buffer (\(remaining.count) chars)", level: .info, category: "Voice")
                         self.voiceService?.speakStreamChunk(remaining)
                     }
+                    self.lastSpokenMessageId = message.messageId
+                } else if self.voiceDidStreamCurrentMessage {
+                    // Stream chunks already spoke the full response sentence-by-sentence — skip re-read
+                    AppLogger.shared.log("[Voice] ⏭️ Skipping onMessageCreated speak — already streamed", level: .info, category: "Voice")
+                    self.voiceDidStreamCurrentMessage = false
                     self.lastSpokenMessageId = message.messageId
                 } else {
                     let text = self.extractTextFromMessage(message)
@@ -936,6 +944,7 @@ final class ChatViewModel {
         voiceService = nil
         voiceSessionId = nil
         voiceStreamBuffer = ""
+        voiceDidStreamCurrentMessage = false
         AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
     }
 
@@ -983,6 +992,7 @@ final class ChatViewModel {
         guard !isCode, !toSpeak.isEmpty else { return }
 
         AppLogger.shared.log("[Voice] 🔊 Stream speak: \(toSpeak.prefix(60))", level: .debug, category: "Voice")
+        voiceDidStreamCurrentMessage = true
         voiceService?.speakStreamChunk(toSpeak)
     }
 
@@ -1071,10 +1081,17 @@ final class ChatViewModel {
     private func speakFinalMessage() {
         guard voiceModeEnabled, let lastMessage = messages.last else { return }
 
-        // Already spoken when it arrived via onMessageCreated — don't double-speak
+        // Already spoken (via onMessageCreated or streaming) — don't double-speak
         if lastMessage.messageId == lastSpokenMessageId {
             AppLogger.shared.log("[Voice] ⏭️ Final message already spoken — skipping", level: .info, category: "Voice")
             lastSpokenMessageId = nil
+            return
+        }
+
+        // Stream chunks are still playing — let them finish; onMessageCreated will handle marking
+        if voiceDidStreamCurrentMessage || voiceService?.isTTSSpeaking == true {
+            AppLogger.shared.log("[Voice] ⏭️ Stream TTS in progress — letting chunks finish", level: .info, category: "Voice")
+            lastSpokenMessageId = lastMessage.messageId
             return
         }
 
