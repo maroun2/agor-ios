@@ -200,21 +200,12 @@ struct MainNavigationView: View {
             socketService.stopHealthCheck()
             chatVM.stopMessagePolling()
             navigationVM.stopPolling()
-            // Pause voice listening in background (keeps audio session alive for TTS)
-            if chatVM.voiceModeEnabled {
-                chatVM.voiceService?.pauseListening()
-            }
+            // Voice stays running in background — user disabled it explicitly to stop it
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling)", level: .info, category: "App")
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
             notificationManager.isBackgrounded = false
-            // Resume voice listening if voice mode active and session is idle
-            if chatVM.voiceModeEnabled,
-               chatVM.currentSession?.status == .idle,
-               let voice = chatVM.voiceService, voice.isPaused, !voice.isTTSSpeaking {
-                try? voice.resumeListening()
-            }
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
                 // Phase 1: Reconnecting

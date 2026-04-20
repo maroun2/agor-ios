@@ -26,6 +26,7 @@ enum ContentBlock: Codable, Identifiable {
     case toolUse(ToolUseContent)
     case toolResult(ToolResultContent)
     case thinking(ThinkingContent)
+    case image(ImageContent)
     case unknown(type: String)
 
     var id: String {
@@ -34,6 +35,7 @@ enum ContentBlock: Codable, Identifiable {
         case .toolUse(let c): "tool-\(c.id)"
         case .toolResult(let c): "result-\(c.toolUseId)"
         case .thinking(let c): "thinking-\(c.thinking.hashValue)"
+        case .image(let c): "image-\(c.source.url ?? c.source.data?.prefix(16) ?? "?")"
         case .unknown(let type): "unknown-\(type)"
         }
     }
@@ -55,6 +57,8 @@ enum ContentBlock: Codable, Identifiable {
             self = .toolResult(try ToolResultContent(from: decoder))
         case "thinking":
             self = .thinking(try ThinkingContent(from: decoder))
+        case "image":
+            self = .image(try ImageContent(from: decoder))
         default:
             self = .unknown(type: type)
         }
@@ -66,7 +70,38 @@ enum ContentBlock: Codable, Identifiable {
         case .toolUse(let c): try c.encode(to: encoder)
         case .toolResult(let c): try c.encode(to: encoder)
         case .thinking(let c): try c.encode(to: encoder)
+        case .image(let c): try c.encode(to: encoder)
         case .unknown: break
+        }
+    }
+}
+
+// MARK: - Image Content
+
+struct ImageContent: Codable {
+    let type: String
+    let source: ImageSource
+
+    struct ImageSource: Codable {
+        let type: String        // "base64" | "url"
+        let mediaType: String?  // "image/png", "image/jpeg", etc.
+        let data: String?       // base64-encoded data
+        let url: String?        // for type="url"
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case mediaType = "media_type"
+            case data, url
+        }
+
+        var uiImage: UIImage? {
+            guard type == "base64", let data, let raw = Data(base64Encoded: data) else { return nil }
+            return UIImage(data: raw)
+        }
+
+        var remoteURL: URL? {
+            guard type == "url", let url else { return nil }
+            return URL(string: url)
         }
     }
 }

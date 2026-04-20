@@ -79,6 +79,7 @@
 		E40E7CC4E8995149A8346CCD /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5929990CCF64D97E009F93B8 /* FileBrowserView.swift */; };
 		EDF28A78EAE35B2064B5AB90 /* AgorTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666E9DB8BF3E970CEC5F906F /* AgorTask.swift */; };
 		EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */; };
+		FA1B2E3C4D5E6F7A8B9C0D11 /* ImageBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1B2E3C4D5E6F7A8B9C0D12 /* ImageBlockView.swift */; };
 		F0C35104273368720F561695 /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D2AB29D83A63FB8BEBCC2D /* MessageContentView.swift */; };
 		FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */; };
 		FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F4192EE4627122322579D6 /* Repo.swift */; };
@@ -131,6 +132,7 @@
 		9F4E25E19693EC0C8C70B5EC /* BoardRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardRow.swift; sourceTree = "<group>"; };
 		A2105103F7F30CD64FE8CA2F /* ContinuousVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousVoiceService.swift; sourceTree = "<group>"; };
 		A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolResultBlockView.swift; sourceTree = "<group>"; };
+		FA1B2E3C4D5E6F7A8B9C0D12 /* ImageBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBlockView.swift; sourceTree = "<group>"; };
 		A465E54C8509B5395EAD81A4 /* FilePathDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePathDetector.swift; sourceTree = "<group>"; };
 		A65ACB752D15547530061855 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		A98A6A388A1848A8940CFFCA /* InlineImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineImageView.swift; sourceTree = "<group>"; };
@@ -291,6 +293,7 @@
 				0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */,
 				2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */,
 				E12DFADF2F6A4CD616C0CFE2 /* ThinkingBlockView.swift */,
+				FA1B2E3C4D5E6F7A8B9C0D12 /* ImageBlockView.swift */,
 				A46459FC8E3B5CEE01EE43DB /* ToolResultBlockView.swift */,
 				5FA2A3F882B5A99C76A0E922 /* ToolUseBlockView.swift */,
 			);
@@ -543,6 +546,7 @@
 				559611F5F7BA4B7AFF532E66 /* TextToSpeechService.swift in Sources */,
 				5BB72299BB6B293193881F59 /* ThinkingBlockView.swift in Sources */,
 				38342D91F7D87DC1A7F7FFE8 /* ToastView.swift in Sources */,
+				FA1B2E3C4D5E6F7A8B9C0D11 /* ImageBlockView.swift in Sources */,
 				EE6C3EAEA1F167614F782749 /* ToolResultBlockView.swift in Sources */,
 				0F7050228A6E77DC360720A9 /* ToolUseBlockView.swift in Sources */,
 				35DFECAA4E833916D7B868F2 /* TranscriptionService.swift in Sources */,

@@ -35,6 +35,9 @@ struct MessageContentView: View {
                 case .thinking(let content):
                     ThinkingBlockView(text: content.thinking)
 
+                case .image(let content):
+                    ImageBlockView(content: content)
+
                 case .unknown:
                     EmptyView()
                 }

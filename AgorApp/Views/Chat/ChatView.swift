@@ -99,28 +99,6 @@ struct ChatView: View {
     @ViewBuilder private var toolbarButtons: some View {
         if let session = viewModel.currentSession {
             HStack(spacing: 8) {
-                Menu {
-                    if !session.worktreeId.isEmpty {
-                        Button { showFileBrowser = true } label: {
-                            Label("Files", systemImage: "folder")
-                        }
-                    }
-                    Button { showSessionSettings = true } label: {
-                        Label("Session Settings", systemImage: "gearshape")
-                    }
-                    Button { showMCPServers = true } label: {
-                        Label("MCP Servers", systemImage: "server.rack")
-                    }
-                    Divider()
-                    Button { viewModel.archiveCurrentSession() } label: {
-                        Label("Archive", systemImage: "archivebox")
-                    }
-                    Button { showResetAlert = true } label: {
-                        Label("Reset Session", systemImage: "arrow.counterclockwise")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary).font(.system(size: 16))
-                }
                 if session.isPlanMode { PlanModeBadge() }
                 if viewModel.canStopSession {
                     Button {
@@ -135,6 +113,28 @@ struct ChatView: View {
                     }
                 } else {
                     StatusBadge(status: session.status)
+                }
+                Menu {
+                    if !session.worktreeId.isEmpty {
+                        Button { showFileBrowser = true } label: {
+                            Label("Files", systemImage: "folder")
+                        }
+                    }
+                    Button { showSessionSettings = true } label: {
+                        Label("Session Settings", systemImage: "gearshape")
+                    }
+                    Button { showMCPServers = true } label: {
+                        Label("MCP Servers", systemImage: "server.rack")
+                    }
+                    Divider()
+                    Button(role: .destructive) { viewModel.archiveCurrentSession() } label: {
+                        Label("Archive", systemImage: "archivebox")
+                    }
+                    Button(role: .destructive) { showResetAlert = true } label: {
+                        Label("Reset Session", systemImage: "arrow.counterclockwise")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary).font(.system(size: 16))
                 }
             }
         }
@@ -176,7 +176,7 @@ struct ChatView: View {
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                VStack(spacing: 0) {
                     if viewModel.hasMore {
                         Button("Load earlier messages") {
                             Task { await viewModel.loadMore() }
@@ -192,41 +192,26 @@ struct ChatView: View {
                     }
                 }
                 .padding(.vertical, 8)
-                // Bottom spacer to ensure last message scrolls above input bar
+                // Bottom anchor for programmatic scrolling
                 Color.clear
                     .frame(height: 60)
                     .id("bottom")
-                    .onAppear {
-                        viewModel.userIsNearBottom = true
-                        viewModel.lastNearBottomTime = Date()
-                        AppLogger.shared.log("[Scroll] bottom marker appeared — userIsNearBottom=true", level: .debug, category: "Scroll")
-                    }
-                    .onDisappear {
-                        viewModel.userIsNearBottom = false
-                        AppLogger.shared.log("[Scroll] bottom marker disappeared — userIsNearBottom=false", level: .debug, category: "Scroll")
-                    }
+            }
+            // Start scrolled to bottom; VStack has all heights measured so this is accurate
+            .defaultScrollAnchor(.bottom)
+            // Track near-bottom via scroll geometry (reliable, no onAppear/onDisappear race)
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height < 120
+            } action: { _, isNearBottom in
+                viewModel.userIsNearBottom = isNearBottom
+                if isNearBottom { viewModel.lastNearBottomTime = Date() }
             }
             .onAppear { scrollProxy = proxy }
             .onChange(of: viewModel.scrollToBottomToken) { _, token in
-                let isInitial = viewModel.isInitialScroll
-                if viewModel.isInitialScroll { viewModel.isInitialScroll = false }
-                let delay: Double = viewModel.isReconnectScroll ? 0.3 : 0.05
-                if viewModel.isReconnectScroll { viewModel.isReconnectScroll = false }
-                AppLogger.shared.log("[Scroll] scrollToBottom executing (token=\(token), delay=\(delay), initial=\(isInitial))", level: .debug, category: "Scroll")
-
-                if isInitial {
-                    // Initial session load: LazyVStack hasn't measured all items yet.
-                    // Fire immediately (no animation) to trigger layout toward the bottom,
-                    // then fire again at 500ms once layout has fully settled.
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                AppLogger.shared.log("[Scroll] scrollToBottom executing (token=\(token))", level: .debug, category: "Scroll")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
                     }
                 }
             }
@@ -238,7 +223,6 @@ struct ChatView: View {
                     withAnimation(.easeOut(duration: 0.25)) {
                         proxy.scrollTo(targetId, anchor: .center)
                     }
-                    // Clear flag after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         viewModel.scrollToMessageInProgress = false
                         AppLogger.shared.log("[Scroll] scrollToMessageInProgress cleared", level: .debug, category: "Scroll")
