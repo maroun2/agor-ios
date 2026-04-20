@@ -56,14 +56,9 @@ final class ChatViewModel {
 
     // Incremented only when a new message arrives at the bottom (not when prepending old ones)
     var scrollToBottomToken: Int = 0
-    // Set to true on initial session load so ChatView uses a multi-attempt no-animation scroll
-    var isInitialScroll = false
-    // Set to true during reconnect to use a longer scroll delay (avoids empty space bug)
-    var isReconnectScroll = false
     // Tracks whether user is scrolled near the bottom — new messages only auto-scroll when true
     var userIsNearBottom = true
-    // Last time the bottom marker was visible — used to allow scroll even if onDisappear
-    // fires spuriously during layout expansion (LazyVStack adding new items)
+    // Last time user was near bottom — grace period for layout changes
     var lastNearBottomTime: Date = .distantPast
     // Scroll to a specific message ID (for permission cards)
     var scrollToMessageId: String?
@@ -130,11 +125,8 @@ final class ChatViewModel {
     // MARK: - Session Selection
 
     func selectSession(_ sessionId: String) {
-        // Disable voice mode when switching away from the voice session
-        if voiceModeEnabled, voiceSessionId != sessionId {
-            disableVoiceMode()
-            voiceModeEnabled = false
-        }
+        // Voice mode is NOT disabled on session switch — it continues running on voiceSessionId.
+        // The floating button guides the user back to the voice session.
 
         if sessionId == currentSessionId {
             // Same session re-selected — do a soft refresh to pick up any missed events
@@ -178,8 +170,7 @@ final class ChatViewModel {
         // Clear stale streaming state (e.g., missed thinking:end while backgrounded)
         streamingService.clearStreams(for: sessionId)
         activeStreams = streamingService.activeStreams
-        isReconnectScroll = true
-        // Re-enable auto-scroll on reconnect — the bottom marker state may be stale
+        // Re-enable auto-scroll on reconnect — scroll position tracking may be stale
         userIsNearBottom = true
         lastNearBottomTime = Date()
         Task {
@@ -255,7 +246,6 @@ final class ChatViewModel {
                     // For "load earlier", we go backwards from startSkip
                     currentSkip = startSkip
                     rebuildDisplayItems()
-                    isInitialScroll = true
                     scrollToBottomToken += 1
                 }
             } else {
@@ -1060,9 +1050,7 @@ final class ChatViewModel {
     }
 
     private func workingStatusPhrase() -> String {
-        let preview = tasks.last?.promptPreview.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !preview.isEmpty else { return "Working..." }
-        return preview.count <= 60 ? "Working on: \(preview)" : "Working on: \(preview.prefix(50))..."
+        return "Working"
     }
 
     private func voicePhrase(for toolName: String) -> String {
