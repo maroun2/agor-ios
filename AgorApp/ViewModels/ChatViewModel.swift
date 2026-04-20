@@ -706,12 +706,12 @@ final class ChatViewModel {
             // Voice: speak text content immediately; fall back to tool-use phrase if no text
             if self.voiceModeEnabled, message.role == .assistant {
                 if !self.voiceStreamBuffer.isEmpty {
-                    // We were streaming-speaking — flush remaining buffer, skip re-speaking full message
+                    // We were streaming-speaking — flush remaining buffer as a queued chunk
                     let remaining = self.voiceStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.voiceStreamBuffer = ""
                     if !remaining.isEmpty {
                         AppLogger.shared.log("[Voice] 💬 Flushing stream buffer (\(remaining.count) chars)", level: .info, category: "Voice")
-                        self.voiceService?.speakStatus(remaining)
+                        self.voiceService?.speakStreamChunk(remaining)
                     }
                     self.lastSpokenMessageId = message.messageId
                 } else {
@@ -721,16 +721,8 @@ final class ChatViewModel {
                         AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
                         self.voiceService?.speakMessage(spokenText)
                         self.lastSpokenMessageId = message.messageId
-                    } else if case .blocks(let blocks) = message.content {
-                        for block in blocks {
-                            if case .toolUse(let tool) = block {
-                                let phrase = self.voicePhrase(for: tool.name)
-                                AppLogger.shared.log("[Voice] 🔧 Tool use detected: \(tool.name) → speaking '\(phrase)'", level: .info, category: "Voice")
-                                self.voiceService?.speakStatus(phrase)
-                                break
-                            }
-                        }
                     }
+                    // Tool-use-only messages (no text) are intentionally not announced
                 }
             }
 
@@ -1123,17 +1115,4 @@ final class ChatViewModel {
         return "Working"
     }
 
-    private func voicePhrase(for toolName: String) -> String {
-        let name = toolName.lowercased()
-        if name.contains("read")                                    { return "Reading" }
-        if name.contains("write")                                   { return "Writing" }
-        if name.contains("edit")                                    { return "Editing" }
-        if name.contains("bash") || name.contains("exec") || name.contains("run") { return "Running command" }
-        if name.contains("grep") || name.contains("search")        { return "Searching" }
-        if name.contains("glob") || name.contains("list")          { return "Listing files" }
-        if name.contains("web")                                     { return "Searching web" }
-        if name.contains("agent") || name.contains("spawn")        { return "Spawning agent" }
-        if name.contains("todo")                                    { return "Updating tasks" }
-        return "Working"
-    }
 }
