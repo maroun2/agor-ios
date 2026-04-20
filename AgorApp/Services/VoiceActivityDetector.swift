@@ -31,10 +31,13 @@ final class VoiceActivityDetector {
     private let emaAlpha: Float = 0.15  // ~7 frame lag at 48 kHz / 1024 buf ≈ 47 fps
 
     // Adaptive noise floor: tracks background noise during silence.
-    // Rises quickly (burst) and falls slowly (de-noise after speech).
+    // Rises quickly (burst) and falls at a reasonable rate when room goes quiet.
     @ObservationIgnored private var noiseFloor: Float = 0.001
-    private let noiseFloorRiseAlpha: Float = 0.05   // Fast rise (background gets louder)
-    private let noiseFloorFallAlpha: Float = 0.002  // Slow fall (quiet room after noise)
+    private let noiseFloorRiseAlpha: Float = 0.05   // Fast rise (~0.3s to track louder background)
+    private let noiseFloorFallAlpha: Float = 0.008  // Faster fall — halves in ~1.8s when room quietens
+    // Hard cap: ensures startThreshold never exceeds typical speech (0.03–0.1 RMS).
+    // Without this, loud sustained background raises noiseFloor until VAD can never fire.
+    private let maxNoiseFloor: Float = 0.010        // startThreshold cap = 0.010 × 2.75 = 0.0275
 
     // Speech-start confirmation: require N consecutive frames above threshold
     // to avoid false triggers from short transients (keyboard taps, clicks).
@@ -154,8 +157,10 @@ final class VoiceActivityDetector {
             } else {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
             }
-            // Clamp noise floor to a sensible minimum so thresholds stay meaningful in very quiet rooms
+            // Clamp: min keeps threshold meaningful in dead-quiet rooms,
+            // max prevents loud background from driving threshold above speech level.
             noiseFloor = max(noiseFloor, 0.0005)
+            noiseFloor = min(noiseFloor, maxNoiseFloor)
         }
 
         let startThreshold = noiseFloor * startMultiplier
