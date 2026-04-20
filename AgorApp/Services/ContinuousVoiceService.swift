@@ -357,6 +357,10 @@ final class ContinuousVoiceService {
         tts.speakStatus(status)
     }
 
+    func speakStreamChunk(_ chunk: String) {
+        tts.speakStreamChunk(chunk)
+    }
+
     func speakMessage(_ message: String) {
         tts.speakMessage(message)
     }

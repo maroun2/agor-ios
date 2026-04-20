@@ -5,6 +5,7 @@ import AVFoundation
 final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     enum SpeechType {
         case status
+        case streamChunk   // Streaming TTS — queues naturally, interrupted by status
         case finalMessage
     }
 
@@ -42,9 +43,9 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     // MARK: - Speech
 
     func speakStatus(_ text: String) {
-        // Cancel any currently speaking status (skip-to-latest)
-        if synthesizer.isSpeaking && currentType == .status {
-            AppLogger.shared.log("[Voice] 🔄 Canceling previous status to speak new status", level: .debug, category: "Voice")
+        // Cancel status or stream chunks — important status is always skip-to-latest
+        if synthesizer.isSpeaking && (currentType == .status || currentType == .streamChunk) {
+            AppLogger.shared.log("[Voice] 🔄 Canceling previous \(currentType) to speak new status", level: .debug, category: "Voice")
             synthesizer.stopSpeaking(at: .immediate)
         }
 
@@ -101,6 +102,30 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.speak(utterance)
 
         AppLogger.shared.log("[Voice] 💬 Speaking message: \"\(text.prefix(50))\(text.count > 50 ? "..." : "")\" (\(text.count) chars, rate: \(String(format: "%.2f", messageRate)))", level: .info, category: "Voice")
+    }
+
+    /// Speak a streaming text chunk — queues naturally (no self-interruption).
+    /// Interrupted by speakStatus (important announcements take priority).
+    func speakStreamChunk(_ text: String) {
+        guard !text.isEmpty else { return }
+        // Only interrupt status speech; stream chunks queue behind each other
+        if synthesizer.isSpeaking && currentType == .status {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = messageRate
+        utterance.volume = 1.0
+
+        currentType = .streamChunk
+        synthesizer.speak(utterance)
+
+        AppLogger.shared.log("[Voice] 🎙️ Stream chunk: \"\(text.prefix(50))\"", level: .debug, category: "Voice")
     }
 
     func speakFinalMessage(_ text: String, type: SpeechType = .finalMessage) {
