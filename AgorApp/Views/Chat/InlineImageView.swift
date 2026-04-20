@@ -11,7 +11,7 @@ struct InlineImageView: View {
     @State private var failed = false
 
     var body: some View {
-        Group {
+        ZStack {
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -22,12 +22,13 @@ struct InlineImageView: View {
             } else if isLoading {
                 ProgressView()
                     .frame(width: 100, height: 60)
+            } else if failed {
+                Label("Image unavailable", systemImage: "photo.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            // If failed, show nothing — the file link is still visible
         }
-        .task {
-            await loadImage()
-        }
+        .task { await loadImage() }
     }
 
     private func loadImage() async {
@@ -44,9 +45,8 @@ struct InlineImageView: View {
 
             guard let content = detail.content else { failed = true; return }
 
-            // Check size — only show inline if < 0.5MB
-            let contentSize = content.utf8.count
-            guard contentSize < 500_000 else { failed = true; return }
+            // Allow up to 5MB base64 (~3.75MB actual image data)
+            guard content.utf8.count < 5_000_000 else { failed = true; return }
 
             if detail.encoding == "base64",
                let data = Data(base64Encoded: content),
