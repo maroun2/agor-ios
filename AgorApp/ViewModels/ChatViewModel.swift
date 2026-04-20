@@ -56,6 +56,8 @@ final class ChatViewModel {
 
     // Incremented only when a new message arrives at the bottom (not when prepending old ones)
     var scrollToBottomToken: Int = 0
+    // Set to true on initial session load so ChatView uses a multi-attempt no-animation scroll
+    var isInitialScroll = false
     // Set to true during reconnect to use a longer scroll delay (avoids empty space bug)
     var isReconnectScroll = false
     // Tracks whether user is scrolled near the bottom — new messages only auto-scroll when true
@@ -253,6 +255,7 @@ final class ChatViewModel {
                     // For "load earlier", we go backwards from startSkip
                     currentSkip = startSkip
                     rebuildDisplayItems()
+                    isInitialScroll = true
                     scrollToBottomToken += 1
                 }
             } else {
