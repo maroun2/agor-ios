@@ -33,8 +33,8 @@ final class VoiceActivityDetector {
     // Adaptive noise floor: tracks background noise during silence.
     // Rises quickly (burst) and falls at a reasonable rate when room goes quiet.
     @ObservationIgnored private var noiseFloor: Float = 0.001
-    private let noiseFloorRiseAlpha: Float = 0.05   // Fast rise (~0.3s to track louder background)
-    private let noiseFloorFallAlpha: Float = 0.008  // Faster fall — halves in ~1.8s when room quietens
+    private let noiseFloorRiseAlpha: Float = 0.02   // Gradual rise (~2s to reach louder background level)
+    private let noiseFloorFallAlpha: Float = 0.008  // Fall — halves in ~1.8s when room quietens
     // Hard cap: ensures startThreshold never exceeds typical speech (0.03–0.1 RMS).
     // Without this, loud sustained background raises noiseFloor until VAD can never fire.
     private let maxNoiseFloor: Float = 0.010        // startThreshold cap = 0.010 × 2.75 = 0.0275
@@ -150,18 +150,26 @@ final class VoiceActivityDetector {
         // 2. Exponential moving average — smooth out transients
         smoothedEnergy = emaAlpha * rms + (1.0 - emaAlpha) * smoothedEnergy
 
-        // 3. Update adaptive noise floor (only during silence, not while speech is active)
+        // 3. Update adaptive noise floor
         if state == .listening {
+            // Full adaptive update: rise tracks louder background, fall tracks quieter room
             if smoothedEnergy > noiseFloor {
                 noiseFloor = noiseFloorRiseAlpha * smoothedEnergy + (1.0 - noiseFloorRiseAlpha) * noiseFloor
             } else {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
             }
-            // Clamp: min keeps threshold meaningful in dead-quiet rooms,
-            // max prevents loud background from driving threshold above speech level.
-            noiseFloor = max(noiseFloor, 0.0005)
-            noiseFloor = min(noiseFloor, maxNoiseFloor)
+        } else if state == .speechDetected {
+            // During recording: only allow noise floor to fall, never rise.
+            // Prevents speech itself from inflating the threshold; lets it drift down
+            // during quiet pauses so the end threshold stays reachable.
+            if smoothedEnergy < noiseFloor {
+                noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
+            }
         }
+        // Clamp: min keeps threshold meaningful in dead-quiet rooms,
+        // max prevents loud background from driving threshold above speech level.
+        noiseFloor = max(noiseFloor, 0.0005)
+        noiseFloor = min(noiseFloor, maxNoiseFloor)
 
         let startThreshold = noiseFloor * startMultiplier
         let endThreshold   = noiseFloor * endMultiplier
