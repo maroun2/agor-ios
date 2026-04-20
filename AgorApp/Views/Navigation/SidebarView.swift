@@ -11,8 +11,8 @@ struct SidebarView: View {
     let appViewModel: AppViewModel
     let socketService: SocketService
     let onLogout: () -> Void
-
     let onServerSwitch: ((ServerProfile) -> Void)?
+    var onClearCache: (() -> Void)?
 
     @State private var showSettings = false
     @State private var fileBrowserTarget: FileBrowserTarget?
@@ -131,7 +131,8 @@ struct SidebarView: View {
                 appViewModel: appViewModel,
                 socketService: socketService,
                 onLogout: onLogout,
-                onServerSwitch: onServerSwitch
+                onServerSwitch: onServerSwitch,
+                onClearCache: onClearCache
             )
         }
         .sheet(item: $fileBrowserTarget) { target in

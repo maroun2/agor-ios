@@ -5,6 +5,7 @@ struct SettingsView: View {
     let socketService: SocketService
     let onLogout: () -> Void
     var onServerSwitch: ((ServerProfile) -> Void)?
+    var onClearCache: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -72,6 +73,13 @@ struct SettingsView: View {
                         DebugLogView(client: appViewModel.client)
                     } label: {
                         Label("Debug Log", systemImage: "doc.text.magnifyingglass")
+                    }
+
+                    Button {
+                        onClearCache?()
+                    } label: {
+                        Label("Clear Session Cache", systemImage: "trash")
+                            .foregroundStyle(.red)
                     }
                 }
 
