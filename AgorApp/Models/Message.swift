@@ -35,7 +35,7 @@ enum ContentBlock: Codable, Identifiable {
         case .toolUse(let c): "tool-\(c.id)"
         case .toolResult(let c): "result-\(c.toolUseId)"
         case .thinking(let c): "thinking-\(c.thinking.hashValue)"
-        case .image(let c): "image-\(c.source.url ?? c.source.data?.prefix(16) ?? "?")"
+        case .image(let c): "image-\(c.source.url ?? c.source.data.map { String($0.prefix(16)) } ?? "?")"
         case .unknown(let type): "unknown-\(type)"
         }
     }
@@ -92,11 +92,6 @@ struct ImageContent: Codable {
             case type
             case mediaType = "media_type"
             case data, url
-        }
-
-        var uiImage: UIImage? {
-            guard type == "base64", let data, let raw = Data(base64Encoded: data) else { return nil }
-            return UIImage(data: raw)
         }
 
         var remoteURL: URL? {

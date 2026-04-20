@@ -191,7 +191,6 @@ struct MainNavigationView: View {
 
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
         let oldLabel = "\(oldPhase)".lowercased()
-        let newLabel = "\(newPhase)".lowercased()
 
         switch newPhase {
         case .background:

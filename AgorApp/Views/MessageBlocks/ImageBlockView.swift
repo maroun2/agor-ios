@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ImageBlockView: View {
     let content: ImageContent
@@ -6,33 +7,35 @@ struct ImageBlockView: View {
     @State private var isExpanded = false
 
     var body: some View {
-        Group {
-            if let uiImage = content.source.uiImage {
-                // Base64 inline image
-                inlineImage(Image(uiImage: uiImage))
-            } else if let url = content.source.remoteURL {
-                // Remote URL image
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        inlineImage(image)
-                    case .failure:
-                        Label("Image failed to load", systemImage: "photo.slash")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    case .empty:
-                        ProgressView()
-                            .frame(height: 80)
-                    @unknown default:
-                        EmptyView()
-                    }
+        if let uiImage = decodedImage {
+            inlineImage(Image(uiImage: uiImage))
+        } else if let url = content.source.remoteURL {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    inlineImage(image)
+                case .failure:
+                    Label("Image failed to load", systemImage: "photo.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .empty:
+                    ProgressView().frame(height: 80)
+                @unknown default:
+                    EmptyView()
                 }
-            } else {
-                Label("Image", systemImage: "photo")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+        } else {
+            Label("Image", systemImage: "photo")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
+    }
+
+    private var decodedImage: UIImage? {
+        guard content.source.type == "base64",
+              let data = content.source.data,
+              let raw = Data(base64Encoded: data) else { return nil }
+        return UIImage(data: raw)
     }
 
     private func inlineImage(_ image: Image) -> some View {
