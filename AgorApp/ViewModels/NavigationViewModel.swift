@@ -185,12 +185,16 @@ final class NavigationViewModel {
 
             AppLogger.shared.log("[Nav] loadBoards: \(mergedNodes.count) boards (\(newCount) new, \(existingCount) existing, \(removedCount) removed)", level: .debug, category: "Nav")
 
-            // Load worktrees for ALL boards (sessions needed for importantSessions/attentionSessions)
-            for node in boardNodes {
-                await loadWorktrees(for: node)
-            }
-
+            // Load ALL sessions in ONE call.
+            // Server's worktree_id filter is not implemented — returns all sessions regardless.
+            // Matching web UI approach: fetch everything at once, group client-side.
+            let sessionsByWorktreeId = await fetchAllSessions()
             await loadRepoNames()
+
+            // Load worktrees per board (board_id filter works correctly on server)
+            for node in boardNodes {
+                await loadWorktrees(for: node, sessionsByWorktreeId: sessionsByWorktreeId)
+            }
 
             // Save to cache after successful load
             SidebarCache.save(boardNodes: boardNodes)
@@ -216,7 +220,56 @@ final class NavigationViewModel {
         }
     }
 
-    func loadWorktrees(for boardNode: BoardNode) async {
+    /// Fetch ALL sessions in a single API call and group them by worktreeId.
+    /// The server's worktree_id filter param is not implemented — always returns all sessions.
+    /// Matching web UI: load once globally, group client-side.
+    @discardableResult
+    private func fetchAllSessions() async -> [String: [Session]] {
+        do {
+            let response: PaginatedResponse<Session> = try await client.getPaginated(
+                "/sessions",
+                query: [
+                    "$limit": "10000",
+                    "$sort[last_updated]": "-1",
+                    "archived": "false",
+                ]
+            )
+            var grouped: [String: [Session]] = [:]
+            for session in response.data {
+                grouped[session.worktreeId, default: []].append(session)
+            }
+            AppLogger.shared.log("[Nav] fetchAllSessions: \(response.data.count) sessions across \(grouped.count) worktrees (1 API call)", level: .debug, category: "Nav")
+            return grouped
+        } catch {
+            AppLogger.shared.log("[Nav] fetchAllSessions failed: \(error.localizedDescription)", level: .error, category: "Nav")
+            return [:]
+        }
+    }
+
+    /// Assign pre-fetched sessions to all WorktreeNodes.
+    private func assignSessions(_ sessionsByWorktreeId: [String: [Session]]) {
+        for board in boardNodes {
+            for wt in board.worktrees {
+                let sessions = sessionsByWorktreeId[wt.worktree.worktreeId] ?? []
+                let newIds = Set(sessions.map(\.sessionId))
+                let oldIds = Set(wt.sessions.map(\.sessionId))
+                if oldIds != newIds || wt.sessions.count != sessions.count {
+                    wt.sessions = sessions
+                } else {
+                    for (index, session) in sessions.enumerated() {
+                        if index < wt.sessions.count,
+                           wt.sessions[index].sessionId == session.sessionId,
+                           wt.sessions[index] != session {
+                            wt.sessions[index] = session
+                        }
+                    }
+                }
+                wt.isExpanded = !collapsedWorktreeIds.contains(wt.worktree.worktreeId)
+            }
+        }
+    }
+
+    func loadWorktrees(for boardNode: BoardNode, sessionsByWorktreeId: [String: [Session]]? = nil) async {
         boardNode.isLoading = true
         do {
             let response: PaginatedResponse<Worktree> = try await client.getPaginated(
@@ -244,9 +297,13 @@ final class NavigationViewModel {
             let boardId = String(boardNode.board.boardId.prefix(8))
             AppLogger.shared.log("[Nav] loadWorktrees boardId=\(boardId): \(mergedWorktrees.count) worktrees", level: .debug, category: "Nav")
 
-            // Load sessions for ALL worktrees (needed for importantSessions/attentionSessions)
-            for wt in boardNode.worktrees {
-                await loadSessions(for: wt)
+            // Assign pre-fetched sessions if available; otherwise skip (caller fetches separately)
+            if let sessionsByWorktreeId {
+                for wt in boardNode.worktrees {
+                    let sessions = sessionsByWorktreeId[wt.worktree.worktreeId] ?? []
+                    wt.sessions = sessions
+                    wt.isExpanded = !collapsedWorktreeIds.contains(wt.worktree.worktreeId)
+                }
             }
         } catch {
             let boardId = String(boardNode.board.boardId.prefix(8))
@@ -255,60 +312,30 @@ final class NavigationViewModel {
         boardNode.isLoading = false
     }
 
+    /// Refresh sessions for a specific worktree (triggered on expand).
+    /// Fetches all sessions and assigns to the target worktree — one API call.
     func loadSessions(for worktreeNode: WorktreeNode) async {
         worktreeNode.isLoading = true
-        do {
-            let response: PaginatedResponse<Session> = try await client.getPaginated(
-                "/sessions",
-                query: [
-                    "worktree_id": worktreeNode.worktree.worktreeId,
-                    "$limit": "50",
-                    "$sort[last_updated]": "-1",
-                    "archived": "false",
-                ]
-            )
-            // Client-side guard: ensure sessions belong to this worktree (server filter may not be reliable)
-            let filteredData = response.data.filter { $0.worktreeId == worktreeNode.worktree.worktreeId }
-            if filteredData.count != response.data.count {
-                let dropped = response.data.count - filteredData.count
-                AppLogger.shared.log("[Nav] loadSessions: dropped \(dropped) sessions with wrong worktree_id", level: .warning, category: "Nav")
-            }
-
-            // Incremental merge: update existing sessions in-place, add new, remove deleted
-            let newSessionIds = Set(filteredData.map(\.sessionId))
-            var mergedSessions: [Session] = []
-            for session in filteredData {
-                mergedSessions.append(session)
-            }
-            // Only assign if content actually changed to avoid unnecessary SwiftUI redraws
-            let oldIds = Set(worktreeNode.sessions.map(\.sessionId))
-            let newIds = newSessionIds.subtracting(oldIds)
-            let removedIds = oldIds.subtracting(newSessionIds)
-            if oldIds != newSessionIds || worktreeNode.sessions.count != mergedSessions.count {
-                worktreeNode.sessions = mergedSessions
-            } else {
-                // Update individual sessions only if they actually changed
-                for (index, session) in mergedSessions.enumerated() {
-                    if index < worktreeNode.sessions.count,
-                       worktreeNode.sessions[index].sessionId == session.sessionId {
-                        if worktreeNode.sessions[index] != session {
-                            worktreeNode.sessions[index] = session
-                        }
-                    } else {
-                        worktreeNode.sessions = mergedSessions
-                        break
-                    }
+        let grouped = await fetchAllSessions()
+        let sessions = grouped[worktreeNode.worktree.worktreeId] ?? []
+        let newIds = Set(sessions.map(\.sessionId))
+        let oldIds = Set(worktreeNode.sessions.map(\.sessionId))
+        if oldIds != newIds || worktreeNode.sessions.count != sessions.count {
+            worktreeNode.sessions = sessions
+        } else {
+            for (index, session) in sessions.enumerated() {
+                if index < worktreeNode.sessions.count,
+                   worktreeNode.sessions[index].sessionId == session.sessionId,
+                   worktreeNode.sessions[index] != session {
+                    worktreeNode.sessions[index] = session
                 }
             }
-            worktreeNode.isExpanded = !collapsedWorktreeIds.contains(worktreeNode.worktree.worktreeId)
-
-            let wtId = String(worktreeNode.worktree.worktreeId.prefix(8))
-            AppLogger.shared.log("[Nav] loadSessions worktreeId=\(wtId): \(mergedSessions.count) sessions (\(newIds.count) new, \(removedIds.count) removed)", level: .debug, category: "Nav")
-        } catch {
-            let wtId = String(worktreeNode.worktree.worktreeId.prefix(8))
-            AppLogger.shared.log("[Nav] loadSessions worktreeId=\(wtId) failed: \(error.localizedDescription)", level: .error, category: "Nav")
         }
+        worktreeNode.isExpanded = !collapsedWorktreeIds.contains(worktreeNode.worktree.worktreeId)
         worktreeNode.isLoading = false
+
+        // Propagate the fresh session data to all other worktrees as a bonus
+        assignSessions(grouped)
     }
 
     func refresh() async {
@@ -344,13 +371,11 @@ final class NavigationViewModel {
 
     private func refreshExpandedNodes() async {
         let expandedBoards = boardNodes.filter(\.isExpanded)
-        let expandedWorktrees = expandedBoards.flatMap { $0.worktrees.filter(\.isExpanded) }
-        AppLogger.shared.log("[Nav] refreshExpandedNodes: \(expandedBoards.count) boards, \(expandedWorktrees.count) worktrees", level: .debug, category: "Nav")
-        for board in expandedBoards {
-            for wt in board.worktrees where wt.isExpanded {
-                await loadSessions(for: wt)
-            }
-        }
+        let expandedWorktreeCount = expandedBoards.reduce(0) { $0 + $1.worktrees.filter(\.isExpanded).count }
+        AppLogger.shared.log("[Nav] refreshExpandedNodes: \(expandedBoards.count) boards, \(expandedWorktreeCount) worktrees — 1 session fetch", level: .debug, category: "Nav")
+        // Single session fetch for all worktrees (server doesn't support per-worktree filter)
+        let grouped = await fetchAllSessions()
+        assignSessions(grouped)
     }
 
     // MARK: - Socket Handlers
