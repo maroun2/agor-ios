@@ -125,6 +125,12 @@ final class VoiceActivityDetector {
         AppLogger.shared.log("[VAD] Started listening (adaptive threshold, EMA smoothing)", level: .info, category: "Voice")
     }
 
+    /// Call immediately after startListening() when resuming — noise floor is already
+    /// calibrated from the previous session, no need to re-suppress speech detection.
+    func skipCalibration() {
+        calibrationFramesRemaining = 0
+    }
+
     func stopListening() {
         guard state != .idle else { return }
 
