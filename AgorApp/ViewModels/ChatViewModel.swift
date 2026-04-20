@@ -1060,10 +1060,9 @@ final class ChatViewModel {
     }
 
     private func workingStatusPhrase() -> String {
-        if let prompt = tasks.last?.prompt.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
-            return prompt.count <= 60 ? "Working on: \(prompt)" : "Working on: \(prompt.prefix(50))..."
-        }
-        return "Working..."
+        let preview = tasks.last?.promptPreview.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !preview.isEmpty else { return "Working..." }
+        return preview.count <= 60 ? "Working on: \(preview)" : "Working on: \(preview.prefix(50))..."
     }
 
     private func voicePhrase(for toolName: String) -> String {
