@@ -1,6 +1,5 @@
 import Foundation
 import AVFoundation
-import AudioToolbox
 
 @Observable
 final class ContinuousVoiceService {
@@ -12,17 +11,6 @@ final class ContinuousVoiceService {
         case transcribing   // Processing with Whisper
         case sending        // Sending to agent
         case speaking       // TTS speaking to user
-    }
-
-    // System sound IDs for audio feedback.
-    // NOTE: AudioServicesPlaySystemSound is silenced by iOS when the audio session is active
-    // in recording mode (.playAndRecord). Only use it when the recorder is NOT running:
-    //   listeningReady → fires before startPreRollRecorder() ✓
-    //   messageSent    → fires after audioRecorder?.stop()   ✓
-    //   recordingStart → fires while recorder is active      ✗ → use playRecordingStartTone()
-    private enum SoundID {
-        static let listeningReady: SystemSoundID = 1057  // SMS received tone
-        static let messageSent: SystemSoundID = 1016     // Tock/sent sound
     }
 
     // Kept alive for the tone duration
@@ -99,8 +87,8 @@ final class ContinuousVoiceService {
 
         try vad.startListening()
         state = .listening
-        AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady (id=\(SoundID.listeningReady))", level: .info, category: "Voice")
-        AudioServicesPlaySystemSound(SoundID.listeningReady)
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady", level: .info, category: "Voice")
+        playTone(frequency: 1046, duration: 0.08)  // C6 — "ready" ding
         AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
 
         // Start pre-roll recorder immediately so first word is never cut off
@@ -166,8 +154,8 @@ final class ContinuousVoiceService {
         // Recorder is already running from pre-roll — just transition state
         cancelPreRollTimer()
         state = .recording
-        AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart (AVAudioEngine tone)", level: .info, category: "Voice")
-        playRecordingStartTone()
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart", level: .info, category: "Voice")
+        playTone(frequency: 880, duration: 0.07)  // A5 — "start recording"
         AppLogger.shared.log("[Voice] 🔴 STATE: listening → recording", level: .info, category: "Voice")
     }
 
@@ -232,18 +220,18 @@ final class ContinuousVoiceService {
         preRollRestartTimer = nil
     }
 
-    /// Play a short tone while the recorder is active.
-    /// AudioServicesPlaySystemSound is silenced by iOS in .playAndRecord sessions, so we use
-    /// AVAudioEngine with .mixWithOthers to generate and play a tone alongside the recorder.
-    private func playRecordingStartTone() {
+    /// Play a short sine-wave tone through AVAudioEngine.
+    /// AVAudioEngine is used (not AudioServicesPlaySystemSound) because:
+    /// - It routes through the media/playback path at the same volume as TTS speech
+    /// - AudioServicesPlaySystemSound uses the ringer path which is typically quieter
+    /// - It works while .playAndRecord audio session is active
+    private func playTone(frequency: Float, duration: Double, amplitude: Float = 0.85) {
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         engine.attach(player)
 
         let sampleRate: Double = 44100
-        let durationSeconds: Double = 0.07   // 70ms — short, crisp
-        let frequency: Float = 880           // A5 — same pitch as system sound 1113
-        let frames = AVAudioFrameCount(sampleRate * durationSeconds)
+        let frames = AVAudioFrameCount(sampleRate * duration)
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
         engine.connect(player, to: engine.mainMixerNode, format: format)
 
@@ -251,10 +239,9 @@ final class ContinuousVoiceService {
         buffer.frameLength = frames
         let data = buffer.floatChannelData![0]
         for i in 0..<Int(frames) {
-            // Sine wave with a short fade-out to avoid click artifacts
             let t = Float(i) / Float(sampleRate)
-            let envelope = 1.0 - (t / Float(durationSeconds))
-            data[i] = sin(2.0 * .pi * frequency * t) * 0.4 * envelope
+            let envelope = 1.0 - (t / Float(duration))  // linear fade-out avoids click
+            data[i] = sin(2.0 * .pi * frequency * t) * amplitude * envelope
         }
 
         do {
@@ -268,9 +255,7 @@ final class ContinuousVoiceService {
         player.scheduleBuffer(buffer, completionHandler: nil)
         player.play()
 
-        // Release engine after tone completes
-        let releaseDelay = durationSeconds + 0.15
-        DispatchQueue.main.asyncAfter(deadline: .now() + releaseDelay) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.15) { [weak self] in
             self?.toneEngine?.stop()
             self?.toneEngine = nil
         }
@@ -337,8 +322,8 @@ final class ContinuousVoiceService {
 
             if !cleanedText.isEmpty {
                 AppLogger.shared.log("[Voice] ✅ Delivering cleaned transcription: \"\(cleanedText)\"", level: .info, category: "Voice")
-                AppLogger.shared.log("[Voice] 🔔 Playing beep: messageSent (id=\(SoundID.messageSent))", level: .info, category: "Voice")
-                AudioServicesPlaySystemSound(SoundID.messageSent)
+                AppLogger.shared.log("[Voice] 🔔 Playing beep: messageSent", level: .info, category: "Voice")
+                playTone(frequency: 660, duration: 0.08)  // E5 — "sent" tock
                 onTranscription?(cleanedText)
 
                 // Auto-pause after sending — wait for agent to respond.
