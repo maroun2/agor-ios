@@ -6,7 +6,7 @@ struct AudioLevelBar: View {
     let isRecording: Bool
 
     private let historyCount = 50
-    private let maxScale: Float = 0.15
+    private let maxScale: Float = 0.02  // Calibrated for typical mic RMS (0.001–0.015 ambient, 0.02–0.08 voice)
 
     @State private var history: [Float] = Array(repeating: 0, count: 50)
 

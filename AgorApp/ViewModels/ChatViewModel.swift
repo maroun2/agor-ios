@@ -991,7 +991,7 @@ final class ChatViewModel {
         guard !isCode, !toSpeak.isEmpty else { return }
 
         AppLogger.shared.log("[Voice] 🔊 Stream speak: \(toSpeak.prefix(60))", level: .debug, category: "Voice")
-        voiceService?.speakStatus(toSpeak)
+        voiceService?.speakStreamChunk(toSpeak)
     }
 
     private func handleVoiceInput(_ text: String) {
