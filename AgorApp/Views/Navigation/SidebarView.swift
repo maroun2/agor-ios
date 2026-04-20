@@ -23,7 +23,7 @@ struct SidebarView: View {
             if !viewModel.attentionSessions.isEmpty {
                 Section {
                     ForEach(viewModel.attentionSessions) { session in
-                        let ctx = viewModel.findContext(for: session.sessionId)
+                        let ctx = viewModel.findContext(for: session)
                         NavigationLink(value: session.sessionId) {
                             AttentionSessionRow(session: session, boardIcon: ctx?.boardIcon)
                         }
@@ -45,7 +45,7 @@ struct SidebarView: View {
             if !viewModel.importantSessions.isEmpty {
                 Section {
                     ForEach(viewModel.importantSessions) { session in
-                        let ctx = viewModel.findContext(for: session.sessionId)
+                        let ctx = viewModel.findContext(for: session)
                         NavigationLink(value: session.sessionId) {
                             ImportantSessionRow(
                                 session: session,
