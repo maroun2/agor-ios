@@ -25,35 +25,45 @@ final class VoiceActivityDetector {
     // Marked @ObservationIgnored so mutations on the audio tap thread don't race
     // with @Observable's MainActor-locked access tracking.
 
-    // Exponential moving average of RMS (smooths out transients).
-    // α controls responsiveness: higher α = faster tracking.
+    // Asymmetric EMA: fast attack tracks speech onset quickly; slow release keeps the
+    // level stable during speech so the end-threshold comparison is smooth.
+    // Attack  α=0.30 → ~3 frames (~65ms) to rise  — catches speech onset fast
+    // Release α=0.08 → ~12 frames (~255ms) to fall — prevents choppy level readout
     @ObservationIgnored private var smoothedEnergy: Float = 0.0
-    private let emaAlpha: Float = 0.15  // ~7 frame lag at 48 kHz / 1024 buf ≈ 47 fps
+    private let emaAttackAlpha: Float  = 0.30
+    private let emaReleaseAlpha: Float = 0.08
 
     // Adaptive noise floor: tracks background noise during silence.
-    // Rises quickly (burst) and falls at a reasonable rate when room goes quiet.
+    // Three distinct alphas:
+    //   calibration — fast convergence during startup so the floor adapts to the room
+    //                 before speech detection opens (~0.5s to reach 95% of ambient)
+    //   rise        — gradual during normal listening to avoid reacting to brief bursts
+    //   fall        — moderate so the threshold drops when the room quietens
     @ObservationIgnored private var noiseFloor: Float = 0.001
-    private let noiseFloorRiseAlpha: Float = 0.02   // Gradual rise (~2s to reach louder background level)
-    private let noiseFloorFallAlpha: Float = 0.008  // Fall — halves in ~1.8s when room quietens
-    // Hard cap: ensures startThreshold never exceeds typical speech (0.03–0.1 RMS).
-    // Without this, loud sustained background raises noiseFloor until VAD can never fire.
-    private let maxNoiseFloor: Float = 0.010        // startThreshold cap = 0.010 × 2.75 = 0.0275
+    private let noiseFloorCalibrationAlpha: Float = 0.15  // Fast: used for first ~1.3s
+    private let noiseFloorRiseAlpha: Float         = 0.02  // Gradual rise (~2s to reach ambient)
+    private let noiseFloorFallAlpha: Float         = 0.008 // Halves in ~1.8s when room quietens
+    // Hard cap: prevents loud sustained background from raising noiseFloor above speech level.
+    private let maxNoiseFloor: Float               = 0.010 // → startThreshold cap ≈ 0.027 RMS
 
-    // Calibration: suppress speech detection for the first N frames so the noise
-    // floor can adapt to ambient levels before we start listening for speech.
+    // Calibration: suppress speech detection while the noise floor converges.
     @ObservationIgnored private var calibrationFramesRemaining: Int = 0
     private let calibrationFrames: Int = 60  // ~1.3s at 47 fps
 
-    // Speech-start confirmation: require N consecutive frames above threshold
-    // to avoid false triggers from short transients (keyboard taps, clicks).
+    // Speech-start confirmation: industry standard ≥ 250ms of continuous speech before
+    // triggering. Filters out keyboard clicks, breath sounds, and short transients.
     @ObservationIgnored private var consecutiveAboveThreshold: Int = 0
-    private let confirmationFrames: Int = 4  // ~80ms at 47 fps
+    private let confirmationFrames: Int = 12  // ~250ms at 47 fps
 
     // Speech-start threshold = noiseFloor × startMultiplier
-    // Speech-end threshold   = noiseFloor × endMultiplier
-    // Multipliers are adjusted by sensitivityLevel.
+    // Speech-end threshold   = noiseFloor × startMultiplier × hysteresisRatio
+    //
+    // Using a fixed hysteresisRatio (rather than independent end multiplier) keeps the
+    // gap proportional across all sensitivity levels — matches industry practice.
+    // Ratio 0.65 puts end at 65% of start (industry range: 0.60–0.75).
     private var startMultiplier: Float { 3.5 - sensitivityLevel * 1.5 }  // 3.5 (low) → 2.0 (high)
-    private var endMultiplier: Float   { 2.0 - sensitivityLevel * 0.8 }  // 2.0 (low) → 1.2 (high)
+    private let hysteresisRatio: Float = 0.65
+    private var endMultiplier: Float { startMultiplier * hysteresisRatio }
 
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
@@ -122,7 +132,7 @@ final class VoiceActivityDetector {
         state = .listening
 
         startSilenceCheckTimer()
-        AppLogger.shared.log("[VAD] Started listening (adaptive threshold, EMA smoothing)", level: .info, category: "Voice")
+        AppLogger.shared.log("[VAD] Started listening — asymmetric EMA, 250ms confirmation, adaptive floor", level: .info, category: "Voice")
     }
 
     /// Call immediately after startListening() when resuming — noise floor is already
@@ -152,34 +162,33 @@ final class VoiceActivityDetector {
         guard let floatData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
 
-        // 1. Calculate RMS for this frame
+        // 1. RMS for this frame
         var sum: Float = 0
         for i in 0..<frameLength {
             sum += floatData[i] * floatData[i]
         }
         let rms = sqrt(sum / Float(frameLength))
 
-        // 2. Exponential moving average — smooth out transients
+        // 2. Asymmetric EMA: fast attack / slow release
+        let emaAlpha = rms > smoothedEnergy ? emaAttackAlpha : emaReleaseAlpha
         smoothedEnergy = emaAlpha * rms + (1.0 - emaAlpha) * smoothedEnergy
 
-        // 3. Update adaptive noise floor
+        // 3. Adaptive noise floor
         if state == .listening {
-            // Full adaptive update: rise tracks louder background, fall tracks quieter room
+            // Use faster alpha during calibration so floor converges to room level quickly.
+            let riseAlpha = calibrationFramesRemaining > 0 ? noiseFloorCalibrationAlpha : noiseFloorRiseAlpha
             if smoothedEnergy > noiseFloor {
-                noiseFloor = noiseFloorRiseAlpha * smoothedEnergy + (1.0 - noiseFloorRiseAlpha) * noiseFloor
+                noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
             } else {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
             }
         } else if state == .speechDetected {
-            // During recording: only allow noise floor to fall, never rise.
-            // Prevents speech itself from inflating the threshold; lets it drift down
-            // during quiet pauses so the end threshold stays reachable.
+            // During recording: only let floor fall, never rise.
+            // Prevents speech itself from inflating the threshold mid-utterance.
             if smoothedEnergy < noiseFloor {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
             }
         }
-        // Clamp: min keeps threshold meaningful in dead-quiet rooms,
-        // max prevents loud background from driving threshold above speech level.
         noiseFloor = max(noiseFloor, 0.0005)
         noiseFloor = min(noiseFloor, maxNoiseFloor)
 
@@ -195,10 +204,10 @@ final class VoiceActivityDetector {
 
         bufferCount += 1
         if bufferCount % 100 == 0 {
-            AppLogger.shared.log("[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) noise=\(String(format: "%.4f", noiseFloor)) start>\(String(format: "%.4f", startThreshold)) end>\(String(format: "%.4f", endThreshold)) state=\(state)", level: .info, category: "Voice")
+            AppLogger.shared.log("[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) noise=\(String(format: "%.4f", noiseFloor)) start>\(String(format: "%.4f", startThreshold)) end>\(String(format: "%.4f", endThreshold)) cal=\(calibrationFramesRemaining) state=\(state)", level: .info, category: "Voice")
         }
 
-        // 4. Speech-start detection with multi-frame confirmation
+        // 4. Speech-start: require ~250ms of continuous speech before triggering
         if state == .listening {
             if calibrationFramesRemaining > 0 {
                 calibrationFramesRemaining -= 1
@@ -219,7 +228,7 @@ final class VoiceActivityDetector {
             }
         }
 
-        // 5. Update last-sound time for silence duration tracking
+        // 5. Update silence tracking — end threshold sits at hysteresisRatio below start
         if smoothedEnergy > endThreshold {
             lastSoundTime = Date()
         }
