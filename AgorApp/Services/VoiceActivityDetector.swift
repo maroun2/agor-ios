@@ -175,11 +175,18 @@ final class VoiceActivityDetector {
 
         // 3. Adaptive noise floor
         if state == .listening {
-            // Freeze rise once confirmation has started — otherwise the threshold chases
-            // the user's voice during the 250ms window and they can never trigger recording.
-            let confirmationInProgress = consecutiveAboveThreshold > 0
-            let riseAlpha = calibrationFramesRemaining > 0 ? noiseFloorCalibrationAlpha : noiseFloorRiseAlpha
-            if smoothedEnergy > noiseFloor && !confirmationInProgress {
+            let isCalibrating = calibrationFramesRemaining > 0
+            let riseAlpha = isCalibrating ? noiseFloorCalibrationAlpha : noiseFloorRiseAlpha
+
+            // Suppress rise if energy looks speech-like (> 2× floor) or confirmation is
+            // already accumulating. This prevents the threshold from chasing the user's
+            // voice — even soft speech below startThreshold inflates the floor otherwise.
+            // Exception: during initial calibration always allow rise so the floor can
+            // converge from 0.001 to the actual ambient level.
+            let suppressRise = !isCalibrating &&
+                (smoothedEnergy > noiseFloor * 2.0 || consecutiveAboveThreshold > 0)
+
+            if smoothedEnergy > noiseFloor && !suppressRise {
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
             } else {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
