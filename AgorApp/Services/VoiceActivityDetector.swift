@@ -175,9 +175,11 @@ final class VoiceActivityDetector {
 
         // 3. Adaptive noise floor
         if state == .listening {
-            // Use faster alpha during calibration so floor converges to room level quickly.
+            // Freeze rise once confirmation has started — otherwise the threshold chases
+            // the user's voice during the 250ms window and they can never trigger recording.
+            let confirmationInProgress = consecutiveAboveThreshold > 0
             let riseAlpha = calibrationFramesRemaining > 0 ? noiseFloorCalibrationAlpha : noiseFloorRiseAlpha
-            if smoothedEnergy > noiseFloor {
+            if smoothedEnergy > noiseFloor && !confirmationInProgress {
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
             } else {
                 noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
