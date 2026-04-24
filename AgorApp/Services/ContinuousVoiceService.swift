@@ -85,14 +85,26 @@ final class ContinuousVoiceService {
     func startListening() throws {
         guard state == .disabled else { return }
 
-        try vad.startListening()
+        // Play "ready" beep BEFORE starting VAD — the mic picks up the beep
+        // through the speaker, which poisons calibration (floor rises to beep
+        // energy ~0.008, making the threshold unreachable for normal speech).
         state = .listening
         AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady", level: .info, category: "Voice")
         playTone(frequency: 1046, duration: 0.08)  // C6 — "ready" ding
-        AppLogger.shared.log("[Voice] Continuous voice mode started", level: .info, category: "Voice")
 
-        // Start pre-roll recorder immediately so first word is never cut off
-        startPreRollRecorder()
+        // Delay VAD + pre-roll start until beep has fully decayed.
+        // Beep = 0.08s tone + 0.15s engine teardown; 0.3s gives safe margin.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.state == .listening else { return }
+            do {
+                try self.vad.startListening()
+                self.startPreRollRecorder()
+                AppLogger.shared.log("[Voice] Continuous voice mode started (post-beep)", level: .info, category: "Voice")
+            } catch {
+                AppLogger.shared.log("[Voice] ❌ VAD start failed: \(error.localizedDescription)", level: .error, category: "Voice")
+                self.state = .disabled
+            }
+        }
     }
 
     func stopListening() {

@@ -177,9 +177,6 @@ final class VoiceActivityDetector {
         let endThreshold   = noiseFloor * endMultiplier
 
         // 3. Adaptive noise floor
-        let prevFloor = noiseFloor
-        var floorAction = "none" // tracks which branch executed
-
         if state == .listening {
             let isCalibrating = calibrationFramesRemaining > 0
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
@@ -194,30 +191,19 @@ final class VoiceActivityDetector {
 
             if smoothedEnergy > noiseFloor && !suppressRise {
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
-                floorAction = isCalibrating ? "CAL_RISE(\(String(format: "%.3f", riseAlpha)))" : "RISE(\(String(format: "%.3f", riseAlpha)))"
             } else if smoothedEnergy < noiseFloor {
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
-                floorAction = "FALL"
-            } else {
-                floorAction = suppressRise ? "SUPPRESSED" : "FLAT"
             }
         } else if state == .speechDetected {
             if smoothedEnergy < noiseFloor {
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
-                floorAction = "REC_FALL"
-            } else {
-                floorAction = "REC_FLAT"
             }
         }
 
-        let preClampFloor = noiseFloor
         noiseFloor = max(noiseFloor, 0.0005)
         noiseFloor = min(noiseFloor, config.maxNoiseFloor)
-        if noiseFloor != preClampFloor {
-            floorAction += noiseFloor > preClampFloor ? "+CLAMP_MIN" : "+CLAMP_MAX"
-        }
 
         if freezeFramesRemaining > 0 {
             freezeFramesRemaining -= 1
@@ -228,36 +214,7 @@ final class VoiceActivityDetector {
             self.energyThreshold = self.noiseFloor * self.startMultiplier
         }
 
-        // CSV-style log: every frame, all values
-        // rms,ema,smoothed,prevFloor,newFloor,delta,startThr,endThr,gate,action,freeze,cal,state,cfg(riseα,fallα,calα,gateMult,maxFloor,atkα,relα,startMult,hystRatio)
         bufferCount += 1
-        let floorDelta = noiseFloor - prevFloor
-        AppLogger.shared.log(
-            "[VAD] "
-            + "\(String(format: "%.6f", rms)),"               // raw rms
-            + "\(String(format: "%.3f", emaAlpha)),"           // ema alpha used
-            + "\(String(format: "%.6f", smoothedEnergy)),"     // smoothed energy
-            + "\(String(format: "%.6f", prevFloor)),"          // floor before
-            + "\(String(format: "%.6f", noiseFloor)),"         // floor after
-            + "\(String(format: "%+.6f", floorDelta)),"        // floor change
-            + "\(String(format: "%.6f", startThreshold)),"     // start threshold
-            + "\(String(format: "%.6f", endThreshold)),"       // end threshold
-            + "\(String(format: "%.6f", noiseFloor * config.suppressRiseGateMultiplier))," // gate value
-            + "\(floorAction),"                                // which branch
-            + "\(freezeFramesRemaining),"                      // freeze remaining
-            + "\(calibrationFramesRemaining),"                 // cal remaining
-            + "\(state),"                                      // state
-            + "\(String(format: "%.3f", config.noiseFloorRiseAlpha)),"   // cfg: riseAlpha
-            + "\(String(format: "%.3f", config.noiseFloorFallAlpha)),"   // cfg: fallAlpha
-            + "\(String(format: "%.3f", config.noiseFloorCalibrationAlpha)),"  // cfg: calAlpha
-            + "\(String(format: "%.1f", config.suppressRiseGateMultiplier)),"  // cfg: gateMult
-            + "\(String(format: "%.3f", config.maxNoiseFloor)),"         // cfg: maxFloor
-            + "\(String(format: "%.2f", config.emaAttackAlpha)),"        // cfg: atkAlpha
-            + "\(String(format: "%.2f", config.emaReleaseAlpha)),"       // cfg: relAlpha
-            + "\(String(format: "%.2f", startMultiplier)),"              // derived startMult
-            + "\(String(format: "%.2f", config.hysteresisRatio))",       // cfg: hystRatio
-            level: .debug, category: "Voice"
-        )
 
         // 5. M-of-N speech confirmation
         //    Instead of requiring N consecutive frames above threshold (which resets
@@ -307,15 +264,6 @@ final class VoiceActivityDetector {
             lastSoundTime = Date()
         }
 
-        if state == .speechDetected {
-            let silenceDur = Date().timeIntervalSince(lastSoundTime)
-            AppLogger.shared.log(
-                "[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy))"
-                + " silence=\(String(format: "%.1f", silenceDur))s"
-                + " endThresh=\(String(format: "%.4f", endThreshold))",
-                level: .debug, category: "Voice"
-            )
-        }
     }
 
     private func startSilenceCheckTimer() {
