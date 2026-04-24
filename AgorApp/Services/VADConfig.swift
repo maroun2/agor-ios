@@ -2,7 +2,8 @@ import Foundation
 
 /// All tunable constants for VoiceActivityDetector in one place.
 /// Change any value on `vad.config` at runtime — takes effect on the next audio frame.
-struct VADConfig {
+/// Codable so the whole struct can be saved/loaded as JSON via UserDefaults.
+struct VADConfig: Codable {
 
     // MARK: - EMA (smoothing)
 
@@ -31,7 +32,7 @@ struct VADConfig {
 
     /// Hard cap on the noise floor.
     /// Prevents very loud sustained background from raising the threshold so high that
-    /// speech can never be detected. Cap at e.g. 0.020 for noisy venues.
+    /// speech can never be detected. Raise (e.g. 0.020) for noisy venues.
     /// → startThreshold max = maxNoiseFloor × startMultiplier
     var maxNoiseFloor: Float = 0.010
 
@@ -58,15 +59,16 @@ struct VADConfig {
     var startMultiplierAtHighSensitivity: Float = 2.0
 
     /// endThreshold = startThreshold × hysteresisRatio.
-    /// Industry range: 0.60–0.80. Higher = wider gap, harder for noise to keep recording alive.
+    /// Industry range: 0.60–0.90. Higher = wider gap, harder for noise to keep recording alive.
     /// Raise in noisy environments (e.g. 0.75–0.85) so ambient bursts don't refresh lastSoundTime.
     var hysteresisRatio: Float = 0.65
 
-    /// Fraction of startThreshold below which the noise floor is ALLOWED to rise.
-    /// 1.0 = freeze floor any time energy ≥ startThreshold (recommended — ties gate to threshold).
-    /// 0.8 = freeze floor when energy ≥ 80% of startThreshold (earlier suppression).
-    /// This replaces the old hardcoded "2× floor" gate.
-    var suppressRiseGateFraction: Float = 1.0
+    /// Multiple of noiseFloor at which floor-rise is suppressed.
+    /// Energy above (noiseFloor × suppressRiseGateMultiplier) freezes the floor — it
+    /// could be speech, so we don't let the floor chase it.
+    /// 2.0 = original safe default (energy > 2× floor triggers freeze).
+    /// Lower (e.g. 1.5) for more protection; raise (e.g. 2.5) to allow more floor rise.
+    var suppressRiseGateMultiplier: Float = 2.0
 
     // MARK: - Timing
 

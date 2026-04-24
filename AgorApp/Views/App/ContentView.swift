@@ -62,6 +62,7 @@ struct MainNavigationView: View {
                 selectedSessionId: $selectedSessionId,
                 appViewModel: appViewModel,
                 socketService: socketService,
+                chatVM: chatVM,
                 onLogout: {
                     socketService.disconnect()
                     navigationVM.clearCache()
