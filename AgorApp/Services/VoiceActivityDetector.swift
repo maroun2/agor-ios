@@ -17,53 +17,23 @@ final class VoiceActivityDetector {
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
 
-    // VAD configuration — base sensitivity (0.0 low → 1.0 high)
+    // All tunable constants — change at any time, takes effect next audio frame
+    var config = VADConfig()
+
+    // VAD sensitivity (0.0 low → 1.0 high) — drives startMultiplier via config
     private(set) var sensitivityLevel: Float = 0.5
-    private let silenceDuration: TimeInterval = 3.0  // Seconds of silence to end speech
 
-    // --- Moving-average / adaptive-threshold state (audio-thread only) ---
-    // Marked @ObservationIgnored so mutations on the audio tap thread don't race
-    // with @Observable's MainActor-locked access tracking.
+    // Derived multipliers
+    private var startMultiplier: Float { config.startMultiplier(for: sensitivityLevel) }
+    private var endMultiplier: Float { startMultiplier * config.hysteresisRatio }
 
-    // Asymmetric EMA: fast attack tracks speech onset quickly; slow release keeps the
-    // level stable during speech so the end-threshold comparison is smooth.
-    // Attack  α=0.30 → ~3 frames (~65ms) to rise  — catches speech onset fast
-    // Release α=0.08 → ~12 frames (~255ms) to fall — prevents choppy level readout
+    // --- Audio-thread-only state ---
+    // @ObservationIgnored prevents race with @Observable's MainActor-locked access tracking
+
     @ObservationIgnored private var smoothedEnergy: Float = 0.0
-    private let emaAttackAlpha: Float  = 0.30
-    private let emaReleaseAlpha: Float = 0.08
-
-    // Adaptive noise floor: tracks background noise during silence.
-    // Three distinct alphas:
-    //   calibration — fast convergence during startup so the floor adapts to the room
-    //                 before speech detection opens (~0.5s to reach 95% of ambient)
-    //   rise        — gradual during normal listening to avoid reacting to brief bursts
-    //   fall        — moderate so the threshold drops when the room quietens
     @ObservationIgnored private var noiseFloor: Float = 0.001
-    private let noiseFloorCalibrationAlpha: Float = 0.15  // Fast: used for first ~1.3s
-    private let noiseFloorRiseAlpha: Float         = 0.02  // Gradual rise (~2s to reach ambient)
-    private let noiseFloorFallAlpha: Float         = 0.008 // Halves in ~1.8s when room quietens
-    // Hard cap: prevents loud sustained background from raising noiseFloor above speech level.
-    private let maxNoiseFloor: Float               = 0.010 // → startThreshold cap ≈ 0.027 RMS
-
-    // Calibration: suppress speech detection while the noise floor converges.
     @ObservationIgnored private var calibrationFramesRemaining: Int = 0
-    private let calibrationFrames: Int = 60  // ~1.3s at 47 fps
-
-    // Speech-start confirmation: industry standard ≥ 250ms of continuous speech before
-    // triggering. Filters out keyboard clicks, breath sounds, and short transients.
     @ObservationIgnored private var consecutiveAboveThreshold: Int = 0
-    private let confirmationFrames: Int = 12  // ~250ms at 47 fps
-
-    // Speech-start threshold = noiseFloor × startMultiplier
-    // Speech-end threshold   = noiseFloor × startMultiplier × hysteresisRatio
-    //
-    // Using a fixed hysteresisRatio (rather than independent end multiplier) keeps the
-    // gap proportional across all sensitivity levels — matches industry practice.
-    // Ratio 0.65 puts end at 65% of start (industry range: 0.60–0.75).
-    private var startMultiplier: Float { 3.5 - sensitivityLevel * 1.5 }  // 3.5 (low) → 2.0 (high)
-    private let hysteresisRatio: Float = 0.65
-    private var endMultiplier: Float { startMultiplier * hysteresisRatio }
 
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
@@ -78,7 +48,12 @@ final class VoiceActivityDetector {
 
     func setSensitivity(_ sensitivity: Float) {
         sensitivityLevel = max(0.0, min(1.0, sensitivity))
-        AppLogger.shared.log("[VAD] Sensitivity set to \(String(format: "%.2f", sensitivityLevel)) → startMult=\(String(format: "%.2f", startMultiplier)) endMult=\(String(format: "%.2f", endMultiplier))", level: .debug, category: "Voice")
+        AppLogger.shared.log(
+            "[VAD] Sensitivity \(String(format: "%.2f", sensitivityLevel)) "
+            + "→ startMult=\(String(format: "%.2f", startMultiplier)) "
+            + "endMult=\(String(format: "%.2f", endMultiplier))",
+            level: .debug, category: "Voice"
+        )
     }
 
     // MARK: - Start/Stop
@@ -106,15 +81,18 @@ final class VoiceActivityDetector {
             break
         }
 
-        // .mixWithOthers lets AVAudioEngine/AVAudioPlayer play tones alongside the active recorder.
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+        try session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
+        )
         try session.setActive(true)
 
-        // Reset adaptive state so we calibrate to the new room on each start
+        // Reset adaptive state so we calibrate fresh on each start
         smoothedEnergy = 0.0
         noiseFloor = 0.001
         consecutiveAboveThreshold = 0
-        calibrationFramesRemaining = calibrationFrames
+        calibrationFramesRemaining = config.calibrationFrameCount
         energyThreshold = noiseFloor * startMultiplier
 
         audioEngine = AVAudioEngine()
@@ -132,11 +110,17 @@ final class VoiceActivityDetector {
         state = .listening
 
         startSilenceCheckTimer()
-        AppLogger.shared.log("[VAD] Started listening — asymmetric EMA, 250ms confirmation, adaptive floor", level: .info, category: "Voice")
+        AppLogger.shared.log(
+            "[VAD] Started — emaAtk=\(config.emaAttackAlpha) emaRel=\(config.emaReleaseAlpha) "
+            + "riseAlpha=\(config.noiseFloorRiseAlpha) fallAlpha=\(config.noiseFloorFallAlpha) "
+            + "maxFloor=\(config.maxNoiseFloor) confirm=\(config.confirmationFrameCount)fr "
+            + "hysteresis=\(config.hysteresisRatio) suppressGate=\(config.suppressRiseGateFraction) "
+            + "silenceDur=\(config.silenceDuration)s maxRec=\(config.maxRecordingDuration)s",
+            level: .info, category: "Voice"
+        )
     }
 
-    /// Call immediately after startListening() when resuming — noise floor is already
-    /// calibrated from the previous session, no need to re-suppress speech detection.
+    /// Call immediately after startListening() when resuming — noise floor already calibrated.
     func skipCalibration() {
         calibrationFramesRemaining = 0
     }
@@ -170,65 +154,87 @@ final class VoiceActivityDetector {
         let rms = sqrt(sum / Float(frameLength))
 
         // 2. Asymmetric EMA: fast attack / slow release
-        let emaAlpha = rms > smoothedEnergy ? emaAttackAlpha : emaReleaseAlpha
+        let emaAlpha = rms > smoothedEnergy ? config.emaAttackAlpha : config.emaReleaseAlpha
         smoothedEnergy = emaAlpha * rms + (1.0 - emaAlpha) * smoothedEnergy
-
-        // 3. Adaptive noise floor
-        if state == .listening {
-            let isCalibrating = calibrationFramesRemaining > 0
-            let riseAlpha = isCalibrating ? noiseFloorCalibrationAlpha : noiseFloorRiseAlpha
-
-            // Suppress rise if energy looks speech-like (> 2× floor) or confirmation is
-            // already accumulating. This prevents the threshold from chasing the user's
-            // voice — even soft speech below startThreshold inflates the floor otherwise.
-            // Exception: during initial calibration always allow rise so the floor can
-            // converge from 0.001 to the actual ambient level.
-            let suppressRise = !isCalibrating &&
-                (smoothedEnergy > noiseFloor * 2.0 || consecutiveAboveThreshold > 0)
-
-            if smoothedEnergy > noiseFloor && !suppressRise {
-                noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
-            } else {
-                noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
-            }
-        } else if state == .speechDetected {
-            // During recording: only let floor fall, never rise.
-            // Prevents speech itself from inflating the threshold mid-utterance.
-            if smoothedEnergy < noiseFloor {
-                noiseFloor = noiseFloorFallAlpha * smoothedEnergy + (1.0 - noiseFloorFallAlpha) * noiseFloor
-            }
-        }
-        noiseFloor = max(noiseFloor, 0.0005)
-        noiseFloor = min(noiseFloor, maxNoiseFloor)
 
         let startThreshold = noiseFloor * startMultiplier
         let endThreshold   = noiseFloor * endMultiplier
 
+        // 3. Adaptive noise floor
+        if state == .listening {
+            let isCalibrating = calibrationFramesRemaining > 0
+            let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
+
+            // ── Suppress-rise gate ──────────────────────────────────────────────────────
+            // Old approach: hardcoded "smoothedEnergy > noiseFloor * 2.0"
+            //   Problem: at sensitivity 1.0 startMultiplier = 2.0, so the gate was AT the
+            //   threshold, giving zero protection; at other sensitivities it was an arbitrary
+            //   fraction that didn't track the threshold.
+            //
+            // New approach: gate = startThreshold × suppressRiseGateFraction (default 1.0).
+            //   Any energy at or above the speech-detection threshold freezes the floor — it
+            //   could be speech, so we don't let the floor chase it.
+            //   Energy below the gate (clearly sub-speech ambient) is still allowed to slowly
+            //   raise the floor so it tracks the true room noise level.
+            //   Exception: during initial calibration always allow rise so floor can converge
+            //   from 0.001 to actual ambient before speech detection opens.
+            let suppressGate = startThreshold * config.suppressRiseGateFraction
+            let suppressRise = !isCalibrating &&
+                (smoothedEnergy >= suppressGate || consecutiveAboveThreshold > 0)
+
+            if smoothedEnergy > noiseFloor && !suppressRise {
+                noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
+            } else {
+                noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
+                    + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
+            }
+        } else if state == .speechDetected {
+            // During recording: only fall, never rise.
+            // Prevents speech from inflating the threshold mid-utterance.
+            if smoothedEnergy < noiseFloor {
+                noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
+                    + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
+            }
+        }
+        noiseFloor = max(noiseFloor, 0.0005)
+        noiseFloor = min(noiseFloor, config.maxNoiseFloor)
+
         // Publish to MainActor — energyThreshold drives the live threshold line in the waveform
-        let publishedThreshold = startThreshold
         Task { @MainActor in
             self.currentAudioLevel = self.smoothedEnergy
-            self.energyThreshold = publishedThreshold
+            self.energyThreshold = self.noiseFloor * self.startMultiplier
         }
 
         bufferCount += 1
         if bufferCount % 100 == 0 {
-            AppLogger.shared.log("[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) noise=\(String(format: "%.4f", noiseFloor)) start>\(String(format: "%.4f", startThreshold)) end>\(String(format: "%.4f", endThreshold)) cal=\(calibrationFramesRemaining) state=\(state)", level: .info, category: "Voice")
+            AppLogger.shared.log(
+                "[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) "
+                + "noise=\(String(format: "%.4f", noiseFloor)) "
+                + "start>\(String(format: "%.4f", startThreshold)) "
+                + "end>\(String(format: "%.4f", endThreshold)) "
+                + "cal=\(calibrationFramesRemaining) state=\(state)",
+                level: .info, category: "Voice"
+            )
         }
 
-        // 4. Speech-start: require ~250ms of continuous speech before triggering
+        // 4. Speech-start: require confirmationFrameCount of continuous speech before triggering
         if state == .listening {
             if calibrationFramesRemaining > 0 {
                 calibrationFramesRemaining -= 1
                 consecutiveAboveThreshold = 0
             } else if smoothedEnergy > startThreshold {
                 consecutiveAboveThreshold += 1
-                if consecutiveAboveThreshold >= confirmationFrames {
+                if consecutiveAboveThreshold >= config.confirmationFrameCount {
                     consecutiveAboveThreshold = 0
                     Task { @MainActor in
                         self.speechStartTime = Date()
                         self.state = .speechDetected
-                        AppLogger.shared.log("[VAD] 🎤 Speech START (smoothed=\(String(format: "%.4f", self.smoothedEnergy)) > threshold=\(String(format: "%.4f", startThreshold)), noise=\(String(format: "%.4f", self.noiseFloor)))", level: .info, category: "Voice")
+                        AppLogger.shared.log(
+                            "[VAD] 🎤 Speech START (smoothed=\(String(format: "%.4f", self.smoothedEnergy))"
+                            + " > threshold=\(String(format: "%.4f", startThreshold))"
+                            + " noise=\(String(format: "%.4f", self.noiseFloor)))",
+                            level: .info, category: "Voice"
+                        )
                         self.onSpeechStart?()
                     }
                 }
@@ -237,14 +243,19 @@ final class VoiceActivityDetector {
             }
         }
 
-        // 5. Update silence tracking — end threshold sits at hysteresisRatio below start
+        // 5. Update silence tracking
         if smoothedEnergy > endThreshold {
             lastSoundTime = Date()
         }
 
         if state == .speechDetected {
             let silenceDur = Date().timeIntervalSince(lastSoundTime)
-            AppLogger.shared.log("[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy)) silence=\(String(format: "%.1f", silenceDur))s endThresh=\(String(format: "%.4f", endThreshold))", level: .debug, category: "Voice")
+            AppLogger.shared.log(
+                "[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy))"
+                + " silence=\(String(format: "%.1f", silenceDur))s"
+                + " endThresh=\(String(format: "%.4f", endThreshold))",
+                level: .debug, category: "Voice"
+            )
         }
     }
 
@@ -260,11 +271,21 @@ final class VoiceActivityDetector {
         guard state == .speechDetected else { return }
 
         let silenceElapsed = Date().timeIntervalSince(lastSoundTime)
-        if silenceElapsed >= silenceDuration {
-            let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
+        let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
+
+        let silenceExpired = silenceElapsed >= config.silenceDuration
+        let maxDurationExpired = config.maxRecordingDuration > 0
+            && totalDuration >= config.maxRecordingDuration
+
+        if silenceExpired || maxDurationExpired {
+            let reason = maxDurationExpired && !silenceExpired ? "maxDuration" : "silence"
             Task { @MainActor in
                 self.state = .listening
-                AppLogger.shared.log("[VAD] 🔇 Speech END (silence=\(String(format: "%.1f", silenceElapsed))s, total=\(String(format: "%.1f", totalDuration))s)", level: .info, category: "Voice")
+                AppLogger.shared.log(
+                    "[VAD] 🔇 Speech END (\(reason): silence=\(String(format: "%.1f", silenceElapsed))s"
+                    + " total=\(String(format: "%.1f", totalDuration))s)",
+                    level: .info, category: "Voice"
+                )
                 self.onSpeechEnd?()
             }
         }
