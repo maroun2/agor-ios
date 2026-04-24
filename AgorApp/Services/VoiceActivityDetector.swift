@@ -17,8 +17,10 @@ final class VoiceActivityDetector {
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
 
-    // All tunable constants — change at any time, takes effect next audio frame
-    var config = VADConfig()
+    // All tunable constants — change at any time, takes effect next audio frame.
+    // @ObservationIgnored: config is read on the audio thread and must not be
+    // wrapped by the @Observable macro's MainActor-locked access tracking.
+    @ObservationIgnored var config = VADConfig()
 
     // VAD sensitivity (0.0 low → 1.0 high) — drives startMultiplier via config
     private(set) var sensitivityLevel: Float = 0.5
@@ -110,14 +112,17 @@ final class VoiceActivityDetector {
         state = .listening
 
         startSilenceCheckTimer()
-        AppLogger.shared.log(
-            "[VAD] Started — emaAtk=\(config.emaAttackAlpha) emaRel=\(config.emaReleaseAlpha) "
-            + "riseAlpha=\(config.noiseFloorRiseAlpha) fallAlpha=\(config.noiseFloorFallAlpha) "
-            + "maxFloor=\(config.maxNoiseFloor) confirm=\(config.confirmationFrameCount)fr "
-            + "hysteresis=\(config.hysteresisRatio) suppressGate=\(config.suppressRiseGateFraction) "
-            + "silenceDur=\(config.silenceDuration)s",
-            level: .info, category: "Voice"
-        )
+        let cfgLog = "[VAD] Started"
+            + " emaAtk=\(config.emaAttackAlpha)"
+            + " emaRel=\(config.emaReleaseAlpha)"
+            + " riseAlpha=\(config.noiseFloorRiseAlpha)"
+            + " fallAlpha=\(config.noiseFloorFallAlpha)"
+            + " maxFloor=\(config.maxNoiseFloor)"
+            + " confirm=\(config.confirmationFrameCount)fr"
+            + " hysteresis=\(config.hysteresisRatio)"
+            + " suppressGate=\(config.suppressRiseGateFraction)"
+            + " silenceDur=\(config.silenceDuration)s"
+        AppLogger.shared.log(cfgLog, level: .info, category: "Voice")
     }
 
     /// Call immediately after startListening() when resuming — noise floor already calibrated.
