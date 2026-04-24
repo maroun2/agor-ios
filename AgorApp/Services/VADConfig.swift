@@ -73,10 +73,6 @@ struct VADConfig {
     /// Seconds of energy below endThreshold before speech is ended. Keep at 3.0 for comfort.
     var silenceDuration: TimeInterval = 3.0
 
-    /// Hard cap on recording length, even in noisy environments where endThreshold is never crossed.
-    /// 0 = disabled (no cap). Set to e.g. 120.0 in public places to guarantee recording stops.
-    var maxRecordingDuration: TimeInterval = 0
-
     // MARK: - Derived helpers (read-only)
 
     func startMultiplier(for sensitivity: Float) -> Float {
