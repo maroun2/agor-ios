@@ -37,7 +37,7 @@ struct VADSettingsView: View {
                     range: 0.3...10,
                     step: 0.1,
                     format: { String(format: "%.1fs", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -49,7 +49,7 @@ struct VADSettingsView: View {
                     range: 1...10,
                     step: 1,
                     format: { "\(Int($0)) of \(config.confirmationWindow)" },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -61,7 +61,7 @@ struct VADSettingsView: View {
                     range: 2...20,
                     step: 1,
                     format: { "~\(Int($0 * 1000 / 47))ms" },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -73,7 +73,7 @@ struct VADSettingsView: View {
                     range: 0...60,
                     step: 1,
                     format: { "~\(Int($0 * 1000 / 47))ms" },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
             }
 
@@ -84,7 +84,7 @@ struct VADSettingsView: View {
                     range: 0.001...0.200,
                     step: 0.001,
                     format: { String(format: "%.3f", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -93,7 +93,7 @@ struct VADSettingsView: View {
                     range: 0...0.200,
                     step: 0.001,
                     format: { $0 == 0 ? "OFF" : String(format: "%.3f", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -102,7 +102,7 @@ struct VADSettingsView: View {
                     range: 1.0...5.0,
                     step: 0.1,
                     format: { String(format: "%.1f× floor", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -111,7 +111,7 @@ struct VADSettingsView: View {
                     range: 0.20...0.95,
                     step: 0.05,
                     format: { String(format: "%.0f%%", $0 * 100) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
             }
 
@@ -122,7 +122,7 @@ struct VADSettingsView: View {
                     range: 0.05...0.90,
                     step: 0.05,
                     format: { String(format: "%.2f", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
 
                 SliderRow(
@@ -131,7 +131,7 @@ struct VADSettingsView: View {
                     range: 0.01...0.50,
                     step: 0.01,
                     format: { String(format: "%.2f", $0) },
-                    onEditingChanged: { commitConfig() }
+                    onEditingChanged: { persistConfig() }
                 )
             }
 
@@ -148,9 +148,14 @@ struct VADSettingsView: View {
         }
         .navigationTitle("Detection Settings")
         .navigationBarTitleDisplayMode(.inline)
+        // Apply config to VAD instantly on every slider drag frame
+        .onChange(of: config) { _, newConfig in
+            chatVM.voiceService?.vad.config = newConfig
+        }
     }
 
-    private func commitConfig() {
+    /// Save to UserDefaults (called on slider release — avoid writes during drag)
+    private func persistConfig() {
         chatVM.vadConfig = config
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 /// All tunable constants for VoiceActivityDetector in one place.
 /// Change any value on `vad.config` at runtime — takes effect on the next audio frame.
 /// Codable so the whole struct can be saved/loaded as JSON via UserDefaults.
-struct VADConfig: Codable {
+struct VADConfig: Codable, Equatable {
 
     // MARK: - EMA (smoothing)
 
