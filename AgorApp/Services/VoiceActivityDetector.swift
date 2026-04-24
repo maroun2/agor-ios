@@ -231,7 +231,8 @@ final class VoiceActivityDetector {
                 + "noise=\(String(format: "%.4f", noiseFloor)) "
                 + "start>\(String(format: "%.4f", startThreshold)) "
                 + "end>\(String(format: "%.4f", endThreshold)) "
-                + "freeze=\(freezeFramesRemaining) cal=\(calibrationFramesRemaining) state=\(state)",
+                + "freeze=\(freezeFramesRemaining) cal=\(calibrationFramesRemaining) "
+                + "riseα=\(String(format: "%.3f", config.noiseFloorRiseAlpha)) state=\(state)",
                 level: .info, category: "Voice"
             )
         }
