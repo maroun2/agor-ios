@@ -10,7 +10,8 @@ struct VADSettingsView: View {
     init(chatVM: ChatViewModel) {
         self.chatVM = chatVM
         _config = State(initialValue: chatVM.vadConfig)
-        _sensitivity = State(initialValue: chatVM.voiceService?.vad.sensitivityLevel ?? 0.5)
+        let saved = UserDefaults.standard.object(forKey: "agor.vad.sensitivity") as? Float
+        _sensitivity = State(initialValue: chatVM.voiceService?.vad.sensitivityLevel ?? saved ?? 0.5)
     }
 
     var body: some View {
@@ -33,19 +34,43 @@ struct VADSettingsView: View {
                         get: { Float(config.silenceDuration) },
                         set: { config.silenceDuration = TimeInterval($0) }
                     ),
-                    range: 0.5...6,
+                    range: 0.3...10,
                     step: 0.1,
                     format: { String(format: "%.1fs", $0) },
                     onEditingChanged: { commitConfig() }
                 )
 
                 SliderRow(
-                    label: "Confirmation window",
+                    label: "Trigger frames (M)",
                     value: Binding(
-                        get: { Float(config.confirmationFrameCount) },
-                        set: { config.confirmationFrameCount = Int($0) }
+                        get: { Float(config.confirmationRequired) },
+                        set: { config.confirmationRequired = Int($0) }
                     ),
-                    range: 4...24,
+                    range: 1...10,
+                    step: 1,
+                    format: { "\(Int($0)) of \(config.confirmationWindow)" },
+                    onEditingChanged: { commitConfig() }
+                )
+
+                SliderRow(
+                    label: "Trigger window (N)",
+                    value: Binding(
+                        get: { Float(config.confirmationWindow) },
+                        set: { config.confirmationWindow = max(Int($0), config.confirmationRequired) }
+                    ),
+                    range: 2...20,
+                    step: 1,
+                    format: { "~\(Int($0 * 1000 / 47))ms" },
+                    onEditingChanged: { commitConfig() }
+                )
+
+                SliderRow(
+                    label: "Floor freeze",
+                    value: Binding(
+                        get: { Float(config.noiseFloorFreezeFrames) },
+                        set: { config.noiseFloorFreezeFrames = Int($0) }
+                    ),
+                    range: 0...60,
                     step: 1,
                     format: { "~\(Int($0 * 1000 / 47))ms" },
                     onEditingChanged: { commitConfig() }
@@ -56,7 +81,7 @@ struct VADSettingsView: View {
                 SliderRow(
                     label: "Max ambient level",
                     value: $config.maxNoiseFloor,
-                    range: 0.003...0.030,
+                    range: 0.001...0.200,
                     step: 0.001,
                     format: { String(format: "%.3f", $0) },
                     onEditingChanged: { commitConfig() }
@@ -65,8 +90,8 @@ struct VADSettingsView: View {
                 SliderRow(
                     label: "Rise speed",
                     value: $config.noiseFloorRiseAlpha,
-                    range: 0.005...0.050,
-                    step: 0.005,
+                    range: 0.001...0.200,
+                    step: 0.001,
                     format: { String(format: "%.3f", $0) },
                     onEditingChanged: { commitConfig() }
                 )
@@ -74,7 +99,7 @@ struct VADSettingsView: View {
                 SliderRow(
                     label: "Suppress gate",
                     value: $config.suppressRiseGateMultiplier,
-                    range: 1.0...3.5,
+                    range: 1.0...5.0,
                     step: 0.1,
                     format: { String(format: "%.1f× floor", $0) },
                     onEditingChanged: { commitConfig() }
@@ -83,9 +108,29 @@ struct VADSettingsView: View {
                 SliderRow(
                     label: "Hysteresis gap",
                     value: $config.hysteresisRatio,
-                    range: 0.40...0.90,
+                    range: 0.20...0.95,
                     step: 0.05,
                     format: { String(format: "%.0f%%", $0 * 100) },
+                    onEditingChanged: { commitConfig() }
+                )
+            }
+
+            Section("EMA Smoothing") {
+                SliderRow(
+                    label: "Attack speed",
+                    value: $config.emaAttackAlpha,
+                    range: 0.05...0.90,
+                    step: 0.05,
+                    format: { String(format: "%.2f", $0) },
+                    onEditingChanged: { commitConfig() }
+                )
+
+                SliderRow(
+                    label: "Release speed",
+                    value: $config.emaReleaseAlpha,
+                    range: 0.01...0.50,
+                    step: 0.01,
+                    format: { String(format: "%.2f", $0) },
                     onEditingChanged: { commitConfig() }
                 )
             }

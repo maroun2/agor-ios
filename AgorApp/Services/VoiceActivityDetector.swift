@@ -35,7 +35,15 @@ final class VoiceActivityDetector {
     @ObservationIgnored private var smoothedEnergy: Float = 0.0
     @ObservationIgnored private var noiseFloor: Float = 0.001
     @ObservationIgnored private var calibrationFramesRemaining: Int = 0
-    @ObservationIgnored private var consecutiveAboveThreshold: Int = 0
+
+    // M-of-N confirmation: ring buffer of recent above-threshold results
+    private static let ringBufferSize = 30
+    @ObservationIgnored private var recentAbove: [Bool] = Array(repeating: false, count: ringBufferSize)
+    @ObservationIgnored private var frameIndex: Int = 0
+
+    // Noise floor freeze: prevent floor rise for N frames after any above-threshold frame.
+    // Breaks the feedback loop where the floor chases speech during brief inter-syllable dips.
+    @ObservationIgnored private var freezeFramesRemaining: Int = 0
 
     private var lastSoundTime: Date = Date()
     private var speechStartTime: Date?
@@ -93,7 +101,9 @@ final class VoiceActivityDetector {
         // Reset adaptive state so we calibrate fresh on each start
         smoothedEnergy = 0.0
         noiseFloor = 0.001
-        consecutiveAboveThreshold = 0
+        recentAbove = Array(repeating: false, count: Self.ringBufferSize)
+        frameIndex = 0
+        freezeFramesRemaining = 0
         calibrationFramesRemaining = config.calibrationFrameCount
         energyThreshold = noiseFloor * startMultiplier
 
@@ -115,10 +125,11 @@ final class VoiceActivityDetector {
         let cfgLog = "[VAD] Started"
             + " emaAtk=\(config.emaAttackAlpha)"
             + " emaRel=\(config.emaReleaseAlpha)"
+            + " confirm=\(config.confirmationRequired)of\(config.confirmationWindow)"
+            + " freeze=\(config.noiseFloorFreezeFrames)fr"
             + " riseAlpha=\(config.noiseFloorRiseAlpha)"
             + " fallAlpha=\(config.noiseFloorFallAlpha)"
             + " maxFloor=\(config.maxNoiseFloor)"
-            + " confirm=\(config.confirmationFrameCount)fr"
             + " hysteresis=\(config.hysteresisRatio)"
             + " suppressGate=\(config.suppressRiseGateMultiplier)×floor"
             + " silenceDur=\(config.silenceDuration)s"
@@ -165,28 +176,38 @@ final class VoiceActivityDetector {
         let startThreshold = noiseFloor * startMultiplier
         let endThreshold   = noiseFloor * endMultiplier
 
-        // 3. Adaptive noise floor
+        // 3. Noise floor freeze countdown
+        if freezeFramesRemaining > 0 {
+            freezeFramesRemaining -= 1
+        }
+
+        // 4. Adaptive noise floor
         if state == .listening {
             let isCalibrating = calibrationFramesRemaining > 0
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
 
-            // ── Suppress-rise gate ──────────────────────────────────────────────────────
+            // ── Suppress-rise gate ──────────────────────────────────────────
             // Gate = noiseFloor × suppressRiseGateMultiplier (default 2.0).
-            // Any energy above the gate freezes the floor — it could be speech, so we
-            // don't let the floor chase it.  Energy clearly below the gate (ambient) is
-            // allowed to slowly raise the floor so it tracks the true room level.
-            // Exception: during calibration always allow rise so the floor can converge
-            // from 0.001 to actual ambient before speech detection opens.
+            // Any energy above the gate freezes the floor — it could be speech.
+            // Also suppress while freeze timer is active (prevents the floor from
+            // chasing speech during brief inter-syllable dips).
+            // Exception: during calibration always allow rise so the floor can
+            // converge from 0.001 to actual ambient before speech detection opens.
             let suppressGate = noiseFloor * config.suppressRiseGateMultiplier
             let suppressRise = !isCalibrating &&
-                (smoothedEnergy >= suppressGate || consecutiveAboveThreshold > 0)
+                (smoothedEnergy >= suppressGate || freezeFramesRemaining > 0)
 
             if smoothedEnergy > noiseFloor && !suppressRise {
+                // Rise: floor tracks ambient noise upward
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
-            } else {
+            } else if smoothedEnergy < noiseFloor {
+                // Fall: floor drops when room gets quieter
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
             }
+            // else: energy >= floor but rise suppressed → floor stays flat
+            // (Previously this fell through to the fall branch, which inadvertently
+            //  raised the floor via EMA when energy > floor and suppress was active.)
         } else if state == .speechDetected {
             // During recording: only fall, never rise.
             // Prevents speech from inflating the threshold mid-utterance.
@@ -211,25 +232,50 @@ final class VoiceActivityDetector {
                 + "noise=\(String(format: "%.4f", noiseFloor)) "
                 + "start>\(String(format: "%.4f", startThreshold)) "
                 + "end>\(String(format: "%.4f", endThreshold)) "
-                + "cal=\(calibrationFramesRemaining) state=\(state)",
+                + "freeze=\(freezeFramesRemaining) cal=\(calibrationFramesRemaining) state=\(state)",
                 level: .info, category: "Voice"
             )
         }
 
-        // 4. Speech-start: require confirmationFrameCount of continuous speech before triggering
+        // 5. M-of-N speech confirmation
+        //    Instead of requiring N consecutive frames above threshold (which resets
+        //    on any brief dip), require M frames above threshold within a window of N.
+        //    This tolerates natural speech variability and inter-syllable pauses.
         if state == .listening {
             if calibrationFramesRemaining > 0 {
                 calibrationFramesRemaining -= 1
-                consecutiveAboveThreshold = 0
-            } else if smoothedEnergy > startThreshold {
-                consecutiveAboveThreshold += 1
-                if consecutiveAboveThreshold >= config.confirmationFrameCount {
-                    consecutiveAboveThreshold = 0
+                recentAbove[frameIndex % Self.ringBufferSize] = false
+                frameIndex += 1
+            } else {
+                let isAbove = smoothedEnergy > startThreshold
+                recentAbove[frameIndex % Self.ringBufferSize] = isAbove
+                frameIndex += 1
+
+                // Freeze floor whenever a frame is above threshold — prevents the
+                // noise floor from chasing speech energy if the next frame dips briefly
+                if isAbove {
+                    freezeFramesRemaining = config.noiseFloorFreezeFrames
+                }
+
+                // Count hits in recent window
+                let window = min(config.confirmationWindow, Self.ringBufferSize, frameIndex)
+                var hits = 0
+                for i in (frameIndex - window)..<frameIndex {
+                    if recentAbove[i % Self.ringBufferSize] { hits += 1 }
+                }
+
+                if hits >= config.confirmationRequired {
+                    // Reset ring for next detection
+                    recentAbove = Array(repeating: false, count: Self.ringBufferSize)
+                    frameIndex = 0
+                    freezeFramesRemaining = 0
+
                     Task { @MainActor in
                         self.speechStartTime = Date()
                         self.state = .speechDetected
                         AppLogger.shared.log(
-                            "[VAD] 🎤 Speech START (smoothed=\(String(format: "%.4f", self.smoothedEnergy))"
+                            "[VAD] 🎤 Speech START (\(hits)/\(window) frames"
+                            + " smoothed=\(String(format: "%.4f", self.smoothedEnergy))"
                             + " > threshold=\(String(format: "%.4f", startThreshold))"
                             + " noise=\(String(format: "%.4f", self.noiseFloor)))",
                             level: .info, category: "Voice"
@@ -237,12 +283,10 @@ final class VoiceActivityDetector {
                         self.onSpeechStart?()
                     }
                 }
-            } else {
-                consecutiveAboveThreshold = 0
             }
         }
 
-        // 5. Update silence tracking
+        // 6. Update silence tracking
         if smoothedEnergy > endThreshold {
             lastSoundTime = Date()
         }
