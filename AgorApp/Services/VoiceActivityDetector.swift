@@ -176,41 +176,35 @@ final class VoiceActivityDetector {
         let startThreshold = noiseFloor * startMultiplier
         let endThreshold   = noiseFloor * endMultiplier
 
-        // 3. Noise floor freeze countdown
-        if freezeFramesRemaining > 0 {
-            freezeFramesRemaining -= 1
-        }
-
-        // 4. Adaptive noise floor
+        // 3. Adaptive noise floor
+        //    IMPORTANT: freeze must be activated BEFORE the floor adapts, on the
+        //    same frame. Otherwise the floor gets one free rise frame before freeze
+        //    kicks in — at high riseAlpha (0.2) that's a 20% jump toward speech.
         if state == .listening {
             let isCalibrating = calibrationFramesRemaining > 0
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
 
-            // ── Suppress-rise gate ──────────────────────────────────────────
-            // Gate = noiseFloor × suppressRiseGateMultiplier (default 2.0).
-            // Any energy above the gate freezes the floor — it could be speech.
-            // Also suppress while freeze timer is active (prevents the floor from
-            // chasing speech during brief inter-syllable dips).
-            // Exception: during calibration always allow rise so the floor can
-            // converge from 0.001 to actual ambient before speech detection opens.
             let suppressGate = noiseFloor * config.suppressRiseGateMultiplier
-            let suppressRise = !isCalibrating &&
-                (smoothedEnergy >= suppressGate || freezeFramesRemaining > 0)
+
+            // Activate/refresh freeze when energy looks like speech.
+            // Two triggers: suppress gate (lower bar) and start threshold (higher bar).
+            // This ensures freeze covers the gap between gate and threshold too.
+            if !isCalibrating && (smoothedEnergy >= suppressGate || smoothedEnergy > startThreshold) {
+                freezeFramesRemaining = config.noiseFloorFreezeFrames
+            }
+
+            // Suppress rise when energy above gate OR during freeze holdover
+            let suppressRise = !isCalibrating && (smoothedEnergy >= suppressGate || freezeFramesRemaining > 0)
 
             if smoothedEnergy > noiseFloor && !suppressRise {
-                // Rise: floor tracks ambient noise upward
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
             } else if smoothedEnergy < noiseFloor {
-                // Fall: floor drops when room gets quieter
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
             }
             // else: energy >= floor but rise suppressed → floor stays flat
-            // (Previously this fell through to the fall branch, which inadvertently
-            //  raised the floor via EMA when energy > floor and suppress was active.)
         } else if state == .speechDetected {
             // During recording: only fall, never rise.
-            // Prevents speech from inflating the threshold mid-utterance.
             if smoothedEnergy < noiseFloor {
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
@@ -218,6 +212,11 @@ final class VoiceActivityDetector {
         }
         noiseFloor = max(noiseFloor, 0.0005)
         noiseFloor = min(noiseFloor, config.maxNoiseFloor)
+
+        // Decrement freeze AFTER it was used for this frame's floor adaptation
+        if freezeFramesRemaining > 0 {
+            freezeFramesRemaining -= 1
+        }
 
         // Publish to MainActor — energyThreshold drives the live threshold line in the waveform
         Task { @MainActor in
@@ -250,12 +249,6 @@ final class VoiceActivityDetector {
                 let isAbove = smoothedEnergy > startThreshold
                 recentAbove[frameIndex % Self.ringBufferSize] = isAbove
                 frameIndex += 1
-
-                // Freeze floor whenever a frame is above threshold — prevents the
-                // noise floor from chasing speech energy if the next frame dips briefly
-                if isAbove {
-                    freezeFramesRemaining = config.noiseFloorFreezeFrames
-                }
 
                 // Count hits in recent window
                 let window = min(config.confirmationWindow, Self.ringBufferSize, frameIndex)
