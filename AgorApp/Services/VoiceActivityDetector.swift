@@ -120,7 +120,7 @@ final class VoiceActivityDetector {
             + " maxFloor=\(config.maxNoiseFloor)"
             + " confirm=\(config.confirmationFrameCount)fr"
             + " hysteresis=\(config.hysteresisRatio)"
-            + " suppressGate=\(config.suppressRiseGateFraction)"
+            + " suppressGate=\(config.suppressRiseGateMultiplier)×floor"
             + " silenceDur=\(config.silenceDuration)s"
         AppLogger.shared.log(cfgLog, level: .info, category: "Voice")
     }
@@ -171,19 +171,13 @@ final class VoiceActivityDetector {
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
 
             // ── Suppress-rise gate ──────────────────────────────────────────────────────
-            // Old approach: hardcoded "smoothedEnergy > noiseFloor * 2.0"
-            //   Problem: at sensitivity 1.0 startMultiplier = 2.0, so the gate was AT the
-            //   threshold, giving zero protection; at other sensitivities it was an arbitrary
-            //   fraction that didn't track the threshold.
-            //
-            // New approach: gate = startThreshold × suppressRiseGateFraction (default 1.0).
-            //   Any energy at or above the speech-detection threshold freezes the floor — it
-            //   could be speech, so we don't let the floor chase it.
-            //   Energy below the gate (clearly sub-speech ambient) is still allowed to slowly
-            //   raise the floor so it tracks the true room noise level.
-            //   Exception: during initial calibration always allow rise so floor can converge
-            //   from 0.001 to actual ambient before speech detection opens.
-            let suppressGate = startThreshold * config.suppressRiseGateFraction
+            // Gate = noiseFloor × suppressRiseGateMultiplier (default 2.0).
+            // Any energy above the gate freezes the floor — it could be speech, so we
+            // don't let the floor chase it.  Energy clearly below the gate (ambient) is
+            // allowed to slowly raise the floor so it tracks the true room level.
+            // Exception: during calibration always allow rise so the floor can converge
+            // from 0.001 to actual ambient before speech detection opens.
+            let suppressGate = noiseFloor * config.suppressRiseGateMultiplier
             let suppressRise = !isCalibrating &&
                 (smoothedEnergy >= suppressGate || consecutiveAboveThreshold > 0)
 

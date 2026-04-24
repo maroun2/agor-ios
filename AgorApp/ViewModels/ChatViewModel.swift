@@ -97,6 +97,23 @@ final class ChatViewModel {
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
+
+    // VAD config — persisted to UserDefaults as JSON; applied to voiceService on change
+    private static let vadConfigKey = "agor.vadConfig"
+    var vadConfig: VADConfig = {
+        if let data = UserDefaults.standard.data(forKey: vadConfigKey),
+           let decoded = try? JSONDecoder().decode(VADConfig.self, from: data) {
+            return decoded
+        }
+        return VADConfig()
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(vadConfig) {
+                UserDefaults.standard.set(data, forKey: Self.vadConfigKey)
+            }
+            voiceService?.vadConfig = vadConfig
+        }
+    }
     private var voiceStreamBuffer = ""          // Accumulates streaming text for live TTS
     private var voiceDidStreamCurrentMessage = false  // True if any chunk was spoken for current turn
     var voiceModeEnabled: Bool = false {
@@ -902,6 +919,7 @@ final class ChatViewModel {
         UIApplication.shared.isIdleTimerDisabled = true
 
         let service = ContinuousVoiceService()
+        service.vadConfig = vadConfig  // apply persisted settings before starting
         service.onTranscription = { [weak self] text in
             self?.handleVoiceInput(text)
         }

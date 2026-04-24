@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     let appViewModel: AppViewModel
     let socketService: SocketService
+    let chatVM: ChatViewModel
     let onLogout: () -> Void
     var onServerSwitch: ((ServerProfile) -> Void)?
     var onClearCache: (() -> Void)?
@@ -80,6 +81,13 @@ struct SettingsView: View {
                     } label: {
                         Label("Clear Session Cache", systemImage: "trash")
                             .foregroundStyle(.red)
+                    }
+                }
+
+                // Voice Section
+                Section("Voice") {
+                    NavigationLink("Detection Settings") {
+                        VADSettingsView(chatVM: chatVM)
                     }
                 }
 

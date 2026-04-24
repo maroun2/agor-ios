@@ -10,6 +10,7 @@ struct SidebarView: View {
     @Binding var selectedSessionId: String?
     let appViewModel: AppViewModel
     let socketService: SocketService
+    let chatVM: ChatViewModel
     let onLogout: () -> Void
     let onServerSwitch: ((ServerProfile) -> Void)?
     var onClearCache: (() -> Void)?
@@ -130,6 +131,7 @@ struct SidebarView: View {
             SettingsView(
                 appViewModel: appViewModel,
                 socketService: socketService,
+                chatVM: chatVM,
                 onLogout: onLogout,
                 onServerSwitch: onServerSwitch,
                 onClearCache: onClearCache
