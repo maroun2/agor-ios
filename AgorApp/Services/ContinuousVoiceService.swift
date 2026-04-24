@@ -372,6 +372,12 @@ final class ContinuousVoiceService {
 
     // MARK: - Configuration
 
+    /// Direct access to VAD tuning constants — change at any time.
+    var vadConfig: VADConfig {
+        get { vad.config }
+        set { vad.config = newValue }
+    }
+
     func setSensitivity(_ sensitivity: Float) {
         vad.setSensitivity(sensitivity)
     }
