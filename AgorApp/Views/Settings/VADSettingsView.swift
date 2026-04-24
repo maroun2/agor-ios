@@ -90,9 +90,9 @@ struct VADSettingsView: View {
                 SliderRow(
                     label: "Rise speed",
                     value: $config.noiseFloorRiseAlpha,
-                    range: 0.001...0.200,
+                    range: 0...0.200,
                     step: 0.001,
-                    format: { String(format: "%.3f", $0) },
+                    format: { $0 == 0 ? "OFF" : String(format: "%.3f", $0) },
                     onEditingChanged: { commitConfig() }
                 )
 

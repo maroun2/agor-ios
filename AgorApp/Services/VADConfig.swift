@@ -23,7 +23,8 @@ struct VADConfig: Codable {
 
     /// Slow rise alpha during normal listening.
     /// Controls how fast the noise floor tracks upward ambient changes.
-    var noiseFloorRiseAlpha: Float = 0.02
+    /// 0 = floor never rises after calibration (safest for speech detection).
+    var noiseFloorRiseAlpha: Float = 0
 
     /// Fall alpha — how fast the floor drops when the room gets quieter.
     var noiseFloorFallAlpha: Float = 0.008
