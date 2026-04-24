@@ -115,7 +115,7 @@ final class VoiceActivityDetector {
             + "riseAlpha=\(config.noiseFloorRiseAlpha) fallAlpha=\(config.noiseFloorFallAlpha) "
             + "maxFloor=\(config.maxNoiseFloor) confirm=\(config.confirmationFrameCount)fr "
             + "hysteresis=\(config.hysteresisRatio) suppressGate=\(config.suppressRiseGateFraction) "
-            + "silenceDur=\(config.silenceDuration)s maxRec=\(config.maxRecordingDuration)s",
+            + "silenceDur=\(config.silenceDuration)s",
             level: .info, category: "Voice"
         )
     }
@@ -271,18 +271,12 @@ final class VoiceActivityDetector {
         guard state == .speechDetected else { return }
 
         let silenceElapsed = Date().timeIntervalSince(lastSoundTime)
-        let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
-
-        let silenceExpired = silenceElapsed >= config.silenceDuration
-        let maxDurationExpired = config.maxRecordingDuration > 0
-            && totalDuration >= config.maxRecordingDuration
-
-        if silenceExpired || maxDurationExpired {
-            let reason = maxDurationExpired && !silenceExpired ? "maxDuration" : "silence"
+        if silenceElapsed >= config.silenceDuration {
+            let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
             Task { @MainActor in
                 self.state = .listening
                 AppLogger.shared.log(
-                    "[VAD] 🔇 Speech END (\(reason): silence=\(String(format: "%.1f", silenceElapsed))s"
+                    "[VAD] 🔇 Speech END (silence=\(String(format: "%.1f", silenceElapsed))s"
                     + " total=\(String(format: "%.1f", totalDuration))s)",
                     level: .info, category: "Voice"
                 )
