@@ -177,6 +177,7 @@ final class VoiceActivityDetector {
         let endThreshold   = noiseFloor * endMultiplier
 
         // 3. Adaptive noise floor
+        let prevFloor = noiseFloor
         if state == .listening {
             let isCalibrating = calibrationFramesRemaining > 0
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
@@ -215,6 +216,33 @@ final class VoiceActivityDetector {
         }
 
         bufferCount += 1
+
+        // Sampled debug log: every 10th frame to keep volume manageable
+        if bufferCount % 10 == 0 {
+            let floorDelta = noiseFloor - prevFloor
+            AppLogger.shared.log(
+                "[VAD] "
+                + "\(String(format: "%.6f", rms)),"
+                + "\(String(format: "%.3f", emaAlpha)),"
+                + "\(String(format: "%.6f", smoothedEnergy)),"
+                + "\(String(format: "%.6f", prevFloor)),"
+                + "\(String(format: "%.6f", noiseFloor)),"
+                + "\(String(format: "%+.6f", floorDelta)),"
+                + "\(String(format: "%.6f", startThreshold)),"
+                + "\(String(format: "%.6f", endThreshold)),"
+                + "\(String(format: "%.6f", noiseFloor * config.suppressRiseGateMultiplier)),"
+                + "\(freezeFramesRemaining),"
+                + "\(calibrationFramesRemaining),"
+                + "\(state),"
+                + "\(String(format: "%.3f", config.noiseFloorRiseAlpha)),"
+                + "\(String(format: "%.3f", config.noiseFloorFallAlpha)),"
+                + "\(String(format: "%.1f", config.suppressRiseGateMultiplier)),"
+                + "\(String(format: "%.3f", config.maxNoiseFloor)),"
+                + "\(String(format: "%.2f", startMultiplier)),"
+                + "\(String(format: "%.2f", config.hysteresisRatio))",
+                level: .debug, category: "Voice"
+            )
+        }
 
         // 5. M-of-N speech confirmation
         //    Instead of requiring N consecutive frames above threshold (which resets
@@ -264,6 +292,15 @@ final class VoiceActivityDetector {
             lastSoundTime = Date()
         }
 
+        if state == .speechDetected && bufferCount % 10 == 0 {
+            let silenceDur = Date().timeIntervalSince(lastSoundTime)
+            AppLogger.shared.log(
+                "[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy))"
+                + " silence=\(String(format: "%.1f", silenceDur))s"
+                + " endThresh=\(String(format: "%.4f", endThreshold))",
+                level: .debug, category: "Voice"
+            )
+        }
     }
 
     private func startSilenceCheckTimer() {
