@@ -6,7 +6,7 @@
 set -e
 
 DEVICE_ID="00008101-001E38812660001E"
-PROFILE_UUID="a16db49a-836a-4b37-8680-3595eb5426a7"
+PROFILE_UUID="8c1ea10f-7151-4056-b2fe-7497b0114623"
 PROFILE="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
