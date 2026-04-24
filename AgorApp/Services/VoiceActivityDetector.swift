@@ -177,65 +177,87 @@ final class VoiceActivityDetector {
         let endThreshold   = noiseFloor * endMultiplier
 
         // 3. Adaptive noise floor
-        //    IMPORTANT: freeze must be activated BEFORE the floor adapts, on the
-        //    same frame. Otherwise the floor gets one free rise frame before freeze
-        //    kicks in — at high riseAlpha (0.2) that's a 20% jump toward speech.
+        let prevFloor = noiseFloor
+        var floorAction = "none" // tracks which branch executed
+
         if state == .listening {
             let isCalibrating = calibrationFramesRemaining > 0
             let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
 
             let suppressGate = noiseFloor * config.suppressRiseGateMultiplier
 
-            // Activate/refresh freeze when energy looks like speech.
-            // Two triggers: suppress gate (lower bar) and start threshold (higher bar).
-            // This ensures freeze covers the gap between gate and threshold too.
             if !isCalibrating && (smoothedEnergy >= suppressGate || smoothedEnergy > startThreshold) {
                 freezeFramesRemaining = config.noiseFloorFreezeFrames
             }
 
-            // Suppress rise when energy above gate OR during freeze holdover
             let suppressRise = !isCalibrating && (smoothedEnergy >= suppressGate || freezeFramesRemaining > 0)
 
             if smoothedEnergy > noiseFloor && !suppressRise {
                 noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
+                floorAction = isCalibrating ? "CAL_RISE(\(String(format: "%.3f", riseAlpha)))" : "RISE(\(String(format: "%.3f", riseAlpha)))"
             } else if smoothedEnergy < noiseFloor {
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
+                floorAction = "FALL"
+            } else {
+                floorAction = suppressRise ? "SUPPRESSED" : "FLAT"
             }
-            // else: energy >= floor but rise suppressed → floor stays flat
         } else if state == .speechDetected {
-            // During recording: only fall, never rise.
             if smoothedEnergy < noiseFloor {
                 noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
                     + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
+                floorAction = "REC_FALL"
+            } else {
+                floorAction = "REC_FLAT"
             }
         }
+
+        let preClampFloor = noiseFloor
         noiseFloor = max(noiseFloor, 0.0005)
         noiseFloor = min(noiseFloor, config.maxNoiseFloor)
+        if noiseFloor != preClampFloor {
+            floorAction += noiseFloor > preClampFloor ? "+CLAMP_MIN" : "+CLAMP_MAX"
+        }
 
-        // Decrement freeze AFTER it was used for this frame's floor adaptation
         if freezeFramesRemaining > 0 {
             freezeFramesRemaining -= 1
         }
 
-        // Publish to MainActor — energyThreshold drives the live threshold line in the waveform
         Task { @MainActor in
             self.currentAudioLevel = self.smoothedEnergy
             self.energyThreshold = self.noiseFloor * self.startMultiplier
         }
 
+        // CSV-style log: every frame, all values
+        // rms,ema,smoothed,prevFloor,newFloor,delta,startThr,endThr,gate,action,freeze,cal,state,cfg(riseα,fallα,calα,gateMult,maxFloor,atkα,relα,startMult,hystRatio)
         bufferCount += 1
-        if bufferCount % 100 == 0 {
-            AppLogger.shared.log(
-                "[VAD] 📊 smoothed=\(String(format: "%.4f", smoothedEnergy)) "
-                + "noise=\(String(format: "%.4f", noiseFloor)) "
-                + "start>\(String(format: "%.4f", startThreshold)) "
-                + "end>\(String(format: "%.4f", endThreshold)) "
-                + "freeze=\(freezeFramesRemaining) cal=\(calibrationFramesRemaining) "
-                + "riseα=\(String(format: "%.3f", config.noiseFloorRiseAlpha)) state=\(state)",
-                level: .info, category: "Voice"
-            )
-        }
+        let floorDelta = noiseFloor - prevFloor
+        AppLogger.shared.log(
+            "[VAD] "
+            + "\(String(format: "%.6f", rms)),"               // raw rms
+            + "\(String(format: "%.3f", emaAlpha)),"           // ema alpha used
+            + "\(String(format: "%.6f", smoothedEnergy)),"     // smoothed energy
+            + "\(String(format: "%.6f", prevFloor)),"          // floor before
+            + "\(String(format: "%.6f", noiseFloor)),"         // floor after
+            + "\(String(format: "%+.6f", floorDelta)),"        // floor change
+            + "\(String(format: "%.6f", startThreshold)),"     // start threshold
+            + "\(String(format: "%.6f", endThreshold)),"       // end threshold
+            + "\(String(format: "%.6f", noiseFloor * config.suppressRiseGateMultiplier))," // gate value
+            + "\(floorAction),"                                // which branch
+            + "\(freezeFramesRemaining),"                      // freeze remaining
+            + "\(calibrationFramesRemaining),"                 // cal remaining
+            + "\(state),"                                      // state
+            + "\(String(format: "%.3f", config.noiseFloorRiseAlpha)),"   // cfg: riseAlpha
+            + "\(String(format: "%.3f", config.noiseFloorFallAlpha)),"   // cfg: fallAlpha
+            + "\(String(format: "%.3f", config.noiseFloorCalibrationAlpha)),"  // cfg: calAlpha
+            + "\(String(format: "%.1f", config.suppressRiseGateMultiplier)),"  // cfg: gateMult
+            + "\(String(format: "%.3f", config.maxNoiseFloor)),"         // cfg: maxFloor
+            + "\(String(format: "%.2f", config.emaAttackAlpha)),"        // cfg: atkAlpha
+            + "\(String(format: "%.2f", config.emaReleaseAlpha)),"       // cfg: relAlpha
+            + "\(String(format: "%.2f", startMultiplier)),"              // derived startMult
+            + "\(String(format: "%.2f", config.hysteresisRatio))",       // cfg: hystRatio
+            level: .debug, category: "Voice"
+        )
 
         // 5. M-of-N speech confirmation
         //    Instead of requiring N consecutive frames above threshold (which resets
