@@ -17,6 +17,7 @@
 		1074F181D730E0C247CF54BB /* Streaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */; };
 		14E11B0726D82E3B5B127D78 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65ACB752D15547530061855 /* ChatViewModel.swift */; };
 		16C751D90D170EE110B7030E /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04685C617F12BA61D59F5298 /* VoiceActivityDetector.swift */; };
+		7EB4A23510C8425C844CB195 /* VADConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */; };
 		171444BE6629F435A0E425DD /* StreamingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD882855177D24609BBFF09 /* StreamingService.swift */; };
 		1A3718A7729A34DE78A08914 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95311D8A9520E21301A4BD82 /* MessageBubble.swift */; };
 		1BC915EC35578109B1FEBEC7 /* TextBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3F12684A7B03E7CCD7FBAE /* TextBlockView.swift */; };
@@ -89,6 +90,7 @@
 
 /* Begin PBXFileReference section */
 		04685C617F12BA61D59F5298 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivityDetector.swift; sourceTree = "<group>"; };
+		2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VADConfig.swift; sourceTree = "<group>"; };
 		0B95F626F1D7EE8E68536C5F /* TextToSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextToSpeechService.swift; sourceTree = "<group>"; };
 		0F3B3F9438460323CF0E66A7 /* PermissionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCardView.swift; sourceTree = "<group>"; };
 		121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewModel.swift; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 				0B95F626F1D7EE8E68536C5F /* TextToSpeechService.swift */,
 				C072427813E19B8BF1E22089 /* TranscriptionService.swift */,
 				04685C617F12BA61D59F5298 /* VoiceActivityDetector.swift */,
+			2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -552,6 +555,7 @@
 				35DFECAA4E833916D7B868F2 /* TranscriptionService.swift in Sources */,
 				E3E39E9B1BBAF2D1B46CCB2D /* User.swift in Sources */,
 				16C751D90D170EE110B7030E /* VoiceActivityDetector.swift in Sources */,
+				7EB4A23510C8425C844CB195 /* VADConfig.swift in Sources */,
 				8250904F41044E1838760EC0 /* Worktree.swift in Sources */,
 				246D9FCC47F6980198DEE416 /* WorktreeRow.swift in Sources */,
 			);
