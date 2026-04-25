@@ -118,13 +118,21 @@ private struct InlineLinkedTextView: View {
 
         for link in sessionLinks {
             // Resolve session name: try exact match, then prefix match
-            let name = knownSessionNames[link.hash]
+            let resolvedName = knownSessionNames[link.hash]
                 ?? knownSessionNames.first(where: { $0.key.hasPrefix(link.hash) })?.value
-                ?? String(link.hash.prefix(8))
+            let label: String
+            if let resolvedName {
+                label = resolvedName
+            } else if let slug = link.boardSlug {
+                label = "\(slug) · \(link.hash.prefix(8))"
+            } else {
+                label = String(link.hash.prefix(8))
+            }
+            let icon = link.boardSlug != nil ? "link" : "bubble.left.and.bubble.right"
             chips.append(LinkChip(
                 id: "session-\(link.hash)",
-                icon: "bubble.left.and.bubble.right",
-                label: name,
+                icon: icon,
+                label: label,
                 color: .purple,
                 action: { onOpenSession?(link.hash) }
             ))
