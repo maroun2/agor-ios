@@ -8,7 +8,7 @@ struct VoiceFloatingButton: View {
         switch voiceState {
         case .listening, .recording:
             return .blue
-        case .transcribing, .sending, .speaking:
+        case .calibrating, .transcribing, .sending, .speaking:
             return .orange
         case .paused, .disabled:
             return .gray
@@ -19,6 +19,8 @@ struct VoiceFloatingButton: View {
         switch voiceState {
         case .listening, .recording:
             return "mic.fill"
+        case .calibrating:
+            return "waveform"
         case .speaking:
             return "speaker.wave.2.fill"
         case .transcribing, .sending:
