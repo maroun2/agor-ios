@@ -138,6 +138,11 @@ struct PromptInputBar: View {
                         Text("Loading voice model…")
                             .foregroundStyle(.secondary)
                     }
+                case .calibrating:
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Calibrating…")
+                        .foregroundStyle(.secondary)
                 case .paused:
                     Image(systemName: "mic.fill")
                         .foregroundStyle(.secondary)

@@ -53,6 +53,7 @@ final class VoiceActivityDetector {
     // Callbacks
     var onSpeechStart: (() -> Void)?
     var onSpeechEnd: (() -> Void)?
+    var onCalibrationComplete: (() -> Void)?
 
     // MARK: - Configuration
 
@@ -253,6 +254,11 @@ final class VoiceActivityDetector {
                 calibrationFramesRemaining -= 1
                 recentAbove[frameIndex % Self.ringBufferSize] = false
                 frameIndex += 1
+                if calibrationFramesRemaining == 0 {
+                    Task { @MainActor in
+                        self.onCalibrationComplete?()
+                    }
+                }
             } else {
                 let isAbove = smoothedEnergy > startThreshold
                 recentAbove[frameIndex % Self.ringBufferSize] = isAbove

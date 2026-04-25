@@ -5,6 +5,7 @@ import AVFoundation
 final class ContinuousVoiceService {
     enum State {
         case disabled
+        case calibrating    // VAD calibrating noise floor — user should stay quiet
         case listening      // VAD active, waiting for speech
         case paused         // VAD stopped while agent is running
         case recording      // User speaking, capturing
@@ -88,18 +89,26 @@ final class ContinuousVoiceService {
         // Play "ready" beep BEFORE starting VAD — the mic picks up the beep
         // through the speaker, which poisons calibration (floor rises to beep
         // energy ~0.008, making the threshold unreachable for normal speech).
-        state = .listening
+        state = .calibrating
         AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady", level: .info, category: "Voice")
         playTone(frequency: 1046, duration: 0.08)  // C6 — "ready" ding
 
-        // Delay VAD + pre-roll start until beep has fully decayed.
+        // Set up calibration-complete callback — transitions to .listening only
+        // after floor has converged, so the user sees "Calibrating..." and waits.
+        vad.onCalibrationComplete = { [weak self] in
+            guard let self, self.state == .calibrating else { return }
+            self.state = .listening
+            self.startPreRollRecorder()
+            AppLogger.shared.log("[Voice] ✅ Calibration done — now listening", level: .info, category: "Voice")
+        }
+
+        // Delay VAD start until beep has fully decayed.
         // Beep = 0.08s tone + 0.15s engine teardown; 0.3s gives safe margin.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, self.state == .listening else { return }
+            guard let self, self.state == .calibrating else { return }
             do {
                 try self.vad.startListening()
-                self.startPreRollRecorder()
-                AppLogger.shared.log("[Voice] Continuous voice mode started (post-beep)", level: .info, category: "Voice")
+                AppLogger.shared.log("[Voice] VAD started — calibrating noise floor", level: .info, category: "Voice")
             } catch {
                 AppLogger.shared.log("[Voice] ❌ VAD start failed: \(error.localizedDescription)", level: .error, category: "Voice")
                 self.state = .disabled
