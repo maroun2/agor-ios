@@ -32,7 +32,9 @@ struct VADConfig: Codable, Equatable {
     /// Hard cap on the noise floor.
     /// Prevents very loud sustained background from raising the threshold so high that
     /// speech can never be detected.
-    var maxNoiseFloor: Float = 0.010
+    /// At 0.005 with startMultiplier 2.25, threshold caps at ~0.011 — normal speech
+    /// (0.015+) still triggers easily.
+    var maxNoiseFloor: Float = 0.005
 
     /// Frames after an above-threshold detection during which floor rise is frozen.
     /// Prevents the floor from chasing speech energy during brief pauses between syllables.
@@ -42,8 +44,10 @@ struct VADConfig: Codable, Equatable {
     // MARK: - Calibration
 
     /// Frames during which speech detection is suppressed so the floor can converge.
-    /// ~1.3s at 47fps. Set to 0 with skipCalibration() when resuming.
-    var calibrationFrameCount: Int = 60
+    /// 20 frames ≈ 0.4s at 47fps — enough for the floor to settle on ambient noise
+    /// but short enough that the user hasn't started speaking yet.
+    /// Set to 0 with skipCalibration() when resuming.
+    var calibrationFrameCount: Int = 20
 
     // MARK: - Speech confirmation (M-of-N)
 
