@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import FluidAudio
 
 @Observable
 final class VoiceActivityDetector {
@@ -10,67 +11,74 @@ final class VoiceActivityDetector {
     }
 
     var state: State = .idle
-    // Observable properties — updated on MainActor, safe for SwiftUI binding
+    /// Speech probability from FluidAudio (0.0–1.0), drives AudioLevelBar.
     var currentAudioLevel: Float = 0.0
-    var energyThreshold: Float = 0.0   // Speech-start threshold (live, for waveform line)
+    /// Current FluidAudio threshold — drives AudioLevelBar threshold line.
+    var energyThreshold: Float = 0.6
 
-    private var audioEngine: AVAudioEngine?
-    private var inputNode: AVAudioInputNode?
-
-    // All tunable constants — change at any time, takes effect next audio frame.
-    // @ObservationIgnored: config is read on the audio thread and must not be
-    // wrapped by the @Observable macro's MainActor-locked access tracking.
+    // All tunable constants — read from audio/processing paths.
     @ObservationIgnored var config = VADConfig()
 
-    // VAD sensitivity (0.0 low → 1.0 high) — drives startMultiplier via config
+    // VAD sensitivity (0.0 low → 1.0 high)
     private(set) var sensitivityLevel: Float = 0.5
 
-    // Derived multipliers
-    private var startMultiplier: Float { config.startMultiplier(for: sensitivityLevel) }
-    private var endMultiplier: Float { startMultiplier * config.hysteresisRatio }
+    // FluidAudio model
+    @ObservationIgnored private var vadManager: VadManager?
 
-    // --- Audio-thread-only state ---
-    // @ObservationIgnored prevents race with @Observable's MainActor-locked access tracking
+    // Audio engine
+    @ObservationIgnored private var audioEngine: AVAudioEngine?
+    @ObservationIgnored private var inputNode: AVAudioInputNode?
 
-    @ObservationIgnored private var smoothedEnergy: Float = 0.0
-    @ObservationIgnored private var noiseFloor: Float = 0.001
-    @ObservationIgnored private var calibrationFramesRemaining: Int = 0
+    // Audio resampling: device rate (44.1/48kHz) → 16kHz mono Float32
+    @ObservationIgnored private var audioConverter: AVAudioConverter?
+    @ObservationIgnored private var targetFormat: AVAudioFormat?
 
-    // M-of-N confirmation: ring buffer of recent above-threshold results
-    private static let ringBufferSize = 30
-    @ObservationIgnored private var recentAbove: [Bool] = Array(repeating: false, count: ringBufferSize)
-    @ObservationIgnored private var frameIndex: Int = 0
+    // Chunk accumulation: 1024-sample tap buffers → 4096-sample FluidAudio chunks
+    private static let chunkSize = 4096
+    @ObservationIgnored private var chunkBuffer: [Float] = []
 
-    // Noise floor freeze: prevent floor rise for N frames after any above-threshold frame.
-    // Breaks the feedback loop where the floor chases speech during brief inter-syllable dips.
-    @ObservationIgnored private var freezeFramesRemaining: Int = 0
+    // AsyncStream bridge: audio tap (real-time) → async processing task
+    @ObservationIgnored private var streamContinuation: AsyncStream<[Float]>.Continuation?
+    @ObservationIgnored private var processingTask: Task<Void, Never>?
 
-    private var lastSoundTime: Date = Date()
-    private var speechStartTime: Date?
-    private var silenceCheckTimer: Timer?
-    private var bufferCount: Int = 0
+    // Silence debounce timer
+    @ObservationIgnored private var silenceTimer: Timer?
 
     // Callbacks
     var onSpeechStart: (() -> Void)?
     var onSpeechEnd: (() -> Void)?
     var onCalibrationComplete: (() -> Void)?
 
+    // MARK: - Model Initialization
+
+    /// Download/load Silero VAD CoreML model (~2MB, runs on Neural Engine).
+    /// Call once before startListening().
+    func initializeModel() async throws {
+        let threshold = config.threshold
+        vadManager = try await VadManager(config: FluidAudio.VadConfig(defaultThreshold: threshold))
+        AppLogger.shared.log("[VAD] FluidAudio Silero model loaded (threshold=\(String(format: "%.2f", threshold)))", level: .info, category: "Voice")
+    }
+
     // MARK: - Configuration
 
     func setSensitivity(_ sensitivity: Float) {
         sensitivityLevel = max(0.0, min(1.0, sensitivity))
+        config.threshold = VADConfig.threshold(for: sensitivityLevel)
+        energyThreshold = config.threshold
         AppLogger.shared.log(
-            "[VAD] Sensitivity \(String(format: "%.2f", sensitivityLevel)) "
-            + "→ startMult=\(String(format: "%.2f", startMultiplier)) "
-            + "endMult=\(String(format: "%.2f", endMultiplier))",
+            "[VAD] Sensitivity \(String(format: "%.2f", sensitivityLevel))"
+            + " → threshold=\(String(format: "%.2f", config.threshold))",
             level: .debug, category: "Voice"
         )
     }
 
-    // MARK: - Start/Stop
+    // MARK: - Start / Stop
 
     func startListening() throws {
         guard state == .idle else { return }
+        guard vadManager != nil else {
+            throw VADError.modelNotLoaded
+        }
 
         let session = AVAudioSession.sharedInstance()
 
@@ -99,240 +107,221 @@ final class VoiceActivityDetector {
         )
         try session.setActive(true)
 
-        // Reset adaptive state so we calibrate fresh on each start
-        smoothedEnergy = 0.0
-        noiseFloor = 0.001
-        recentAbove = Array(repeating: false, count: Self.ringBufferSize)
-        frameIndex = 0
-        freezeFramesRemaining = 0
-        calibrationFramesRemaining = config.calibrationFrameCount
-        energyThreshold = noiseFloor * startMultiplier
+        // Reset state
+        chunkBuffer = []
+        energyThreshold = config.threshold
 
+        // Setup audio engine
         audioEngine = AVAudioEngine()
         guard let engine = audioEngine else { return }
 
         inputNode = engine.inputNode
         guard let input = inputNode else { return }
 
-        let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        let inputFormat = input.outputFormat(forBus: 0)
+
+        // Setup resampler: device format → 16kHz mono Float32 (FluidAudio requirement)
+        targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            channels: 1,
+            interleaved: false
+        )!
+        audioConverter = AVAudioConverter(from: inputFormat, to: targetFormat!)
+
+        // Create AsyncStream bridge: audio tap pushes chunks, processing task consumes
+        let (stream, continuation) = AsyncStream<[Float]>.makeStream()
+        self.streamContinuation = continuation
+
+        // Start FluidAudio streaming processing task
+        startProcessingTask(stream: stream)
+
+        // Install audio tap — resamples and accumulates chunks
+        input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             self?.processAudioBuffer(buffer)
         }
 
         try engine.start()
         state = .listening
 
-        startSilenceCheckTimer()
-        let cfgLog = "[VAD] Started"
-            + " emaAtk=\(config.emaAttackAlpha)"
-            + " emaRel=\(config.emaReleaseAlpha)"
-            + " confirm=\(config.confirmationRequired)of\(config.confirmationWindow)"
-            + " freeze=\(config.noiseFloorFreezeFrames)fr"
-            + " riseAlpha=\(config.noiseFloorRiseAlpha)"
-            + " fallAlpha=\(config.noiseFloorFallAlpha)"
-            + " maxFloor=\(config.maxNoiseFloor)"
-            + " hysteresis=\(config.hysteresisRatio)"
-            + " suppressGate=\(config.suppressRiseGateMultiplier)×floor"
-            + " silenceDur=\(config.silenceDuration)s"
-        AppLogger.shared.log(cfgLog, level: .info, category: "Voice")
+        // No calibration needed — FluidAudio model is ready immediately
+        Task { @MainActor in
+            self.onCalibrationComplete?()
+        }
+
+        AppLogger.shared.log(
+            "[VAD] FluidAudio streaming started"
+            + " (threshold=\(String(format: "%.2f", config.threshold))"
+            + ", silenceDur=\(String(format: "%.1f", config.silenceDuration))s)",
+            level: .info, category: "Voice"
+        )
     }
 
-    /// Call immediately after startListening() when resuming — noise floor already calibrated.
-    func skipCalibration() {
-        calibrationFramesRemaining = 0
-    }
+    /// No-op — FluidAudio needs no calibration. Kept for ContinuousVoiceService compat.
+    func skipCalibration() {}
 
     func stopListening() {
         guard state != .idle else { return }
 
-        silenceCheckTimer?.invalidate()
-        silenceCheckTimer = nil
+        cancelSilenceTimer()
 
+        // Stop processing pipeline
+        processingTask?.cancel()
+        processingTask = nil
+        streamContinuation?.finish()
+        streamContinuation = nil
+
+        // Stop audio engine
         inputNode?.removeTap(onBus: 0)
         audioEngine?.stop()
         audioEngine = nil
         inputNode = nil
+        audioConverter = nil
+        chunkBuffer = []
 
         state = .idle
         AppLogger.shared.log("[VAD] Stopped listening", level: .info, category: "Voice")
     }
 
-    // MARK: - Audio Processing
+    // MARK: - Audio Processing (Audio Thread → AsyncStream)
 
+    /// Called on audio render thread. Resamples to 16kHz, accumulates chunks,
+    /// yields 4096-sample arrays to the AsyncStream for FluidAudio processing.
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let floatData = buffer.floatChannelData?[0] else { return }
-        let frameLength = Int(buffer.frameLength)
+        guard let converter = audioConverter, let targetFmt = targetFormat else { return }
 
-        // 1. RMS for this frame
-        var sum: Float = 0
-        for i in 0..<frameLength {
-            sum += floatData[i] * floatData[i]
-        }
-        let rms = sqrt(sum / Float(frameLength))
+        // Calculate output frame count for 16kHz
+        let ratio = 16000.0 / buffer.format.sampleRate
+        let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+        guard frameCount > 0,
+              let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFmt, frameCapacity: frameCount) else { return }
 
-        // 2. Asymmetric EMA: fast attack / slow release
-        let emaAlpha = rms > smoothedEnergy ? config.emaAttackAlpha : config.emaReleaseAlpha
-        smoothedEnergy = emaAlpha * rms + (1.0 - emaAlpha) * smoothedEnergy
-
-        let startThreshold = noiseFloor * startMultiplier
-        let endThreshold   = noiseFloor * endMultiplier
-
-        // 3. Adaptive noise floor
-        let prevFloor = noiseFloor
-        if state == .listening {
-            let isCalibrating = calibrationFramesRemaining > 0
-            let riseAlpha = isCalibrating ? config.noiseFloorCalibrationAlpha : config.noiseFloorRiseAlpha
-
-            let suppressGate = noiseFloor * config.suppressRiseGateMultiplier
-
-            if !isCalibrating && (smoothedEnergy >= suppressGate || smoothedEnergy > startThreshold) {
-                freezeFramesRemaining = config.noiseFloorFreezeFrames
+        // Resample — inputBlock provides source data exactly once
+        var inputConsumed = false
+        var convError: NSError?
+        let status = converter.convert(to: convertedBuffer, error: &convError) { _, outStatus in
+            if inputConsumed {
+                outStatus.pointee = .noDataNow
+                return nil
             }
-
-            let suppressRise = !isCalibrating && (smoothedEnergy >= suppressGate || freezeFramesRemaining > 0)
-
-            if smoothedEnergy > noiseFloor && !suppressRise {
-                noiseFloor = riseAlpha * smoothedEnergy + (1.0 - riseAlpha) * noiseFloor
-            } else if smoothedEnergy < noiseFloor {
-                noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
-                    + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
-            }
-        } else if state == .speechDetected {
-            if smoothedEnergy < noiseFloor {
-                noiseFloor = config.noiseFloorFallAlpha * smoothedEnergy
-                    + (1.0 - config.noiseFloorFallAlpha) * noiseFloor
-            }
+            inputConsumed = true
+            outStatus.pointee = .haveData
+            return buffer
         }
 
-        noiseFloor = max(noiseFloor, 0.0005)
-        noiseFloor = min(noiseFloor, config.maxNoiseFloor)
+        guard status != .error,
+              let floatData = convertedBuffer.floatChannelData?[0] else { return }
 
-        if freezeFramesRemaining > 0 {
-            freezeFramesRemaining -= 1
-        }
+        // Copy resampled samples into accumulation buffer
+        let samples = Array(UnsafeBufferPointer(start: floatData, count: Int(convertedBuffer.frameLength)))
+        chunkBuffer.append(contentsOf: samples)
 
-        Task { @MainActor in
-            self.currentAudioLevel = self.smoothedEnergy
-            self.energyThreshold = self.noiseFloor * self.startMultiplier
-        }
-
-        bufferCount += 1
-
-        // Sampled debug log: every 10th frame to keep volume manageable
-        if bufferCount % 10 == 0 {
-            let floorDelta = noiseFloor - prevFloor
-            AppLogger.shared.log(
-                "[VAD] "
-                + "\(String(format: "%.6f", rms)),"
-                + "\(String(format: "%.3f", emaAlpha)),"
-                + "\(String(format: "%.6f", smoothedEnergy)),"
-                + "\(String(format: "%.6f", prevFloor)),"
-                + "\(String(format: "%.6f", noiseFloor)),"
-                + "\(String(format: "%+.6f", floorDelta)),"
-                + "\(String(format: "%.6f", startThreshold)),"
-                + "\(String(format: "%.6f", endThreshold)),"
-                + "\(String(format: "%.6f", noiseFloor * config.suppressRiseGateMultiplier)),"
-                + "\(freezeFramesRemaining),"
-                + "\(calibrationFramesRemaining),"
-                + "\(state),"
-                + "\(String(format: "%.3f", config.noiseFloorRiseAlpha)),"
-                + "\(String(format: "%.3f", config.noiseFloorFallAlpha)),"
-                + "\(String(format: "%.1f", config.suppressRiseGateMultiplier)),"
-                + "\(String(format: "%.3f", config.maxNoiseFloor)),"
-                + "\(String(format: "%.2f", startMultiplier)),"
-                + "\(String(format: "%.2f", config.hysteresisRatio))",
-                level: .debug, category: "Voice"
-            )
-        }
-
-        // 5. M-of-N speech confirmation
-        //    Instead of requiring N consecutive frames above threshold (which resets
-        //    on any brief dip), require M frames above threshold within a window of N.
-        //    This tolerates natural speech variability and inter-syllable pauses.
-        if state == .listening {
-            if calibrationFramesRemaining > 0 {
-                calibrationFramesRemaining -= 1
-                recentAbove[frameIndex % Self.ringBufferSize] = false
-                frameIndex += 1
-                if calibrationFramesRemaining == 0 {
-                    Task { @MainActor in
-                        self.onCalibrationComplete?()
-                    }
-                }
-            } else {
-                let isAbove = smoothedEnergy > startThreshold
-                recentAbove[frameIndex % Self.ringBufferSize] = isAbove
-                frameIndex += 1
-
-                // Count hits in recent window
-                let window = min(config.confirmationWindow, Self.ringBufferSize, frameIndex)
-                var hits = 0
-                for i in (frameIndex - window)..<frameIndex {
-                    if recentAbove[i % Self.ringBufferSize] { hits += 1 }
-                }
-
-                if hits >= config.confirmationRequired {
-                    // Reset ring for next detection
-                    recentAbove = Array(repeating: false, count: Self.ringBufferSize)
-                    frameIndex = 0
-                    freezeFramesRemaining = 0
-
-                    Task { @MainActor in
-                        self.speechStartTime = Date()
-                        self.state = .speechDetected
-                        AppLogger.shared.log(
-                            "[VAD] 🎤 Speech START (\(hits)/\(window) frames"
-                            + " smoothed=\(String(format: "%.4f", self.smoothedEnergy))"
-                            + " > threshold=\(String(format: "%.4f", startThreshold))"
-                            + " noise=\(String(format: "%.4f", self.noiseFloor)))",
-                            level: .info, category: "Voice"
-                        )
-                        self.onSpeechStart?()
-                    }
-                }
-            }
-        }
-
-        // 6. Update silence tracking
-        if smoothedEnergy > endThreshold {
-            lastSoundTime = Date()
-        }
-
-        if state == .speechDetected && bufferCount % 10 == 0 {
-            let silenceDur = Date().timeIntervalSince(lastSoundTime)
-            AppLogger.shared.log(
-                "[VAD] 🎙️ Recording: smoothed=\(String(format: "%.4f", smoothedEnergy))"
-                + " silence=\(String(format: "%.1f", silenceDur))s"
-                + " endThresh=\(String(format: "%.4f", endThreshold))",
-                level: .debug, category: "Voice"
-            )
+        // Yield complete 4096-sample chunks to processing task
+        while chunkBuffer.count >= Self.chunkSize {
+            let chunk = Array(chunkBuffer.prefix(Self.chunkSize))
+            chunkBuffer.removeFirst(Self.chunkSize)
+            streamContinuation?.yield(chunk)
         }
     }
 
-    private func startSilenceCheckTimer() {
+    // MARK: - FluidAudio Streaming Task
+
+    private func startProcessingTask(stream: AsyncStream<[Float]>) {
+        guard let manager = vadManager else { return }
+
+        processingTask = Task { [weak self] in
+            var streamState = await manager.makeStreamState()
+
+            for await chunk in stream {
+                guard !Task.isCancelled else { break }
+                guard let self else { break }
+
+                do {
+                    let result = try await manager.processStreamingChunk(
+                        chunk,
+                        state: streamState,
+                        config: .default,
+                        returnSeconds: true,
+                        timeResolution: 2
+                    )
+                    streamState = result.state
+
+                    // Update probability display
+                    await MainActor.run {
+                        self.currentAudioLevel = result.probability
+                    }
+
+                    // Handle speech events
+                    if let event = result.event {
+                        await MainActor.run {
+                            self.handleVadEvent(event)
+                        }
+                    }
+                } catch {
+                    AppLogger.shared.log(
+                        "[VAD] Streaming chunk error: \(error.localizedDescription)",
+                        level: .error, category: "Voice"
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - VAD Event Handling (MainActor)
+
+    private func handleVadEvent(_ event: VadEvent) {
+        switch event.kind {
+        case .speechStart:
+            // Cancel any pending silence timer — speech resumed
+            cancelSilenceTimer()
+
+            if state == .listening {
+                state = .speechDetected
+                AppLogger.shared.log(
+                    "[VAD] 🎤 Speech START (prob=\(String(format: "%.2f", currentAudioLevel)))",
+                    level: .info, category: "Voice"
+                )
+                onSpeechStart?()
+            }
+
+        case .speechEnd:
+            // Debounce: wait silenceDuration before propagating onSpeechEnd.
+            // FluidAudio may fire speechEnd during brief inter-syllable pauses;
+            // this prevents premature cutoff for conversational speech.
+            if state == .speechDetected {
+                startSilenceTimer()
+            }
+        }
+    }
+
+    // MARK: - Silence Debounce
+
+    private func startSilenceTimer() {
+        cancelSilenceTimer()
+        let duration = config.silenceDuration
         DispatchQueue.main.async { [weak self] in
-            self?.silenceCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.checkForSilence()
-            }
-        }
-    }
-
-    private func checkForSilence() {
-        guard state == .speechDetected else { return }
-
-        let silenceElapsed = Date().timeIntervalSince(lastSoundTime)
-        if silenceElapsed >= config.silenceDuration {
-            let totalDuration = Date().timeIntervalSince(speechStartTime ?? Date())
-            Task { @MainActor in
+            self?.silenceTimer = Timer.scheduledTimer(
+                withTimeInterval: duration,
+                repeats: false
+            ) { [weak self] _ in
+                guard let self, self.state == .speechDetected else { return }
                 self.state = .listening
                 AppLogger.shared.log(
-                    "[VAD] 🔇 Speech END (silence=\(String(format: "%.1f", silenceElapsed))s"
-                    + " total=\(String(format: "%.1f", totalDuration))s)",
+                    "[VAD] 🔇 Speech END (debounce=\(String(format: "%.1f", duration))s)",
                     level: .info, category: "Voice"
                 )
                 self.onSpeechEnd?()
             }
         }
+        AppLogger.shared.log(
+            "[VAD] ⏱️ Silence timer started (\(String(format: "%.1f", duration))s)",
+            level: .debug, category: "Voice"
+        )
+    }
+
+    private func cancelSilenceTimer() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
     }
 }
 
@@ -340,11 +329,14 @@ final class VoiceActivityDetector {
 
 enum VADError: LocalizedError {
     case microphonePermissionDenied
+    case modelNotLoaded
 
     var errorDescription: String? {
         switch self {
         case .microphonePermissionDenied:
             return "Microphone permission denied. Please enable microphone access in Settings."
+        case .modelNotLoaded:
+            return "VAD model not loaded. Call initializeModel() first."
         }
     }
 }

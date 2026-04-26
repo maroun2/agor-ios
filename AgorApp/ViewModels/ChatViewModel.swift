@@ -935,6 +935,7 @@ final class ChatViewModel {
         Task {
             do {
                 try await service.transcription.initialize()
+                try await service.vad.initializeModel()
                 try service.startListening()
                 AppLogger.shared.log("[Voice] Voice mode enabled", level: .info, category: "Voice")
                 // If agent is already working when voice is opened, announce it immediately

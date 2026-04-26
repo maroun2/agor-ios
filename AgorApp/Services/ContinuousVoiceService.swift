@@ -86,29 +86,27 @@ final class ContinuousVoiceService {
     func startListening() throws {
         guard state == .disabled else { return }
 
-        // Play "ready" beep BEFORE starting VAD — the mic picks up the beep
-        // through the speaker, which poisons calibration (floor rises to beep
-        // energy ~0.008, making the threshold unreachable for normal speech).
+        // Play "ready" beep, then start VAD.
+        // FluidAudio's neural model ignores beep audio (not speech), so no delay needed
+        // for calibration. Short delay still avoids beep appearing in pre-roll recording.
         state = .calibrating
         AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady", level: .info, category: "Voice")
         playTone(frequency: 1046, duration: 0.08)  // C6 — "ready" ding
 
-        // Set up calibration-complete callback — transitions to .listening only
-        // after floor has converged, so the user sees "Calibrating..." and waits.
+        // FluidAudio fires onCalibrationComplete immediately (no calibration needed).
         vad.onCalibrationComplete = { [weak self] in
             guard let self, self.state == .calibrating else { return }
             self.state = .listening
             self.startPreRollRecorder()
-            AppLogger.shared.log("[Voice] ✅ Calibration done — now listening", level: .info, category: "Voice")
+            AppLogger.shared.log("[Voice] ✅ FluidAudio ready — now listening", level: .info, category: "Voice")
         }
 
-        // Delay VAD start until beep has fully decayed.
-        // Beep = 0.08s tone + 0.15s engine teardown; 0.3s gives safe margin.
+        // Brief delay so the beep doesn't land in the pre-roll recording
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.state == .calibrating else { return }
             do {
                 try self.vad.startListening()
-                AppLogger.shared.log("[Voice] VAD started — calibrating noise floor", level: .info, category: "Voice")
+                AppLogger.shared.log("[Voice] VAD started (FluidAudio Silero)", level: .info, category: "Voice")
             } catch {
                 AppLogger.shared.log("[Voice] ❌ VAD start failed: \(error.localizedDescription)", level: .error, category: "Voice")
                 self.state = .disabled
@@ -150,7 +148,6 @@ final class ContinuousVoiceService {
     func resumeListening() throws {
         guard isPaused else { return }
         try vad.startListening()
-        vad.skipCalibration()  // Noise floor already calibrated — detect speech immediately
         isPaused = false
         state = .listening
         startPreRollRecorder()
