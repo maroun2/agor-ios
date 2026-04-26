@@ -349,7 +349,9 @@ final class ContinuousVoiceService {
                 onTranscription?(cleanedText)
 
                 // Auto-pause after sending — wait for agent to respond.
-                // updateVoiceListening() will resume once session goes idle.
+                // Stop VAD so it doesn't pick up the "sent" beep or TTS and
+                // get stuck in speechDetected. resumeListening() restarts it.
+                vad.stopListening()
                 isPaused = true
                 state = .paused
                 AppLogger.shared.log("[Voice] ⏸️ STATE: sending → paused (waiting for agent)", level: .info, category: "Voice")
