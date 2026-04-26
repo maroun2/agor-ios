@@ -61,6 +61,7 @@
 		96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */; };
 		A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D605F6B723D6EA97E1A72D /* AgentIcon.swift */; };
 		A64D1F14CDC83982EFE2519C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5F1BBED22797D1140CCECD58 /* WhisperKit */; };
+		F1A2B3C4D5E6F7081234ABCD /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F1A2B3C4D5E6F708ABCD1234 /* FluidAudio */; };
 		A6D79B6661690381A79C5F6D /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = CCF002A5A41C9F07F7F17C60 /* Textual */; };
 		A744EEB8F99656B7E1B27398 /* InputRequestCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654C55C11D4BB92250AF1C75 /* InputRequestCardView.swift */; };
 		A92A5AB97103797A6C64970F /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F78F2D50983FDDBFE11F828 /* AppLogger.swift */; };
@@ -178,6 +179,7 @@
 				C836E615CD25F252F2639596 /* SocketIO in Frameworks */,
 				7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */,
 				A64D1F14CDC83982EFE2519C /* WhisperKit in Frameworks */,
+				F1A2B3C4D5E6F7081234ABCD /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -416,6 +418,7 @@
 				D1D99525620248594DB52F1B /* SocketIO */,
 				B88AC8BE0A5D228075CE47D6 /* Highlightr */,
 				5F1BBED22797D1140CCECD58 /* WhisperKit */,
+				F1A2B3C4D5E6F708ABCD1234 /* FluidAudio */,
 			);
 			productName = AgorApp;
 			productReference = 9D7E4A344E99EB593C21C406 /* AgorApp.app */;
@@ -449,6 +452,7 @@
 				8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
 				E57F1B0612ED13FD2B432B7D /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				ABC65789A1D3FDBFE299A3DF /* XCRemoteSwiftPackageReference "textual" */,
+				F1A2B3C4D5E6F708DEAD0001 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D00AFC90AD6CE126C9E4E2F9 /* Products */;
@@ -783,6 +787,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		F1A2B3C4D5E6F708DEAD0001 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.12.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -805,6 +817,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8CC916FB74407D98CC845B05 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
 			productName = SocketIO;
+		};
+		F1A2B3C4D5E6F708ABCD1234 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1A2B3C4D5E6F708DEAD0001 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

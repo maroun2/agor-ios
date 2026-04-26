@@ -6,7 +6,7 @@ struct AudioLevelBar: View {
     let isRecording: Bool
 
     private let historyCount = 50
-    private let maxScale: Float = 0.02  // Calibrated for typical mic RMS (0.001–0.015 ambient, 0.02–0.08 voice)
+    private let maxScale: Float = 1.0  // FluidAudio probability is 0.0–1.0
 
     @State private var history: [Float] = Array(repeating: 0, count: 50)
 
@@ -15,7 +15,7 @@ struct AudioLevelBar: View {
             let barW = size.width / CGFloat(historyCount)
 
             for (i, level) in history.enumerated() {
-                let normalized = CGFloat(sqrt(min(1.0, level / maxScale)))
+                let normalized = CGFloat(min(1.0, level / maxScale))
                 let barH = max(2, normalized * size.height)
                 let rect = CGRect(
                     x: CGFloat(i) * barW,
@@ -31,7 +31,7 @@ struct AudioLevelBar: View {
             }
 
             // Dashed threshold line
-            let threshY = size.height * (1 - CGFloat(sqrt(min(1.0, threshold / maxScale))))
+            let threshY = size.height * (1 - CGFloat(min(1.0, threshold / maxScale)))
             var line = Path()
             line.move(to: CGPoint(x: 0, y: threshY))
             line.addLine(to: CGPoint(x: size.width, y: threshY))
