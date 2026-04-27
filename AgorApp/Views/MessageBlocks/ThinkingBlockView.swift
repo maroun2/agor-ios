@@ -8,7 +8,7 @@ struct ThinkingBlockView: View {
     var body: some View {
         if let text, !text.isEmpty {
             DisclosureGroup(isExpanded: $isExpanded) {
-                Text(text)
+                Text(verbatim: text)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .italic()

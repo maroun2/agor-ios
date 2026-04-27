@@ -32,7 +32,7 @@ struct StreamingMessageView: View {
 
                 // Content — plain monospaced text while streaming
                 if !streaming.content.isEmpty {
-                    Text(streaming.content)
+                    Text(verbatim: streaming.content)
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                 }
@@ -44,9 +44,12 @@ struct StreamingMessageView: View {
 
                 // Error
                 if streaming.hasError, let error = streaming.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text(verbatim: error)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.red)
                 }
             }
             .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
@@ -119,7 +122,7 @@ struct ThinkingIndicator: View {
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             if let content, !content.isEmpty {
-                Text(content)
+                Text(verbatim: content)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .italic()

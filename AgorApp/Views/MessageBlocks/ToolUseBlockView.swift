@@ -22,11 +22,11 @@ struct ToolUseBlockView: View {
                         .font(.caption)
                         .foregroundStyle(.blue)
 
-                    Text(content.name)
+                    Text(verbatim: content.name)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.blue)
 
-                    Text(content.inputSummary)
+                    Text(verbatim: content.inputSummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -37,7 +37,7 @@ struct ToolUseBlockView: View {
 
             if isExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    Text(formatJSON(content.input))
+                    Text(verbatim: formatJSON(content.input))
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)

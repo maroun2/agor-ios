@@ -9,7 +9,7 @@ struct TextBlockView: View {
         if useMarkdown {
             MarkdownTextView(text: text)
         } else {
-            Text(text)
+            Text(verbatim: text)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
         }
