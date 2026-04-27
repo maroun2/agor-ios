@@ -1,6 +1,30 @@
 import Foundation
 import MetricKit
 
+/// File-scope storage for the crash log directory — required because
+/// `NSSetUncaughtExceptionHandler` takes a bare C function pointer that
+/// cannot capture context (no closures allowed).
+private var _crashLogDir: URL?
+
+/// Called by the C-compatible uncaught-exception handler below.
+private func _handleUncaughtException(_ exception: NSException) {
+    guard let dir = _crashLogDir else { return }
+    let ts = Int(Date().timeIntervalSince1970)
+    let url = dir.appendingPathComponent("crash-exception-\(ts).txt")
+    let text = """
+    Uncaught Exception
+    ==================
+    Name:    \(exception.name.rawValue)
+    Reason:  \(exception.reason ?? "(none)")
+    Date:    \(Date())
+
+    Call Stack
+    ----------
+    \(exception.callStackSymbols.joined(separator: "\n"))
+    """
+    try? text.data(using: .utf8)?.write(to: url)
+}
+
 /// Collects crash diagnostics from two sources:
 ///   1. MetricKit — `MXDiagnosticPayload` delivered by iOS on the next launch after a crash.
 ///   2. `NSSetUncaughtExceptionHandler` — catches ObjC exceptions before the process dies.
@@ -21,14 +45,12 @@ final class CrashLogService {
         crashLogsDir = caches.appendingPathComponent("CrashLogs", isDirectory: true)
         try? FileManager.default.createDirectory(at: crashLogsDir, withIntermediateDirectories: true)
 
-        // Capture self before registering handlers
-        let dir = crashLogsDir
-        NSSetUncaughtExceptionHandler { exception in
-            CrashLogService.writeException(exception, to: dir)
-        }
+        // Store dir in global so the C function pointer can reach it
+        _crashLogDir = crashLogsDir
+        NSSetUncaughtExceptionHandler(_handleUncaughtException)
 
         // MetricKit subscriber (delivers crash payloads on next launch after crash)
-        let sub = MetricKitSubscriber(crashLogsDir: dir) { [weak self] in
+        let sub = MetricKitSubscriber(crashLogsDir: crashLogsDir) { [weak self] in
             DispatchQueue.main.async { self?.hasCrashLog = true }
         }
         MXMetricManager.shared.add(sub)
@@ -61,23 +83,6 @@ final class CrashLogService {
             at: crashLogsDir,
             includingPropertiesForKeys: nil
         ))?.filter { ["txt", "json"].contains($0.pathExtension) } ?? []
-    }
-
-    private static func writeException(_ exception: NSException, to dir: URL) {
-        let ts = Int(Date().timeIntervalSince1970)
-        let url = dir.appendingPathComponent("crash-exception-\(ts).txt")
-        let text = """
-        Uncaught Exception
-        ==================
-        Name:    \(exception.name.rawValue)
-        Reason:  \(exception.reason ?? "(none)")
-        Date:    \(Date())
-
-        Call Stack
-        ----------
-        \(exception.callStackSymbols.joined(separator: "\n"))
-        """
-        try? text.data(using: .utf8)?.write(to: url)
     }
 }
 
