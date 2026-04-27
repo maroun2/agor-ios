@@ -5,7 +5,7 @@ import AVFoundation
 final class ContinuousVoiceService {
     enum State {
         case disabled
-        case calibrating    // VAD calibrating noise floor — user should stay quiet
+        case preparing      // Brief beep delay before VAD starts (~0.3s)
         case listening      // VAD active, waiting for speech
         case paused         // VAD stopped while agent is running
         case recording      // User speaking, capturing
@@ -72,11 +72,14 @@ final class ContinuousVoiceService {
 
         tts.onSpeechFinished = { [weak self] in
             Task { @MainActor in
-                if self?.state == .speaking {
-                    self?.state = (self?.isPaused == true) ? .paused : .listening
-                }
-                // Notify ChatViewModel so it can resume listening now that TTS is done
-                self?.onTTSFinished?()
+                guard let self, self.state == .speaking else { return }
+                // Always go to .paused — let ChatViewModel.updateVoiceListening()
+                // decide whether to resume. Going directly to .listening here risks
+                // listening while agent is still running (race with isPaused flag).
+                self.state = .paused
+                self.isPaused = true
+                // Notify ChatViewModel so it can resume listening if agent is idle
+                self.onTTSFinished?()
             }
         }
     }
@@ -89,13 +92,13 @@ final class ContinuousVoiceService {
         // Play "ready" beep, then start VAD.
         // FluidAudio's neural model ignores beep audio (not speech), so no delay needed
         // for calibration. Short delay still avoids beep appearing in pre-roll recording.
-        state = .calibrating
+        state = .preparing
         AppLogger.shared.log("[Voice] 🔔 Playing beep: listeningReady", level: .info, category: "Voice")
         playTone(frequency: 1046, duration: 0.08)  // C6 — "ready" ding
 
         // FluidAudio fires onCalibrationComplete immediately (no calibration needed).
         vad.onCalibrationComplete = { [weak self] in
-            guard let self, self.state == .calibrating else { return }
+            guard let self, self.state == .preparing else { return }
             self.state = .listening
             self.startPreRollRecorder()
             AppLogger.shared.log("[Voice] ✅ FluidAudio ready — now listening", level: .info, category: "Voice")
@@ -103,7 +106,7 @@ final class ContinuousVoiceService {
 
         // Brief delay so the beep doesn't land in the pre-roll recording
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, self.state == .calibrating else { return }
+            guard let self, self.state == .preparing else { return }
             do {
                 try self.vad.startListening()
                 AppLogger.shared.log("[Voice] VAD started (FluidAudio Silero)", level: .info, category: "Voice")
@@ -129,9 +132,24 @@ final class ContinuousVoiceService {
         AppLogger.shared.log("[Voice] Continuous voice mode stopped", level: .info, category: "Voice")
     }
 
-    // Pause VAD while agent is running — keeps voice mode active, no beep on resume
+    // Pause VAD while agent is running — keeps voice mode active, no beep on resume.
+    // Only pauses from states where we're idle/waiting. Mid-flow states (recording,
+    // transcribing, sending) handle their own transition to .paused after completion.
     func pauseListening() {
         guard !isPaused, state != .disabled else { return }
+
+        // Don't interrupt active recording/transcription/sending — they auto-pause on completion.
+        // Don't interrupt TTS — it has its own onSpeechFinished → paused path.
+        switch state {
+        case .recording, .transcribing, .sending, .speaking:
+            // Mark as paused so completion handlers know to go to .paused instead of .listening
+            isPaused = true
+            AppLogger.shared.log("[Voice] ⏸️ Voice pause deferred (mid-flow: \(state))", level: .info, category: "Voice")
+            return
+        default:
+            break
+        }
+
         cancelPreRollTimer()
         vad.stopListening()
         audioRecorder?.stop()
@@ -288,6 +306,7 @@ final class ContinuousVoiceService {
         guard let audioURL = currentRecordingURL else {
             AppLogger.shared.log("[Voice] ⚠️ No recording URL found", level: .warning, category: "Voice")
             state = .listening
+            startPreRollRecorder()
             return
         }
 
@@ -323,8 +342,7 @@ final class ContinuousVoiceService {
 
             guard !text.isEmpty else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription empty, ignoring", level: .warning, category: "Voice")
-                state = .listening
-                AppLogger.shared.log("[Voice] 🔵 STATE: transcribing → listening", level: .info, category: "Voice")
+                returnToListeningOrPaused()
                 return
             }
 
@@ -354,21 +372,31 @@ final class ContinuousVoiceService {
                 AppLogger.shared.log("[Voice] ⏸️ STATE: sending → paused (waiting for agent)", level: .info, category: "Voice")
             } else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
-                // Nothing was sent — return to listening normally
-                state = .listening
-                AppLogger.shared.log("[Voice] 🔵 STATE: sending → listening (nothing sent)", level: .info, category: "Voice")
-                startPreRollRecorder()
+                returnToListeningOrPaused()
             }
         } catch {
             tickTask.cancel()
             AppLogger.shared.log("[Voice] ❌ Transcription error: \(error.localizedDescription)", level: .error, category: "Voice")
-            state = .listening
-            AppLogger.shared.log("[Voice] 🔵 STATE: transcribing → listening (error)", level: .info, category: "Voice")
 
             // Clean up temp file on error
             try? FileManager.default.removeItem(at: audioURL)
             currentRecordingURL = nil
+            returnToListeningOrPaused()
+        }
+    }
+
+    /// After a failed/empty transcription, return to the correct state.
+    /// If agent started running (isPaused was set by deferred pause), go to .paused.
+    /// Otherwise resume listening with pre-roll.
+    private func returnToListeningOrPaused() {
+        if isPaused {
+            vad.stopListening()
+            state = .paused
+            AppLogger.shared.log("[Voice] ⏸️ STATE: → paused (agent started during flow)", level: .info, category: "Voice")
+        } else {
+            state = .listening
             startPreRollRecorder()
+            AppLogger.shared.log("[Voice] 🔵 STATE: → listening", level: .info, category: "Voice")
         }
     }
 
