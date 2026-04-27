@@ -26,7 +26,7 @@ struct PermissionCardView: View {
                     .font(.body)
                     .foregroundStyle(.orange)
 
-                Text(content.toolDisplayName)
+                Text(verbatim: content.toolDisplayName)
                     .font(.subheadline.weight(.semibold))
 
                 Spacer()
@@ -38,7 +38,7 @@ struct PermissionCardView: View {
 
             // Input preview
             VStack(alignment: .leading, spacing: 4) {
-                Text(content.inputPreview)
+                Text(verbatim: content.inputPreview)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(showDetails ? nil : 3)
@@ -54,7 +54,7 @@ struct PermissionCardView: View {
             if showDetails {
                 // Full input
                 ScrollView {
-                    Text(formatInput())
+                    Text(verbatim: formatInput())
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -110,7 +110,7 @@ struct PermissionCardView: View {
     private var resolvedView: some View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: 4) {
-                Text(content.inputPreview)
+                Text(verbatim: content.inputPreview)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
@@ -120,7 +120,7 @@ struct PermissionCardView: View {
                     .font(.caption)
                 Text(content.status == .approved ? "Allowed" : "Denied")
                     .font(.caption.weight(.medium))
-                Text(content.toolDisplayName)
+                Text(verbatim: content.toolDisplayName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

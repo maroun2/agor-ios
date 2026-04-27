@@ -27,7 +27,7 @@ struct ToolResultBlockView: View {
                         .foregroundStyle(.secondary)
 
                     if let preview = content.content?.textPreview {
-                        Text(preview)
+                        Text(verbatim: preview)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
@@ -40,7 +40,7 @@ struct ToolResultBlockView: View {
             if isExpanded {
                 if let resultContent = content.content {
                     ScrollView {
-                        Text(resultContent.textPreview)
+                        Text(verbatim: resultContent.textPreview)
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)

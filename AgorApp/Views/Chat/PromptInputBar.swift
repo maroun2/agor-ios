@@ -137,7 +137,7 @@ struct PromptInputBar: View {
                         .controlSize(.small)
                     switch service.transcription.state {
                     case .downloading(let progress) where progress > 0:
-                        Text("Downloading model… \(Int(progress * 100))%")
+                        Text(verbatim: "Downloading model… \(Int(progress * 100))%")
                             .foregroundStyle(.secondary)
                     case .warming:
                         Text("Compiling model (first run)…")
@@ -177,7 +177,7 @@ struct PromptInputBar: View {
                 case .transcribing:
                     ProgressView()
                         .controlSize(.small)
-                    Text(service.transcriptionProgress.isEmpty ? "Transcribing..." : service.transcriptionProgress)
+                    Text(verbatim: service.transcriptionProgress.isEmpty ? "Transcribing..." : service.transcriptionProgress)
                         .foregroundStyle(.secondary)
                 case .sending:
                     ProgressView()
