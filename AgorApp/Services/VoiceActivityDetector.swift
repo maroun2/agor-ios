@@ -40,6 +40,10 @@ final class VoiceActivityDetector {
     @ObservationIgnored private var streamContinuation: AsyncStream<[Float]>.Continuation?
     @ObservationIgnored private var processingTask: Task<Void, Never>?
 
+    // EMA smoothing for displayed probability (raw probability is coarse/binary)
+    @ObservationIgnored private var smoothedProbability: Float = 0.0
+    private let displayEmaAlpha: Float = 0.3  // 0.3 = responsive but smooth
+
     // Silence debounce timer
     @ObservationIgnored private var silenceTimer: Timer?
 
@@ -108,6 +112,7 @@ final class VoiceActivityDetector {
 
         // Reset state
         chunkBuffer = []
+        smoothedProbability = 0.0
         energyThreshold = config.threshold
 
         // Setup audio engine
@@ -245,9 +250,13 @@ final class VoiceActivityDetector {
                     )
                     streamState = result.state
 
-                    // Update probability display
+                    // Update probability display with EMA smoothing
+                    let raw = result.probability
+                    self.smoothedProbability = self.displayEmaAlpha * raw
+                        + (1.0 - self.displayEmaAlpha) * self.smoothedProbability
+                    let smoothed = self.smoothedProbability
                     await MainActor.run {
-                        self.currentAudioLevel = result.probability
+                        self.currentAudioLevel = smoothed
                     }
 
                     // Handle speech events
