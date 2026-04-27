@@ -14,7 +14,7 @@ final class VoiceActivityDetector {
     /// Speech probability from FluidAudio (0.0–1.0), drives AudioLevelBar.
     var currentAudioLevel: Float = 0.0
     /// Current FluidAudio threshold — drives AudioLevelBar threshold line.
-    var energyThreshold: Float = 0.6
+    var energyThreshold: Float = 0.7
 
     // All tunable constants — read from audio/processing paths.
     @ObservationIgnored var config = VADConfig()
