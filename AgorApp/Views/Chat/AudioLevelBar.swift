@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct AudioLevelBar: View {
     let audioLevel: Float
@@ -41,9 +42,11 @@ struct AudioLevelBar: View {
                 style: StrokeStyle(lineWidth: 1, dash: [3, 3])
             )
         }
-        .onChange(of: audioLevel) { _, newLevel in
+        // Sample at 20Hz — timer fires even when probability stays constant
+        // (e.g. 0.0 during silence), keeping the chart scrolling smoothly.
+        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
             history.removeFirst()
-            history.append(newLevel)
+            history.append(audioLevel)
         }
     }
 }
