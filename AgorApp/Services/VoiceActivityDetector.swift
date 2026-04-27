@@ -33,8 +33,7 @@ final class VoiceActivityDetector {
     @ObservationIgnored private var audioConverter: AVAudioConverter?
     @ObservationIgnored private var targetFormat: AVAudioFormat?
 
-    // Chunk accumulation: 1024-sample tap buffers → 4096-sample FluidAudio chunks
-    private static let chunkSize = 4096
+    // Chunk accumulation: 1024-sample tap buffers → VadManager.chunkSize FluidAudio chunks
     @ObservationIgnored private var chunkBuffer: [Float] = []
 
     // AsyncStream bridge: audio tap (real-time) → async processing task
@@ -55,7 +54,7 @@ final class VoiceActivityDetector {
     /// Call once before startListening().
     func initializeModel() async throws {
         let threshold = config.threshold
-        vadManager = try await VadManager(config: FluidAudio.VadConfig(defaultThreshold: threshold))
+        vadManager = try await VadManager(config: VadConfig(defaultThreshold: threshold))
         AppLogger.shared.log("[VAD] FluidAudio Silero model loaded (threshold=\(String(format: "%.2f", threshold)))", level: .info, category: "Voice")
     }
 
@@ -123,7 +122,7 @@ final class VoiceActivityDetector {
         // Setup resampler: device format → 16kHz mono Float32 (FluidAudio requirement)
         targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
-            sampleRate: 16000,
+            sampleRate: Double(VadManager.sampleRate),
             channels: 1,
             interleaved: false
         )!
@@ -191,7 +190,7 @@ final class VoiceActivityDetector {
         guard let converter = audioConverter, let targetFmt = targetFormat else { return }
 
         // Calculate output frame count for 16kHz
-        let ratio = 16000.0 / buffer.format.sampleRate
+        let ratio = Double(VadManager.sampleRate) / buffer.format.sampleRate
         let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
         guard frameCount > 0,
               let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFmt, frameCapacity: frameCount) else { return }
@@ -217,9 +216,9 @@ final class VoiceActivityDetector {
         chunkBuffer.append(contentsOf: samples)
 
         // Yield complete 4096-sample chunks to processing task
-        while chunkBuffer.count >= Self.chunkSize {
-            let chunk = Array(chunkBuffer.prefix(Self.chunkSize))
-            chunkBuffer.removeFirst(Self.chunkSize)
+        while chunkBuffer.count >= VadManager.chunkSize {
+            let chunk = Array(chunkBuffer.prefix(VadManager.chunkSize))
+            chunkBuffer.removeFirst(VadManager.chunkSize)
             streamContinuation?.yield(chunk)
         }
     }
@@ -269,7 +268,7 @@ final class VoiceActivityDetector {
 
     // MARK: - VAD Event Handling (MainActor)
 
-    private func handleVadEvent(_ event: VadEvent) {
+    private func handleVadEvent(_ event: VadStreamEvent) {
         switch event.kind {
         case .speechStart:
             // Cancel any pending silence timer — speech resumed
