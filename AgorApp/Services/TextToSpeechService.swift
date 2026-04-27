@@ -14,19 +14,8 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     private var currentType: SpeechType = .status
 
     // Best available English voice: premium → enhanced → default compact
-    private lazy var bestVoice: AVSpeechSynthesisVoice? = {
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
-        if let premium = voices.first(where: { $0.quality == .premium }) {
-            AppLogger.shared.log("[Voice] 🎙️ Using premium voice: \(premium.name) (\(premium.language))", level: .info, category: "Voice")
-            return premium
-        }
-        if let enhanced = voices.first(where: { $0.quality == .enhanced }) {
-            AppLogger.shared.log("[Voice] 🎙️ Using enhanced voice: \(enhanced.name) (\(enhanced.language))", level: .info, category: "Voice")
-            return enhanced
-        }
-        AppLogger.shared.log("[Voice] 🎙️ No premium/enhanced voice found — using compact default", level: .warning, category: "Voice")
-        return AVSpeechSynthesisVoice(language: "en-US")
-    }()
+    // Computed once at init (lazy var incompatible with @Observable)
+    private let bestVoice: AVSpeechSynthesisVoice?
 
     // Configuration
     private var statusRate: Float = 0.6  // Faster for status updates
@@ -41,6 +30,17 @@ final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
     var onSpeechFinished: (() -> Void)?
 
     override init() {
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
+        if let premium = voices.first(where: { $0.quality == .premium }) {
+            AppLogger.shared.log("[Voice] 🎙️ Using premium voice: \(premium.name) (\(premium.language))", level: .info, category: "Voice")
+            bestVoice = premium
+        } else if let enhanced = voices.first(where: { $0.quality == .enhanced }) {
+            AppLogger.shared.log("[Voice] 🎙️ Using enhanced voice: \(enhanced.name) (\(enhanced.language))", level: .info, category: "Voice")
+            bestVoice = enhanced
+        } else {
+            AppLogger.shared.log("[Voice] 🎙️ No premium/enhanced voice found — using compact default", level: .warning, category: "Voice")
+            bestVoice = AVSpeechSynthesisVoice(language: "en-US")
+        }
         super.init()
         synthesizer.delegate = self
     }
