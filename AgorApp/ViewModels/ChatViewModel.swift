@@ -405,6 +405,13 @@ final class ChatViewModel {
         uploadAndInsertReference(fileData: data, fileName: fileName, mimeType: "text/plain")
     }
 
+    func uploadCrashLog() {
+        guard let (data, fileName) = CrashLogService.shared.latestCrashLog() else { return }
+        let mimeType = fileName.hasSuffix(".json") ? "application/json" : "text/plain"
+        uploadAndInsertReference(fileData: data, fileName: fileName, mimeType: mimeType)
+        CrashLogService.shared.clearCrashLogs()
+    }
+
     // MARK: - Mark Viewed
 
     private func markSessionViewed(_ sessionId: String) async {

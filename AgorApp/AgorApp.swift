@@ -10,6 +10,8 @@ struct AgorApp: App {
         _ = NotificationManager.shared
         // Register background task before app finishes launching
         BackgroundSessionPoller.shared.registerBackgroundTask()
+        // Install MetricKit subscriber + uncaught exception handler
+        _ = CrashLogService.shared
     }
 
     var body: some Scene {

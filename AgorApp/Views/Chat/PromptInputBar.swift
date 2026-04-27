@@ -33,6 +33,14 @@ struct PromptInputBar: View {
                     // Text mode - normal UI
                     // Attachment menu
                     Menu {
+                        if CrashLogService.shared.hasCrashLog {
+                            Button {
+                                viewModel.uploadCrashLog()
+                            } label: {
+                                Label("Attach Crash Log", systemImage: "ladybug")
+                            }
+                        }
+
                         Button {
                             viewModel.uploadDebugLog()
                         } label: {
