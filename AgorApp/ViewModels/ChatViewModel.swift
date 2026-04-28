@@ -98,16 +98,13 @@ final class ChatViewModel {
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
 
-    // VAD config — persisted to UserDefaults as JSON; applied to voiceService on change
+    // VAD config — persisted to UserDefaults as JSON; applied to voiceService on change.
+    // @ObservationIgnored: no view reads this for display, so it must not enter AttributeGraph.
     private static let vadConfigKey = "agor.vadConfig"
-    var vadConfig: VADConfig = {
-        if let data = UserDefaults.standard.data(forKey: vadConfigKey),
-           let decoded = try? JSONDecoder().decode(VADConfig.self, from: data) {
-            return decoded
-        }
-        return VADConfig()
-    }() {
+    @ObservationIgnored
+    var vadConfig: VADConfig = VADConfig() {
         didSet {
+            guard vadConfig != oldValue else { return }
             if let data = try? JSONEncoder().encode(vadConfig) {
                 UserDefaults.standard.set(data, forKey: Self.vadConfigKey)
             }
@@ -137,6 +134,11 @@ final class ChatViewModel {
         self.socketService = socketService
         self.streamingService = streamingService
         self.userId = userId
+        // Restore persisted VAD config (didSet not called in init, so no side effects)
+        if let data = UserDefaults.standard.data(forKey: Self.vadConfigKey),
+           let decoded = try? JSONDecoder().decode(VADConfig.self, from: data) {
+            vadConfig = decoded
+        }
         setupSocketHandlers()
         setupStreamingHandlers()
     }
