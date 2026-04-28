@@ -187,7 +187,7 @@ final class AgorClient {
                 // Nil out the refresh token so no further requests attempt a refresh.
                 // This is the circuit breaker — stops the 401 flood and rate-limit cascade.
                 refreshToken = nil
-                AppLogger.shared.log("[HTTP] Token refresh failed permanently — forcing logout", level: .error, category: "Auth")
+                AppLogger.shared.log("[HTTP] Token refresh failed permanently — triggering session expired handler", level: .error, category: "Auth")
                 DispatchQueue.main.async { self.onSessionExpired?() }
                 throw AgorAPIError.tokenRefreshFailed
             }

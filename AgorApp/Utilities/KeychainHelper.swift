@@ -10,6 +10,7 @@ enum KeychainHelper {
         case daemonURL = "daemon_url"
         case userId = "user_id"
         case userEmail = "user_email"
+        case password = "password"
     }
 
     static func save(_ value: String, for key: Key) {
@@ -56,7 +57,7 @@ enum KeychainHelper {
     }
 
     static func deleteAll() {
-        for key in [Key.accessToken, .refreshToken, .daemonURL, .userId, .userEmail] {
+        for key in Key.allCases {
             delete(key)
         }
     }

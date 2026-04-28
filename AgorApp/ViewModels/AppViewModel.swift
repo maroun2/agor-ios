@@ -90,6 +90,7 @@ final class AppViewModel {
         if let userEmail = authService.currentUser?.email {
             pm.saveToken(userEmail, key: .userEmail, profileId: profileId)
         }
+        pm.saveToken(password, key: .password, profileId: profileId)
     }
 
     var isAuthenticated: Bool { authService.isAuthenticated }

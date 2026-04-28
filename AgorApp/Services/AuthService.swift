@@ -198,6 +198,45 @@ final class AuthService {
         }
     }
 
+    // MARK: - Silent Re-Auth (called when JWT refresh fails — re-login with stored credentials)
+
+    func silentReauth() async -> Bool {
+        let pm = ServerProfileManager.shared
+        guard let profileId = pm.activeProfileId,
+              let email = pm.loadToken(key: .userEmail, profileId: profileId),
+              let password = pm.loadToken(key: .password, profileId: profileId),
+              !email.isEmpty, !password.isEmpty
+        else {
+            AppLogger.shared.log("[Auth] silentReauth: no stored credentials", level: .warning, category: "Auth")
+            return false
+        }
+
+        AppLogger.shared.log("[Auth] silentReauth: attempting for \(email)", level: .info, category: "Auth")
+
+        struct LoginRequest: Codable {
+            let strategy: String
+            let email: String
+            let password: String
+        }
+
+        do {
+            let body = LoginRequest(strategy: "local", email: email, password: password)
+            let response: AuthResponse = try await client.post("/authentication", body: body)
+            client.accessToken = response.accessToken
+            client.refreshToken = response.refreshToken
+            pm.saveToken(response.accessToken, key: .accessToken, profileId: profileId)
+            if let refresh = response.refreshToken {
+                pm.saveToken(refresh, key: .refreshToken, profileId: profileId)
+            }
+            KeychainHelper.save(response.accessToken, for: .accessToken)
+            AppLogger.shared.log("[Auth] silentReauth: succeeded", level: .info, category: "Auth")
+            return true
+        } catch {
+            AppLogger.shared.log("[Auth] silentReauth: failed — \(error.localizedDescription)", level: .error, category: "Auth")
+            return false
+        }
+    }
+
     // MARK: - Fetch Current User
 
     func fetchCurrentUser() async {
