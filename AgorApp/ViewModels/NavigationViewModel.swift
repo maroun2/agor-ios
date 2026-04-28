@@ -42,6 +42,7 @@ final class WorktreeNode: Identifiable {
 // MARK: - Navigation ViewModel
 
 @Observable
+@MainActor
 final class NavigationViewModel {
     var boardNodes: [BoardNode] = []
     var isLoading = false
@@ -382,7 +383,9 @@ final class NavigationViewModel {
 
     private func setupSocketHandlers() {
         socketService.onSessionPatched { [weak self] session in
-            self?.handleSessionUpdate(session)
+            Task { @MainActor [weak self] in
+                self?.handleSessionUpdate(session)
+            }
         }
     }
 
