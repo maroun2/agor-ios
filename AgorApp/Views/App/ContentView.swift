@@ -134,13 +134,22 @@ struct MainNavigationView: View {
             notificationManager.favoriteSessionIds = newValue
         }
         .task {
-            // Force logout when token refresh fails permanently (stops 401 flood + rate-limit cascade)
+            // Silent re-auth when JWT refresh fails — user never sees a logout prompt
             appViewModel.client.onSessionExpired = {
-                AppLogger.shared.log("[App] Session expired — forcing logout", level: .info, category: "App")
-                socketService.disconnect()
-                navigationVM.stopPolling()
-                navigationVM.clearCache()
-                appViewModel.authService.logout()
+                AppLogger.shared.log("[App] Session expired — attempting silent re-auth", level: .info, category: "App")
+                Task {
+                    let success = await appViewModel.authService.silentReauth()
+                    if success {
+                        AppLogger.shared.log("[App] Silent re-auth succeeded — reconnecting socket", level: .info, category: "App")
+                        socketService.reconnect()
+                    } else {
+                        AppLogger.shared.log("[App] Silent re-auth failed — forcing logout", level: .error, category: "App")
+                        socketService.disconnect()
+                        navigationVM.stopPolling()
+                        navigationVM.clearCache()
+                        appViewModel.authService.logout()
+                    }
+                }
             }
 
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
