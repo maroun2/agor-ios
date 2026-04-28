@@ -31,6 +31,10 @@ final class AgorClient {
     var refreshToken: String?
     var isRefreshing = false
 
+    /// Called on main thread when token refresh fails permanently.
+    /// Wire this to logout in the app entry point.
+    var onSessionExpired: (() -> Void)?
+
     private let session: URLSession
     private let decoder = JSONDecoder.agor
     private let encoder = JSONEncoder.agor
@@ -180,6 +184,11 @@ final class AgorClient {
                 }
                 return try await executeRaw(retryRequest, attemptRefresh: false)
             } catch {
+                // Nil out the refresh token so no further requests attempt a refresh.
+                // This is the circuit breaker — stops the 401 flood and rate-limit cascade.
+                refreshToken = nil
+                AppLogger.shared.log("[HTTP] Token refresh failed permanently — forcing logout", level: .error, category: "Auth")
+                DispatchQueue.main.async { self.onSessionExpired?() }
                 throw AgorAPIError.tokenRefreshFailed
             }
         }

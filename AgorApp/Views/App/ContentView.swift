@@ -134,6 +134,15 @@ struct MainNavigationView: View {
             notificationManager.favoriteSessionIds = newValue
         }
         .task {
+            // Force logout when token refresh fails permanently (stops 401 flood + rate-limit cascade)
+            appViewModel.client.onSessionExpired = {
+                AppLogger.shared.log("[App] Session expired — forcing logout", level: .info, category: "App")
+                socketService.disconnect()
+                navigationVM.stopPolling()
+                navigationVM.clearCache()
+                appViewModel.authService.logout()
+            }
+
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
