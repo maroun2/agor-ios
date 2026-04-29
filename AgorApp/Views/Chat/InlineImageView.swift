@@ -13,12 +13,18 @@ struct InlineImageView: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 280, maxHeight: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .onTapGesture { onTapFile(path) }
+                Group {
+                    if image.images != nil {
+                        AnimatedImageView(image: image)
+                    } else {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    }
+                }
+                .frame(maxWidth: 280, maxHeight: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onTapGesture { onTapFile(path) }
             } else if isLoading {
                 ProgressView()
                     .frame(width: 100, height: 60)
@@ -51,7 +57,7 @@ struct InlineImageView: View {
 
             if detail.encoding == "base64",
                let data = Data(base64Encoded: content),
-               let uiImage = UIImage(data: data) {
+               let uiImage = decodeGIF(data) {
                 self.image = uiImage
             } else {
                 failed = true
