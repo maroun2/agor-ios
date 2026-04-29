@@ -31,6 +31,7 @@ struct InlineImageView: View {
         .task { await loadImage() }
     }
 
+    @MainActor
     private func loadImage() async {
         guard image == nil, !isLoading, !failed else { return }
         isLoading = true
