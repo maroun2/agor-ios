@@ -28,6 +28,7 @@ enum DisplayItem: Identifiable {
 // MARK: - Chat ViewModel
 
 @Observable
+@MainActor
 final class ChatViewModel {
     var currentSessionId: String?
     var currentSession: Session?
