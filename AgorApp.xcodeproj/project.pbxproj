@@ -31,6 +31,7 @@
 		350F75444CDCD3A9389358B0 /* NavigationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */; };
 		35DFECAA4E833916D7B868F2 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C072427813E19B8BF1E22089 /* TranscriptionService.swift */; };
 		36E023A754775A327ABD3345 /* JSONCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */; };
+		E7F8A9B0C1D2E3F4A5B6C7D8 /* GIFImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A9B0C1D2E3F4A5B6C7D8E9 /* GIFImage.swift */; };
 		38342D91F7D87DC1A7F7FFE8 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0CDC85C039C7D69A1305C0 /* ToastView.swift */; };
 		3C95AB0D28BFCAA207F8A499 /* InlineImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A98A6A388A1848A8940CFFCA /* InlineImageView.swift */; };
 		3DD0DA4774269186359639D2 /* PromptInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD5BEF26CA7E33AA376CE7B /* PromptInputBar.swift */; };
@@ -100,6 +101,7 @@
 		121A085FA54EF7B94199DCAC /* NavigationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewModel.swift; sourceTree = "<group>"; };
 		129D2DB1B28976F25E0C070A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONCoding.swift; sourceTree = "<group>"; };
+		F8A9B0C1D2E3F4A5B6C7D8E9 /* GIFImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFImage.swift; sourceTree = "<group>"; };
 		1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		1C5CB666E46F734293855109 /* SessionLinkDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLinkDetector.swift; sourceTree = "<group>"; };
 		1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
@@ -322,6 +324,7 @@
 			children = (
 				BF72FBB9974FDE5788C1260A /* DateFormatting.swift */,
 				A465E54C8509B5395EAD81A4 /* FilePathDetector.swift */,
+				F8A9B0C1D2E3F4A5B6C7D8E9 /* GIFImage.swift */,
 				D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */,
 				15B20FC2B2A8D819B6B98D24 /* JSONCoding.swift */,
 				C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */,
@@ -520,6 +523,7 @@
 				40E8878105F35F2854FC84BD /* FileDetailView.swift in Sources */,
 				316D193D271773C9352B3CD2 /* FileItem.swift in Sources */,
 				8704AE2A12444ABE18BF24D6 /* FilePathDetector.swift in Sources */,
+				E7F8A9B0C1D2E3F4A5B6C7D8 /* GIFImage.swift in Sources */,
 				FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */,
 				CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */,
 				3C95AB0D28BFCAA207F8A499 /* InlineImageView.swift in Sources */,

@@ -59,7 +59,12 @@ struct FileDetailView: View {
     private func zoomableImage(detail: FileDetail) -> some View {
         if let content = detail.content,
            let data = Data(base64Encoded: content),
-           let uiImage = UIImage(data: data) {
+           let uiImage = decodeGIF(data) {
+            if uiImage.images != nil {
+                // Animated GIF — UIViewRepresentable drives the animation loop
+                AnimatedImageView(image: uiImage)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -107,6 +112,7 @@ struct FileDetailView: View {
                         }
                     }
                 }
+            } // end static image else
         } else {
             Text("Unable to display image")
                 .foregroundStyle(.secondary)
