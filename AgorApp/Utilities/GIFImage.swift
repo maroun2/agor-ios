@@ -52,6 +52,18 @@ struct AnimatedImageView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIImageView, context: Context) {
-        uiView.image = image
+        // UIImageView does NOT auto-animate when .image is set to an animated UIImage.
+        // Must use .animationImages + startAnimating() explicitly.
+        if let images = image.images, !images.isEmpty {
+            uiView.image = nil
+            uiView.animationImages = images
+            uiView.animationDuration = image.duration
+            uiView.animationRepeatCount = 0  // loop forever
+            if !uiView.isAnimating { uiView.startAnimating() }
+        } else {
+            uiView.animationImages = nil
+            uiView.stopAnimating()
+            uiView.image = image
+        }
     }
 }
