@@ -1,6 +1,7 @@
 import Foundation
 
 @Observable
+@MainActor
 final class FileBrowserViewModel {
     var files: [FileListItem] = []
     var currentPath: String = ""
