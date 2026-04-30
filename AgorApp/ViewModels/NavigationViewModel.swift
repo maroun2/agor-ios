@@ -230,8 +230,9 @@ final class NavigationViewModel {
     }
 
     /// Fetch ALL sessions in a single API call and group them by worktreeId.
-    /// The server's worktree_id filter param is not implemented — always returns all sessions.
-    /// Matching web UI: load once globally, group client-side.
+    /// The server's worktree_id and archived filters are not applied at DB level —
+    /// they filter in-memory after a full table scan, making the query equally slow.
+    /// Fetch everything and filter archived sessions client-side instead.
     @discardableResult
     private func fetchAllSessions() async -> [String: [Session]] {
         do {
@@ -240,14 +241,13 @@ final class NavigationViewModel {
                 query: [
                     "$limit": "10000",
                     "$sort[last_updated]": "-1",
-                    "archived": "false",
                 ]
             )
             var grouped: [String: [Session]] = [:]
-            for session in response.data {
+            for session in response.data where session.archived != true {
                 grouped[session.worktreeId, default: []].append(session)
             }
-            AppLogger.shared.log("[Nav] fetchAllSessions: \(response.data.count) sessions across \(grouped.count) worktrees (1 API call)", level: .debug, category: "Nav")
+            AppLogger.shared.log("[Nav] fetchAllSessions: \(response.data.count) total, \(grouped.values.reduce(0) { $0 + $1.count }) active across \(grouped.count) worktrees", level: .debug, category: "Nav")
             return grouped
         } catch {
             AppLogger.shared.log("[Nav] fetchAllSessions failed: \(error.localizedDescription)", level: .error, category: "Nav")
