@@ -95,6 +95,8 @@ final class NavigationViewModel {
     let client: AgorClient
     private let socketService: SocketService
     private var pollingTimer: Timer?
+    /// Guards against concurrent loadBoards() calls (e.g. startup task + health-check reconnect).
+    private var isLoadingBoards = false
 
     // MARK: - Persistence
 
@@ -144,6 +146,12 @@ final class NavigationViewModel {
     // MARK: - Load Data
 
     func loadBoards() async {
+        guard !isLoadingBoards else {
+            AppLogger.shared.log("[Nav] loadBoards: already in flight — skipping duplicate call", level: .debug, category: "Nav")
+            return
+        }
+        isLoadingBoards = true
+        defer { isLoadingBoards = false }
         isLoading = true
         error = nil
 
