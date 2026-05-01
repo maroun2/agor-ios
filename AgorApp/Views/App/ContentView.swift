@@ -124,7 +124,7 @@ struct MainNavigationView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             handleScenePhaseChange(from: oldPhase, to: newPhase)
         }
-        .onChange(of: notificationManager.pendingNavigationSessionId) { _, sessionId in
+        .onChange(of: notificationManager.pendingNavigationSessionId, initial: true) { _, sessionId in
             if let sessionId {
                 selectedSessionId = sessionId
                 notificationManager.pendingNavigationSessionId = nil
