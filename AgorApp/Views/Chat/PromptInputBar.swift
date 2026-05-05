@@ -14,10 +14,24 @@ struct PromptInputBar: View {
             Divider()
 
             HStack(alignment: .center, spacing: 8) {
-                if viewModel.voiceModeEnabled {
+                if viewModel.showsInlineVoiceControls {
                     // Voice mode active - show voice status
                     voiceStatusView
                         .frame(maxWidth: .infinity)
+
+                    // Skip TTS button — stops current speech, voice mode continues
+                    let isSpeaking = viewModel.voiceService?.state == .speaking
+                    Button {
+                        HapticFeedback.light()
+                        viewModel.voiceService?.skipTTS()
+                    } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(isSpeaking ? Color.blue : Color.secondary)
+                            .frame(width: 30, height: 36)
+                    }
+                    .disabled(!isSpeaking)
+                    .opacity(isSpeaking ? 1.0 : 0.35)
 
                     // Disable voice button
                     Button {
@@ -84,17 +98,19 @@ struct PromptInputBar: View {
                         .padding(.vertical, 8)
                         .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
 
-                    // Voice mode toggle
-                    Button {
-                        HapticFeedback.light()
-                        viewModel.voiceModeEnabled = true
-                    } label: {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.blue)
-                            .frame(width: 36, height: 36)
+                    if !viewModel.voiceModeEnabled {
+                        // Voice mode toggle
+                        Button {
+                            HapticFeedback.light()
+                            viewModel.voiceModeEnabled = true
+                        } label: {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.blue)
+                                .frame(width: 36, height: 36)
+                        }
+                        .disabled(viewModel.currentSessionId == nil)
                     }
-                    .disabled(viewModel.currentSessionId == nil)
 
                     // Send button
                     Button {
