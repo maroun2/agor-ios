@@ -19,19 +19,18 @@ struct PromptInputBar: View {
                     voiceStatusView
                         .frame(maxWidth: .infinity)
 
-                    // Skip TTS button — stops current speech, voice mode continues
-                    let isSpeaking = viewModel.voiceService?.state == .speaking
-                    Button {
-                        HapticFeedback.light()
-                        viewModel.voiceService?.skipTTS()
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(isSpeaking ? Color.blue : Color.secondary)
-                            .frame(width: 30, height: 36)
+                    // Skip TTS button — only shown while TTS is actively speaking
+                    if viewModel.voiceService?.state == .speaking {
+                        Button {
+                            HapticFeedback.light()
+                            viewModel.voiceService?.skipTTS()
+                        } label: {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Color.blue)
+                                .frame(width: 30, height: 36)
+                        }
                     }
-                    .disabled(!isSpeaking)
-                    .opacity(isSpeaking ? 1.0 : 0.35)
 
                     // Disable voice button
                     Button {
