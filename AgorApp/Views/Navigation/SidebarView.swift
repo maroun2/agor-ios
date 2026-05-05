@@ -98,6 +98,7 @@ struct SidebarView: View {
                         }
                     } label: {
                         BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
+                            .selectionDisabled()
                     }
                 }
             }
@@ -411,6 +412,7 @@ private struct WorktreeSection: View {
             sessionsList
         } label: {
             worktreeLabel
+                .selectionDisabled()
         }
     }
 
