@@ -167,6 +167,8 @@ final class ContinuousVoiceService {
         guard isPaused else { return }
         try vad.startListening()
         isPaused = false
+        AppLogger.shared.log("[Voice] 🔔 Playing beep: readyToListen", level: .info, category: "Voice")
+        playTone(frequency: 440, duration: 0.10)  // A4 — "ready to listen" deep readiness beep
         state = .listening
         startPreRollRecorder()
         AppLogger.shared.log("[Voice] ▶️ Voice resumed", level: .info, category: "Voice")
@@ -394,6 +396,8 @@ final class ContinuousVoiceService {
             state = .paused
             AppLogger.shared.log("[Voice] ⏸️ STATE: → paused (agent started during flow)", level: .info, category: "Voice")
         } else {
+            AppLogger.shared.log("[Voice] 🔔 Playing beep: readyToListen", level: .info, category: "Voice")
+            playTone(frequency: 440, duration: 0.10)  // A4 — "ready to listen" (deeper than sent/recording beeps)
             state = .listening
             startPreRollRecorder()
             AppLogger.shared.log("[Voice] 🔵 STATE: → listening", level: .info, category: "Voice")
