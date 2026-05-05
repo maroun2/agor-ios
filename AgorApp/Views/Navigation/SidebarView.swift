@@ -99,7 +99,6 @@ struct SidebarView: View {
                     } label: {
                         BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
                     }
-                    .selectionDisabled()
                 }
             }
 
@@ -379,7 +378,6 @@ private struct WorktreeSection: View {
 
     var body: some View {
         disclosureGroup
-            .selectionDisabled()
             .sheet(isPresented: $showFileBrowser) {
                 FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: worktreeNode.worktree.worktreeId, socketService: socketService))
             }
