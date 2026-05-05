@@ -66,6 +66,7 @@ struct ConnectionSetupView: View {
                                 .keyboardType(.emailAddress)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                                .textContentType(.username)
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
@@ -75,6 +76,7 @@ struct ConnectionSetupView: View {
 
                             SecureField("Password", text: $password)
                                 .textFieldStyle(.roundedBorder)
+                                .textContentType(.password)
                         }
                     }
                     .padding(.horizontal)
