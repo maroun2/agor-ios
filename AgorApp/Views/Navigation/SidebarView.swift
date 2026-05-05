@@ -20,6 +20,20 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selectedSessionId) {
+            // Server tab bar
+            Section {
+                ServerTabBar(
+                    profiles: ServerProfileManager.shared.profiles,
+                    activeProfileId: ServerProfileManager.shared.activeProfileId,
+                    connectionState: socketService.connectionState,
+                    onSelect: { profile in onServerSwitch?(profile) }
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                .selectionDisabled()
+            }
+
             // Needs Attention Section
             if !viewModel.attentionSessions.isEmpty {
                 Section {
@@ -123,7 +137,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle(ServerProfileManager.shared.activeProfile?.name ?? "Agor")
+        .navigationTitle("Agor")
         .refreshable {
             await viewModel.refresh()
         }
@@ -476,6 +490,56 @@ private struct WorktreeSection: View {
             await viewModel.refresh()
         } catch {
             AppLogger.shared.log("[Sidebar] createSession ERROR: \(error)", level: .error, category: "Nav")
+        }
+    }
+}
+
+// MARK: - Server Tab Bar
+
+private struct ServerTabBar: View {
+    let profiles: [ServerProfile]
+    let activeProfileId: UUID?
+    let connectionState: ConnectionState
+    let onSelect: (ServerProfile) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(profiles) { profile in
+                    let isActive = profile.id == activeProfileId
+                    Button {
+                        guard !isActive else { return }
+                        onSelect(profile)
+                    } label: {
+                        HStack(spacing: 4) {
+                            if isActive {
+                                Circle()
+                                    .fill(dotColor)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(profile.name)
+                                .font(.caption.weight(isActive ? .semibold : .regular))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            isActive ? Color.accentColor : Color.secondary.opacity(0.15),
+                            in: Capsule()
+                        )
+                        .foregroundStyle(isActive ? Color.white : Color.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var dotColor: Color {
+        switch connectionState {
+        case .connected: .green
+        case .connecting, .reconnecting: .orange
+        case .disconnected: .red
         }
     }
 }
