@@ -44,6 +44,9 @@ final class ChatViewModel {
     var promptText: String = "" {
         didSet {
             guard let sessionId = currentSessionId else { return }
+            if sessionId == voiceSessionId, voicePendingPromptText != nil {
+                voicePendingPromptText = promptText.isEmpty ? nil : promptText
+            }
             if promptText.isEmpty {
                 UserDefaults.standard.removeObject(forKey: Self.draftKeyPrefix + sessionId)
             } else {
@@ -98,6 +101,9 @@ final class ChatViewModel {
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
+    private var voiceSession: Session?
+    private var voiceLastAssistantMessage: Message?
+    private var voicePendingPromptText: String?
 
     // VAD config — persisted to UserDefaults as JSON; applied to voiceService on change.
     // @ObservationIgnored: no view reads this for display, so it must not enter AttributeGraph.
@@ -147,8 +153,8 @@ final class ChatViewModel {
     // MARK: - Session Selection
 
     func selectSession(_ sessionId: String) {
-        // Voice mode is NOT disabled on session switch — it continues running on voiceSessionId.
-        // The floating button guides the user back to the voice session.
+        // Voice mode stays active across session switches, but only the owning session
+        // should render inline voice UI or receive voice-driven prompt updates.
 
         if sessionId == currentSessionId {
             // Same session re-selected — do a soft refresh to pick up any missed events
@@ -174,7 +180,7 @@ final class ChatViewModel {
         hasMore = true
         error = nil
         // Restore draft for this session (set directly to avoid didSet writing back before session is set)
-        promptText = UserDefaults.standard.string(forKey: Self.draftKeyPrefix + sessionId) ?? ""
+        promptText = draftText(for: sessionId)
 
         Task {
             await loadSession(sessionId)
@@ -211,6 +217,9 @@ final class ChatViewModel {
     private func loadSession(_ sessionId: String) async {
         do {
             let session: Session = try await client.get("/sessions/\(sessionId)")
+            if session.sessionId == voiceSessionId {
+                voiceSession = session
+            }
             if currentSessionId == sessionId {
                 currentSession = session
             }
@@ -342,9 +351,17 @@ final class ChatViewModel {
         let text = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let sessionId = currentSessionId else { return }
         AppLogger.shared.log("[Chat] sendPrompt to \(sessionId) (\(text.count) chars)", level: .debug, category: "Chat")
+        if sessionId == voiceSessionId {
+            voicePendingPromptText = nil
+        }
         promptText = ""
-        isSendingPrompt = true
+        sendPrompt(to: sessionId, text: text, showSendingState: true)
+    }
 
+    private func sendPrompt(to sessionId: String, text: String, showSendingState: Bool) {
+        if showSendingState {
+            isSendingPrompt = true
+        }
         Task {
             do {
                 struct PromptBody: Codable {
@@ -356,19 +373,23 @@ final class ChatViewModel {
                 )
                 // Proactively refresh in case socket events were missed
                 try? await Task.sleep(for: .milliseconds(300))
-                guard currentSessionId == sessionId else { return }
-                AppLogger.shared.log("[Chat] sendPrompt: proactive refresh after send", level: .debug, category: "Chat")
-                await loadSession(sessionId)
-                await loadTasks(sessionId)
-                await checkForNewMessages(sessionId)
+                if currentSessionId == sessionId {
+                    AppLogger.shared.log("[Chat] sendPrompt: proactive refresh after send", level: .debug, category: "Chat")
+                    await loadSession(sessionId)
+                    await loadTasks(sessionId)
+                    await checkForNewMessages(sessionId)
+                } else if voiceSessionId == sessionId {
+                    await loadSession(sessionId)
+                }
             } catch {
                 AppLogger.shared.log("[Chat] sendPrompt ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
                 self.error = "Failed to send prompt: \(error.localizedDescription)"
             }
-            isSendingPrompt = false
+            if showSendingState {
+                isSendingPrompt = false
+            }
         }
     }
-
     // MARK: - File Upload
 
     var isUploading = false
@@ -718,9 +739,10 @@ final class ChatViewModel {
         socketService.onMessageCreated { [weak self] message in
             guard let self else { return }
             AppLogger.shared.log("[ChatVM] Received onMessageCreated: \(message.messageId.prefix(8)) session=\(message.sessionId)", level: .debug, category: "Chat")
-            guard message.sessionId == self.currentSessionId else { 
-                AppLogger.shared.log("[ChatVM] Ignoring message \(message.messageId.prefix(8)) - session mismatch (\(message.sessionId) != \(self.currentSessionId ?? "nil"))", level: .debug, category: "Chat")
-                return 
+            self.handleVoiceMessageCreated(message)
+            guard message.sessionId == self.currentSessionId else {
+                AppLogger.shared.log("[ChatVM] Ignoring visible message \(message.messageId.prefix(8)) - session mismatch (\(message.sessionId) != \(self.currentSessionId ?? "nil"))", level: .debug, category: "Chat")
+                return
             }
             // Remove from streaming (handoff)
             self.activeStreams.removeValue(forKey: message.messageId)
@@ -732,35 +754,6 @@ final class ChatViewModel {
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
-            // Voice: speak text content — but only once across streaming/onMessageCreated/speakFinalMessage
-            if self.voiceModeEnabled, message.role == .assistant {
-                if !self.voiceStreamBuffer.isEmpty {
-                    // Flush any incomplete trailing sentence from the stream buffer
-                    let remaining = self.voiceStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.voiceStreamBuffer = ""
-                    self.voiceDidStreamCurrentMessage = false
-                    if !remaining.isEmpty {
-                        AppLogger.shared.log("[Voice] 💬 Flushing stream buffer (\(remaining.count) chars)", level: .info, category: "Voice")
-                        self.voiceService?.speakStreamChunk(remaining)
-                    }
-                    self.lastSpokenMessageId = message.messageId
-                } else if self.voiceDidStreamCurrentMessage {
-                    // Stream chunks already spoke the full response sentence-by-sentence — skip re-read
-                    AppLogger.shared.log("[Voice] ⏭️ Skipping onMessageCreated speak — already streamed", level: .info, category: "Voice")
-                    self.voiceDidStreamCurrentMessage = false
-                    self.lastSpokenMessageId = message.messageId
-                } else {
-                    let text = self.extractTextFromMessage(message)
-                    if !text.isEmpty {
-                        let spokenText = text.count > 500 ? self.summarizeText(text) : text
-                        AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
-                        self.voiceService?.speakMessage(spokenText)
-                        self.lastSpokenMessageId = message.messageId
-                    }
-                    // Tool-use-only messages (no text) are intentionally not announced
-                }
-            }
-
             // Add to messages if not already there
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
                 self.messages.append(message)
@@ -797,7 +790,9 @@ final class ChatViewModel {
         }
 
         socketService.onSessionPatched { [weak self] session in
-            guard let self, session.sessionId == self.currentSessionId else { return }
+            guard let self else { return }
+            self.handleVoiceSessionPatched(session)
+            guard session.sessionId == self.currentSessionId else { return }
             let oldStatus = self.currentSession?.status
             self.currentSession = session
             AppLogger.shared.log("[Scroll] onSessionPatched: \(oldStatus?.rawValue ?? "nil") → \(session.status.rawValue)", level: .debug, category: "Scroll")
@@ -811,12 +806,6 @@ final class ChatViewModel {
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
-
-            // Voice mode: speak status changes
-            if voiceModeEnabled && oldStatus != session.status {
-                handleVoiceStatusChange(from: oldStatus, to: session.status)
-            }
-
             // Clear stale streams when session becomes idle (handles missed thinking:end)
             if session.status == .idle {
                 self.streamingService.clearStreams(for: session.sessionId)
@@ -926,6 +915,9 @@ final class ChatViewModel {
         guard voiceService == nil else { return }
 
         voiceSessionId = currentSessionId
+        voiceSession = currentSession
+        voiceLastAssistantMessage = messages.last(where: { $0.role == .assistant })
+        voicePendingPromptText = nil
         UIApplication.shared.isIdleTimerDisabled = true
 
         let service = ContinuousVoiceService()
@@ -950,7 +942,7 @@ final class ChatViewModel {
                 AppLogger.shared.log("[Voice] Voice mode enabled", level: .info, category: "Voice")
                 // If agent is already working when voice is opened, announce it immediately
                 await MainActor.run {
-                    if let status = self.currentSession?.status, status != .idle {
+                    if let status = self.voiceSession?.status, status != .idle {
                         self.handleVoiceStatusChange(from: nil, to: status)
                     }
                     self.updateVoiceListening()
@@ -972,6 +964,9 @@ final class ChatViewModel {
         voiceService?.stopListening()
         voiceService = nil
         voiceSessionId = nil
+        voiceSession = nil
+        voiceLastAssistantMessage = nil
+        voicePendingPromptText = nil
         voiceStreamBuffer = ""
         voiceDidStreamCurrentMessage = false
         AppLogger.shared.log("[Voice] Voice mode disabled", level: .info, category: "Voice")
@@ -1026,13 +1021,26 @@ final class ChatViewModel {
     }
 
     private func handleVoiceInput(_ text: String) {
-        // Text appears for 5s, then auto-sends if not edited
-        promptText = text
+        guard let sessionId = voiceSessionId else { return }
+        voicePendingPromptText = text
+        if currentSessionId == sessionId {
+            promptText = text
+        }
 
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(5000)) // Give user time to review
-            if promptText == text { // User didn't edit
-                sendPrompt()
+            guard self.voiceSessionId == sessionId else { return }
+
+            if self.currentSessionId == sessionId {
+                let currentDraft = self.promptText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if currentDraft == text {
+                    self.voicePendingPromptText = nil
+                    self.promptText = ""
+                    self.sendPrompt(to: sessionId, text: text, showSendingState: true)
+                }
+            } else if self.voicePendingPromptText == text {
+                self.voicePendingPromptText = nil
+                self.sendPrompt(to: sessionId, text: text, showSendingState: false)
             }
         }
     }
@@ -1040,7 +1048,7 @@ final class ChatViewModel {
     private func updateVoiceListening() {
         guard let voice = voiceService else { return }
 
-        if currentSession?.status == .idle && isSessionPromptable {
+        if voiceSession?.status == .idle && voiceSession?.isPromptable == true {
             if voice.state == .disabled {
                 // Fresh start
                 do {
@@ -1056,7 +1064,7 @@ final class ChatViewModel {
                     AppLogger.shared.log("[Voice] Failed to resume listening: \(error.localizedDescription)", level: .error, category: "Voice")
                 }
             }
-        } else if currentSession?.status != .idle {
+        } else if voiceSession?.status != .idle {
             // Agent is running — pause VAD without disrupting TTS or showing disabled state
             if !voice.isPaused && voice.state != .disabled {
                 voice.pauseListening()
@@ -1098,7 +1106,7 @@ final class ChatViewModel {
 
     private func hasNewAssistantMessage(since oldStatus: SessionStatus?) -> Bool {
         // Check if last message is from assistant and relatively recent
-        guard let lastMessage = messages.last,
+        guard let lastMessage = voiceLastAssistantMessage,
               lastMessage.role == .assistant else {
             return false
         }
@@ -1108,7 +1116,7 @@ final class ChatViewModel {
     }
 
     private func speakFinalMessage() {
-        guard voiceModeEnabled, let lastMessage = messages.last else { return }
+        guard voiceModeEnabled, let lastMessage = voiceLastAssistantMessage else { return }
 
         // Already spoken (via onMessageCreated or streaming) — don't double-speak
         if lastMessage.messageId == lastSpokenMessageId {
@@ -1159,6 +1167,71 @@ final class ChatViewModel {
 
     private func workingStatusPhrase() -> String {
         return "Working"
+    }
+
+    private func handleVoiceMessageCreated(_ message: Message) {
+        guard voiceModeEnabled,
+              message.sessionId == voiceSessionId else { return }
+
+        if message.role == .assistant {
+            voiceLastAssistantMessage = message
+        }
+
+        guard message.role == .assistant else { return }
+
+        if !voiceStreamBuffer.isEmpty {
+            let remaining = voiceStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            voiceStreamBuffer = ""
+            voiceDidStreamCurrentMessage = false
+            if !remaining.isEmpty {
+                AppLogger.shared.log("[Voice] 💬 Flushing stream buffer (\(remaining.count) chars)", level: .info, category: "Voice")
+                voiceService?.speakStreamChunk(remaining)
+            }
+            lastSpokenMessageId = message.messageId
+        } else if voiceDidStreamCurrentMessage {
+            AppLogger.shared.log("[Voice] ⏭️ Skipping onMessageCreated speak — already streamed", level: .info, category: "Voice")
+            voiceDidStreamCurrentMessage = false
+            lastSpokenMessageId = message.messageId
+        } else {
+            let text = extractTextFromMessage(message)
+            if !text.isEmpty {
+                let spokenText = text.count > 500 ? summarizeText(text) : text
+                AppLogger.shared.log("[Voice] 💬 Speaking assistant message (\(text.count) chars)", level: .info, category: "Voice")
+                voiceService?.speakMessage(spokenText)
+                lastSpokenMessageId = message.messageId
+            }
+        }
+    }
+
+    private func handleVoiceSessionPatched(_ session: Session) {
+        guard voiceModeEnabled,
+              session.sessionId == voiceSessionId else { return }
+
+        let oldStatus = voiceSession?.status
+        voiceSession = session
+
+        if oldStatus != session.status {
+            handleVoiceStatusChange(from: oldStatus, to: session.status)
+        }
+
+        if session.status == .idle {
+            streamingService.clearStreams(for: session.sessionId)
+            activeStreams = streamingService.activeStreams
+            rebuildDisplayItems()
+        }
+
+        updateVoiceListening()
+    }
+
+    var showsInlineVoiceControls: Bool {
+        voiceModeEnabled && currentSessionId == voiceSessionId
+    }
+
+    private func draftText(for sessionId: String) -> String {
+        if sessionId == voiceSessionId, let voicePendingPromptText {
+            return voicePendingPromptText
+        }
+        return UserDefaults.standard.string(forKey: Self.draftKeyPrefix + sessionId) ?? ""
     }
 
 }
