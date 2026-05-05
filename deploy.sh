@@ -6,19 +6,32 @@
 set -e
 
 DEVICE_ID="00008101-001E38812660001E"
-PROFILE_UUID="8c1ea10f-7151-4056-b2fe-7497b0114623"
-PROFILE="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
 
-# Verify profile exists
-if [ ! -f "$PROFILE" ]; then
-  echo "ERROR: Provisioning profile not found. Open Xcode and build once with Cmd+R to renew it."
+# Auto-detect newest valid provisioning profile (newest file first)
+PROFILE=""
+NOW=$(date +%s)
+while IFS= read -r p; do
+  [ -f "$p" ] || continue
+  PEXPIRY=$(security cms -D -i "$p" 2>/dev/null | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "")
+  [ -z "$PEXPIRY" ] && continue
+  PEXPIRY_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$PEXPIRY" +%s 2>/dev/null || echo "0")
+  if [ "$PEXPIRY_EPOCH" -gt "$NOW" ]; then
+    PROFILE="$p"
+    EXPIRY="$PEXPIRY"
+    break
+  fi
+done < <(ls -t "$PROFILES_DIR"/*.mobileprovision 2>/dev/null)
+
+if [ -z "$PROFILE" ]; then
+  echo "ERROR: No valid provisioning profile found. Open Xcode and build once with Cmd+R to renew it."
   exit 1
 fi
 
-EXPIRY=$(security cms -D -i "$PROFILE" 2>/dev/null | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "unknown")
-echo "Profile expires: $EXPIRY"
+echo "Profile: $(basename "$PROFILE")"
+echo "Expires: $EXPIRY"
 
 # Regenerate project if project.yml is newer than .xcodeproj
 if [ "project.yml" -nt "AgorApp.xcodeproj/project.pbxproj" ]; then
