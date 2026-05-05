@@ -91,13 +91,13 @@ struct MainNavigationView: View {
                 )
             }
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
             if chatVM.voiceModeEnabled, selectedSessionId != chatVM.voiceSessionId {
                 VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
                     selectedSessionId = chatVM.voiceSessionId
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 24)
+                .padding(.top, 8)
                 .transition(.scale.combined(with: .opacity))
             }
         }
