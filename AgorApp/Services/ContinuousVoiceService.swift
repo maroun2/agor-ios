@@ -117,6 +117,19 @@ final class ContinuousVoiceService {
         }
     }
 
+    /// Stop current TTS immediately without disabling voice mode.
+    /// Manually fires the onTTSFinished path so ChatViewModel can resume listening.
+    func skipTTS() {
+        guard state == .speaking else { return }
+        AppLogger.shared.log("[Voice] ⏭️ TTS skipped by user", level: .info, category: "Voice")
+        tts.stop()
+        // tts.stop() fires didCancel, not didFinish — onSpeechFinished won't fire.
+        // Manually replicate the onSpeechFinished → paused flow so voice mode continues.
+        state = .paused
+        isPaused = true
+        onTTSFinished?()
+    }
+
     func stopListening() {
         cancelPreRollTimer()
         vad.stopListening()
