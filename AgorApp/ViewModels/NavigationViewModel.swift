@@ -354,10 +354,8 @@ final class NavigationViewModel {
     func clearCache() {
         SidebarCache.clear()
         boardNodes = []
-        favoriteSessionIds = []
         UserDefaults.standard.removeObject(forKey: Self.collapsedBoardsKey)
         UserDefaults.standard.removeObject(forKey: Self.collapsedWorktreesKey)
-        UserDefaults.standard.removeObject(forKey: Self.favoritesKey)
         AppLogger.shared.log("[Nav] cache cleared", level: .info, category: "Nav")
     }
 
