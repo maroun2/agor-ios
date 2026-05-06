@@ -137,7 +137,8 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Agor")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await viewModel.refresh()
         }
