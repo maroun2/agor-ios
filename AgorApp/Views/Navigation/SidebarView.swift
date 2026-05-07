@@ -17,6 +17,7 @@ struct SidebarView: View {
 
     @State private var showSettings = false
     @State private var fileBrowserTarget: FileBrowserTarget?
+    @State private var searchText = ""
 
     var body: some View {
         List(selection: $selectedSessionId) {
@@ -34,86 +35,131 @@ struct SidebarView: View {
                 .selectionDisabled()
             }
 
-            // Needs Attention Section
-            if !viewModel.attentionSessions.isEmpty {
-                Section {
-                    ForEach(viewModel.attentionSessions) { session in
-                        let ctx = viewModel.findContext(for: session)
-                        NavigationLink(value: session.sessionId) {
-                            AttentionSessionRow(session: session, boardIcon: ctx?.boardIcon)
-                        }
-                        .contextMenu {
-                            FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
-                            BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
-                            Divider()
-                            CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
-                            ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
-                        }
-                    }
-                } header: {
-                    Label("Needs Attention", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
+            // Search bar
+            Section {
+                SessionSearchBar(text: $searchText)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 4, trailing: 8))
+                    .selectionDisabled()
             }
 
-            // Important Section — running, ready for prompt, favorites, 3 most recent
-            if !viewModel.importantSessions.isEmpty {
-                Section {
-                    ForEach(viewModel.importantSessions) { session in
-                        let ctx = viewModel.findContext(for: session)
-                        NavigationLink(value: session.sessionId) {
-                            ImportantSessionRow(
-                                session: session,
-                                isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
-                                boardName: ctx?.boardName,
-                                worktreeName: ctx?.worktreeName,
-                                boardIcon: ctx?.boardIcon
-                            )
-                        }
-                        .contextMenu {
-                            FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
-                            BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
-                            Divider()
-                            CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
-                            ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
-                        }
-                    }
-                } header: {
-                    Label("Important", systemImage: "sparkles")
-                        .foregroundStyle(.primary)
-                }
-            }
-
-            // Boards
-            ForEach(viewModel.boardNodes) { boardNode in
-                Section {
-                    DisclosureGroup(isExpanded: Binding(
-                        get: { boardNode.isExpanded },
-                        set: {
-                            boardNode.isExpanded = $0
-                            viewModel.setBoardExpanded(boardNode.board.boardId, expanded: $0)
-                            if $0 {
-                                Task { await viewModel.loadWorktrees(for: boardNode) }
+            if searchText.isEmpty {
+                // Needs Attention Section
+                if !viewModel.attentionSessions.isEmpty {
+                    Section {
+                        ForEach(viewModel.attentionSessions) { session in
+                            let ctx = viewModel.findContext(for: session)
+                            NavigationLink(value: session.sessionId) {
+                                AttentionSessionRow(session: session, boardIcon: ctx?.boardIcon)
+                            }
+                            .contextMenu {
+                                FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                                BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
+                                Divider()
+                                CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                                ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                             }
                         }
-                    )) {
-                        if boardNode.isLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            ForEach(boardNode.worktrees) { wtNode in
-                                WorktreeSection(
-                                    worktreeNode: wtNode,
-                                    viewModel: viewModel,
-                                    socketService: socketService,
-                                    selectedSessionId: $selectedSessionId
+                    } header: {
+                        Label("Needs Attention", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                // Important Section — running, ready for prompt, favorites, 3 most recent
+                if !viewModel.importantSessions.isEmpty {
+                    Section {
+                        ForEach(viewModel.importantSessions) { session in
+                            let ctx = viewModel.findContext(for: session)
+                            NavigationLink(value: session.sessionId) {
+                                ImportantSessionRow(
+                                    session: session,
+                                    isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
+                                    boardName: ctx?.boardName,
+                                    worktreeName: ctx?.worktreeName,
+                                    boardIcon: ctx?.boardIcon
                                 )
                             }
+                            .contextMenu {
+                                FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                                BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
+                                Divider()
+                                CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                                ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
+                            }
                         }
-                    } label: {
-                        BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
-                            .selectionDisabled()
+                    } header: {
+                        Label("Important", systemImage: "sparkles")
+                            .foregroundStyle(.primary)
                     }
+                }
+
+                // Boards
+                ForEach(viewModel.boardNodes) { boardNode in
+                    Section {
+                        DisclosureGroup(isExpanded: Binding(
+                            get: { boardNode.isExpanded },
+                            set: {
+                                boardNode.isExpanded = $0
+                                viewModel.setBoardExpanded(boardNode.board.boardId, expanded: $0)
+                                if $0 {
+                                    Task { await viewModel.loadWorktrees(for: boardNode) }
+                                }
+                            }
+                        )) {
+                            if boardNode.isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                ForEach(boardNode.worktrees) { wtNode in
+                                    WorktreeSection(
+                                        worktreeNode: wtNode,
+                                        viewModel: viewModel,
+                                        socketService: socketService,
+                                        selectedSessionId: $selectedSessionId
+                                    )
+                                }
+                            }
+                        } label: {
+                            BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
+                                .selectionDisabled()
+                        }
+                    }
+                }
+            } else {
+                // Search results
+                let results = searchResults
+                Section {
+                    if results.isEmpty {
+                        Text("No sessions match "\(searchText)"")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .listRowBackground(Color.clear)
+                            .selectionDisabled()
+                    } else {
+                        ForEach(results) { session in
+                            let ctx = viewModel.findContext(for: session)
+                            NavigationLink(value: session.sessionId) {
+                                ImportantSessionRow(
+                                    session: session,
+                                    isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
+                                    boardName: ctx?.boardName,
+                                    worktreeName: ctx?.worktreeName,
+                                    boardIcon: ctx?.boardIcon
+                                )
+                            }
+                            .contextMenu {
+                                FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                                BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
+                                Divider()
+                                CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                                ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
+                            }
+                        }
+                    }
+                } header: {
+                    Text(results.isEmpty ? "Results" : "\(results.count) session\(results.count == 1 ? "" : "s")")
                 }
             }
 
@@ -178,6 +224,20 @@ struct SidebarView: View {
                     description: Text("Create a board in Agor to get started")
                 )
             }
+        }
+    }
+
+    // MARK: - Search
+
+    private var searchResults: [Session] {
+        let query = searchText.lowercased()
+        let all = viewModel.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
+            + viewModel.attentionSessions
+            + viewModel.importantSessions
+        var seen = Set<String>()
+        return all.filter { session in
+            guard seen.insert(session.sessionId).inserted else { return false }
+            return session.displayTitle.lowercased().contains(query)
         }
     }
 }
@@ -492,6 +552,36 @@ private struct WorktreeSection: View {
         } catch {
             AppLogger.shared.log("[Sidebar] createSession ERROR: \(error)", level: .error, category: "Nav")
         }
+    }
+}
+
+// MARK: - Session Search Bar
+
+private struct SessionSearchBar: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+            TextField("Filter sessions…", text: $text)
+                .font(.subheadline)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 13))
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
