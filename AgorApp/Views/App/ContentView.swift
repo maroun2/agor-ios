@@ -97,7 +97,7 @@ struct MainNavigationView: View {
                     selectedSessionId = chatVM.voiceSessionId
                 }
                 .padding(.trailing, 16)
-                .padding(.top, 8)
+                .padding(.top, 60) // 44pt nav bar + 16pt gap below toolbar items
                 .transition(.scale.combined(with: .opacity))
             }
         }
