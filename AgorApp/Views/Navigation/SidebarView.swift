@@ -132,7 +132,7 @@ struct SidebarView: View {
                 let results = searchResults
                 Section {
                     if results.isEmpty {
-                        Text("No sessions match "\(searchText)"")
+                        Text("No sessions match \"\(searchText)\"")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .listRowBackground(Color.clear)
