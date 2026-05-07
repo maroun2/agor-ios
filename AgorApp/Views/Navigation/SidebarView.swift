@@ -140,7 +140,11 @@ struct SidebarView: View {
                     } else {
                         ForEach(results) { session in
                             let ctx = viewModel.findContext(for: session)
-                            NavigationLink(value: session.sessionId) {
+                            Button {
+                                viewModel.revealSession(session)
+                                searchText = ""
+                                selectedSessionId = session.sessionId
+                            } label: {
                                 ImportantSessionRow(
                                     session: session,
                                     isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
@@ -148,7 +152,9 @@ struct SidebarView: View {
                                     worktreeName: ctx?.worktreeName,
                                     boardIcon: ctx?.boardIcon
                                 )
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                             .contextMenu {
                                 FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
                                 BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)

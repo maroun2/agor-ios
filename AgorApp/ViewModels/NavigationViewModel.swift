@@ -478,4 +478,22 @@ final class NavigationViewModel {
         }
         return nil
     }
+
+    /// Expand the board and worktree that contain this session so it is visible in the sidebar tree.
+    func revealSession(_ session: Session) {
+        for boardNode in boardNodes {
+            guard let wtNode = boardNode.worktrees.first(where: { $0.worktree.worktreeId == session.worktreeId }) else { continue }
+            if !boardNode.isExpanded {
+                boardNode.isExpanded = true
+                setBoardExpanded(boardNode.board.boardId, expanded: true)
+                Task { await loadWorktrees(for: boardNode) }
+            }
+            if !wtNode.isExpanded {
+                wtNode.isExpanded = true
+                setWorktreeExpanded(wtNode.worktree.worktreeId, expanded: true)
+                Task { await loadSessions(for: wtNode) }
+            }
+            return
+        }
+    }
 }
