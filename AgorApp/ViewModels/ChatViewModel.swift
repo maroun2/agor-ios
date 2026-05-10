@@ -200,11 +200,20 @@ final class ChatViewModel {
         // Clear stale streaming state (e.g., missed thinking:end while backgrounded)
         streamingService.clearStreams(for: sessionId)
         activeStreams = streamingService.activeStreams
+        // Clear stale voice stream buffer so TTS doesn't speak old content on resume
+        voiceStreamBuffer = ""
+        voiceDidStreamCurrentMessage = false
         // Re-enable auto-scroll on reconnect — scroll position tracking may be stale
         userIsNearBottom = true
         lastNearBottomTime = Date()
         Task {
             await loadSession(sessionId)
+            // Re-evaluate voice state — agent may have finished while backgrounded.
+            // Socket patches are missed during background, so voiceSession is only
+            // fresh after loadSession() fetches from server.
+            await MainActor.run {
+                updateVoiceListening()
+            }
             await loadTasks(sessionId)
             resetMessagePagination()
             await loadMessages(sessionId)
