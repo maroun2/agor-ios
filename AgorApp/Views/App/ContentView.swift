@@ -83,22 +83,25 @@ struct MainNavigationView: View {
         } detail: {
             if let sessionId = selectedSessionId {
                 ChatView(viewModel: chatVM, sessionId: sessionId, socketService: socketService, navigationVM: navigationVM)
+                    // Voice floating button — must be inside detail so it renders
+                    // above the pushed view on iPhone (NavigationSplitView collapses
+                    // to a stack; overlays on the split view sit behind pushed views).
+                    .overlay(alignment: .topTrailing) {
+                        if chatVM.voiceModeEnabled, sessionId != chatVM.voiceSessionId {
+                            VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
+                                selectedSessionId = chatVM.voiceSessionId
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.top, 60)
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                    }
             } else {
                 ContentUnavailableView(
                     "Select a Session",
                     systemImage: "bubble.left.and.bubble.right",
                     description: Text("Choose a session from the sidebar to start chatting")
                 )
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if chatVM.voiceModeEnabled, selectedSessionId != chatVM.voiceSessionId {
-                VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
-                    selectedSessionId = chatVM.voiceSessionId
-                }
-                .padding(.trailing, 16)
-                .padding(.top, 60) // 44pt nav bar + 16pt gap below toolbar items
-                .transition(.scale.combined(with: .opacity))
             }
         }
         .toastOverlay(manager: toastManager) { sessionId in
