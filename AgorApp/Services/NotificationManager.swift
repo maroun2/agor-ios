@@ -88,22 +88,14 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             return false
         }
 
-        // Don't notify for the session user is looking at
-        if transition.sessionId == activeSessionId && !isBackgrounded {
-            AppLogger.shared.log("[Notification] skip \(String(transition.sessionId.prefix(8))): active session in foreground", level: .debug, category: "Notification")
-            return false
-        }
-
         let isFav = favoriteSessionIds.contains(transition.sessionId)
+        let isActive = transition.sessionId == activeSessionId && !isBackgrounded
 
-        // Always notify if backgrounded or favorited
-        if isBackgrounded || isFav {
-            AppLogger.shared.log("[Notification] firing for \(String(transition.sessionId.prefix(8))): backgrounded=\(isBackgrounded) favorited=\(isFav)", level: .info, category: "Notification")
-            return true
-        }
-
-        // In foreground, not the active session — still notify
-        AppLogger.shared.log("[Notification] firing for \(String(transition.sessionId.prefix(8))): different session in foreground", level: .info, category: "Notification")
+        AppLogger.shared.log(
+            "[Notification] firing for \(String(transition.sessionId.prefix(8))):"
+            + " backgrounded=\(isBackgrounded) favorited=\(isFav) activeInForeground=\(isActive)",
+            level: .info, category: "Notification"
+        )
         return true
     }
 
