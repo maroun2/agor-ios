@@ -343,18 +343,34 @@ final class ChatViewModel {
 
     private func loadTaskMessagesIfNeeded(_ task: AgorTask) async {
         guard let sessionId = currentSessionId else { return }
-        // Skip if we already have messages for this task
-        guard !messages.contains(where: { $0.taskId == task.taskId }) else { return }
+        // Skip if we already have messages covering this task's index range or by taskId
+        let alreadyLoaded: Bool
+        if let start = task.firstMessageIndex {
+            alreadyLoaded = messages.contains(where: { $0.index >= start })
+        } else {
+            alreadyLoaded = messages.contains(where: { $0.taskId == task.taskId })
+        }
+        guard !alreadyLoaded else { return }
 
         do {
-            let response: PaginatedResponse<Message> = try await client.getPaginated(
-                "/messages",
-                query: [
+            // Prefer querying by index range so we also get null-task_id agent replies.
+            // Fall back to task_id query when firstMessageIndex is unavailable.
+            let query: [String: String]
+            if let start = task.firstMessageIndex {
+                query = [
+                    "session_id": sessionId,
+                    "index[$gte]": "\(start)",
+                    "$sort[index]": "1",
+                    "$limit": "200",
+                ]
+            } else {
+                query = [
                     "task_id": task.taskId,
                     "$sort[index]": "1",
                     "$limit": "200",
                 ]
-            )
+            }
+            let response: PaginatedResponse<Message> = try await client.getPaginated("/messages", query: query)
             guard currentSessionId == sessionId, !response.data.isEmpty else { return }
             let existingIds = Set(messages.map(\.messageId))
             let newMessages = response.data.filter { !existingIds.contains($0.messageId) }
@@ -757,22 +773,42 @@ final class ChatViewModel {
                 }
             }
         } else {
-            // Normal mode: server-managed task grouping
-            let taskMap = Dictionary(grouping: messages) { $0.taskId ?? "" }
-            var handledTaskIds = Set<String>()
+            // Normal mode: server-managed task grouping with index-range fallback.
+            //
+            // Many backends set task_id only on the user's prompt message; assistant
+            // replies have task_id = null. Using firstMessageIndex we can assign
+            // null-task_id messages to the task whose index range covers them, so
+            // collapsing a task hides the agent's replies too — not just the prompt.
+            let sortedTasks = tasks.sorted { ($0.firstMessageIndex ?? Int.max) < ($1.firstMessageIndex ?? Int.max) }
+            var handledMsgIds = Set<String>()
 
-            for task in tasks {
-                handledTaskIds.insert(task.taskId)
+            for (taskIdx, task) in sortedTasks.enumerated() {
                 items.append(.taskHeader(task))
+
+                let rangeStart = task.firstMessageIndex
+                let rangeEnd = (taskIdx + 1 < sortedTasks.count)
+                    ? sortedTasks[taskIdx + 1].firstMessageIndex
+                    : nil
+
+                // Collect all messages belonging to this task:
+                // primary — taskId matches; fallback — null taskId within index range
+                let taskMessages = messages.filter { msg in
+                    if msg.taskId == task.taskId { return true }
+                    guard msg.taskId == nil, let start = rangeStart else { return false }
+                    if let end = rangeEnd { return msg.index >= start && msg.index < end }
+                    return msg.index >= start
+                }.sorted { $0.index < $1.index }
+
+                taskMessages.forEach { handledMsgIds.insert($0.messageId) }
+
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
-                let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
                 items.append(contentsOf: taskMessages.map { .message($0) })
             }
 
-            // Messages without a matching task
-            let orphanMessages = messages.filter { msg in
-                msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
-            }.sorted { $0.index < $1.index }
+            // True orphans: not claimed by any task (neither by taskId nor by index range)
+            let orphanMessages = messages
+                .filter { !handledMsgIds.contains($0.messageId) }
+                .sorted { $0.index < $1.index }
             items.append(contentsOf: orphanMessages.map { .message($0) })
         }
 
