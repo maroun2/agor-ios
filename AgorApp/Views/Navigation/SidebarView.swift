@@ -95,22 +95,34 @@ struct SidebarView: View {
                     }
                 }
 
-                // Boards
+                // Boards — Button header instead of DisclosureGroup so taps never leak to List selection
                 ForEach(viewModel.boardNodes) { boardNode in
                     Section {
-                        DisclosureGroup(isExpanded: Binding(
-                            get: { boardNode.isExpanded },
-                            set: {
-                                boardNode.isExpanded = $0
-                                viewModel.setBoardExpanded(boardNode.board.boardId, expanded: $0)
-                                if $0 {
-                                    Task { await viewModel.loadWorktrees(for: boardNode) }
-                                }
+                        Button {
+                            let expanding = !boardNode.isExpanded
+                            boardNode.isExpanded = expanding
+                            viewModel.setBoardExpanded(boardNode.board.boardId, expanded: expanding)
+                            if expanding {
+                                Task { await viewModel.loadWorktrees(for: boardNode) }
                             }
-                        )) {
+                        } label: {
+                            HStack {
+                                BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
+                                Image(systemName: "chevron.right")
+                                    .rotationEffect(.degrees(boardNode.isExpanded ? 90 : 0))
+                                    .animation(.easeInOut(duration: 0.2), value: boardNode.isExpanded)
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption.weight(.semibold))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .selectionDisabled()
+
+                        if boardNode.isExpanded {
                             if boardNode.isLoading {
                                 ProgressView()
                                     .frame(maxWidth: .infinity)
+                                    .selectionDisabled()
                             } else {
                                 ForEach(boardNode.worktrees) { wtNode in
                                     WorktreeSection(
@@ -121,9 +133,6 @@ struct SidebarView: View {
                                     )
                                 }
                             }
-                        } label: {
-                            BoardRow(board: boardNode.board, attentionCount: boardNode.attentionCount)
-                                .selectionDisabled()
                         }
                     }
                 }
@@ -459,41 +468,46 @@ private struct WorktreeSection: View {
     @State private var newSessionName = ""
 
     var body: some View {
-        disclosureGroup
-            .sheet(isPresented: $showFileBrowser) {
-                FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: worktreeNode.worktree.worktreeId, socketService: socketService))
-            }
-            .sheet(item: Binding(
-                get: { sessionFileBrowserWorktreeId.map { FileBrowserTarget(id: $0) } },
-                set: { sessionFileBrowserWorktreeId = $0?.id }
-            )) { target in
-                FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: target.id, socketService: socketService))
-            }
-            .alert("New Session", isPresented: $showNewSessionAlert) {
-                TextField("Session name", text: $newSessionName)
-                Button("Cancel", role: .cancel) {}
-                Button("Create") {
-                    let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    Task { await createSession(worktreeId: worktreeNode.worktree.worktreeId, name: name.isEmpty ? nil : name) }
-                }
-            } message: {
-                Text("Enter a name for the new session on this worktree.")
-            }
-    }
-
-    private var disclosureGroup: some View {
-        DisclosureGroup(isExpanded: Binding(
-            get: { worktreeNode.isExpanded },
-            set: {
-                worktreeNode.isExpanded = $0
-                viewModel.setWorktreeExpanded(worktreeNode.worktree.worktreeId, expanded: $0)
-                if $0 { Task { await viewModel.loadSessions(for: worktreeNode) } }
-            }
-        )) {
-            sessionsList
+        // Worktree header — Button fully captures tap, never leaks to List selection
+        Button {
+            let expanding = !worktreeNode.isExpanded
+            worktreeNode.isExpanded = expanding
+            viewModel.setWorktreeExpanded(worktreeNode.worktree.worktreeId, expanded: expanding)
+            if expanding { Task { await viewModel.loadSessions(for: worktreeNode) } }
         } label: {
-            worktreeLabel
-                .selectionDisabled()
+            HStack {
+                worktreeLabel
+                Image(systemName: "chevron.right")
+                    .rotationEffect(.degrees(worktreeNode.isExpanded ? 90 : 0))
+                    .animation(.easeInOut(duration: 0.2), value: worktreeNode.isExpanded)
+                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.semibold))
+            }
+        }
+        .buttonStyle(.plain)
+        .selectionDisabled()
+        .sheet(isPresented: $showFileBrowser) {
+            FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: worktreeNode.worktree.worktreeId, socketService: socketService))
+        }
+        .sheet(item: Binding(
+            get: { sessionFileBrowserWorktreeId.map { FileBrowserTarget(id: $0) } },
+            set: { sessionFileBrowserWorktreeId = $0?.id }
+        )) { target in
+            FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: target.id, socketService: socketService))
+        }
+        .alert("New Session", isPresented: $showNewSessionAlert) {
+            TextField("Session name", text: $newSessionName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+                Task { await createSession(worktreeId: worktreeNode.worktree.worktreeId, name: name.isEmpty ? nil : name) }
+            }
+        } message: {
+            Text("Enter a name for the new session on this worktree.")
+        }
+
+        if worktreeNode.isExpanded {
+            sessionsList
         }
     }
 
