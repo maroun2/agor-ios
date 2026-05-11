@@ -94,7 +94,7 @@ final class ChatViewModel {
     // Pagination
     var hasMore = true
     private var currentSkip = 0
-    private let pageSize = 50
+    private let pageSize = 20
     private var messagePollingTimer: Timer?
 
     // Voice mode
