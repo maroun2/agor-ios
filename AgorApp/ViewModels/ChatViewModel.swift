@@ -248,11 +248,19 @@ final class ChatViewModel {
                 ]
             )
             if currentSessionId == sessionId {
-                tasks = response.data
-                AppLogger.shared.log("[Chat] loadTasks: \(response.data.count) tasks loaded", level: .debug, category: "Chat")
-                // Collapse all tasks except the last one
-                let lastId = response.data.last?.taskId
-                collapsedTaskIds = Set(response.data.compactMap { $0.taskId != lastId ? $0.taskId : nil })
+                // Merge: keep locally-added tasks (from socket events) not yet confirmed by server.
+                // This prevents a race where loadTasks runs before the server has persisted a task
+                // that onTaskCreated already added to the local list.
+                let serverIds = Set(response.data.map(\.taskId))
+                let unconfirmed = tasks.filter { !serverIds.contains($0.taskId) }
+                let merged = response.data + unconfirmed
+                tasks = merged
+                AppLogger.shared.log("[Chat] loadTasks: \(response.data.count) from server + \(unconfirmed.count) unconfirmed local", level: .debug, category: "Chat")
+                // Collapse all real tasks except the last one; preserve any virtual task collapse state.
+                let lastId = merged.last?.taskId
+                let newCollapsed = Set(merged.compactMap { $0.taskId != lastId ? $0.taskId : nil })
+                let virtualCollapsed = collapsedTaskIds.filter { $0.hasPrefix("virtual-") }
+                collapsedTaskIds = newCollapsed.union(virtualCollapsed)
                 rebuildDisplayItems()
             }
         } catch {
@@ -287,6 +295,8 @@ final class ChatViewModel {
                     // currentSkip tracks how many messages from the tail we've loaded
                     // For "load earlier", we go backwards from startSkip
                     currentSkip = startSkip
+                    // If this session has no server-managed tasks, initialize virtual task collapse
+                    if tasks.isEmpty { initVirtualTaskCollapse() }
                     rebuildDisplayItems()
                     scrollToBottomToken += 1
                 }
@@ -307,6 +317,8 @@ final class ChatViewModel {
                     AppLogger.shared.log("[Chat] loadMessages: \(response.data.count) messages loaded", level: .debug, category: "Chat")
                     hasMore = prevSkip > 0
                     currentSkip = prevSkip
+                    // Re-initialize virtual task collapse — older user messages may now be visible
+                    if tasks.isEmpty { initVirtualTaskCollapse() }
                     rebuildDisplayItems()
                 }
             }
@@ -593,6 +605,11 @@ final class ChatViewModel {
                 let existingIds = Set(messages.map(\.messageId))
                 let newOnly = newMessages.data.filter { !existingIds.contains($0.messageId) }
                 if !newOnly.isEmpty {
+                    // For virtual-task sessions: collapse previous last virtual task when new user msg arrives
+                    if tasks.isEmpty && newOnly.contains(where: { $0.role == .user }),
+                       let prevLastUser = messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
+                        collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
+                    }
                     messages.append(contentsOf: newOnly)
                     rebuildDisplayItems()
                     requestScrollToBottom()
@@ -684,23 +701,80 @@ final class ChatViewModel {
     private func _rebuildDisplayItemsNow() {
         var items: [DisplayItem] = []
 
-        // Group messages by task_id
-        let taskMap = Dictionary(grouping: messages) { $0.taskId ?? "" }
-        var handledTaskIds = Set<String>()
+        if tasks.isEmpty && !messages.isEmpty {
+            // Virtual task mode: no server-managed tasks — group messages by user message turns.
+            // Each user message starts a new collapsible group; all but the last are collapsed.
+            let sorted = messages.sorted { $0.index < $1.index }
+            var userMsgIndices: [Int] = []
+            for (i, msg) in sorted.enumerated() {
+                if msg.role == .user { userMsgIndices.append(i) }
+            }
 
-        for task in tasks {
-            handledTaskIds.insert(task.taskId)
-            items.append(.taskHeader(task))
-            guard !collapsedTaskIds.contains(task.taskId) else { continue }
-            let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
-            items.append(contentsOf: taskMessages.map { .message($0) })
+            if userMsgIndices.isEmpty {
+                // No user messages at all — show everything flat
+                items.append(contentsOf: sorted.map { .message($0) })
+            } else {
+                // Messages before the first user message (e.g. system messages) shown flat
+                let firstIdx = userMsgIndices[0]
+                if firstIdx > 0 {
+                    items.append(contentsOf: sorted[0..<firstIdx].map { .message($0) })
+                }
+
+                for (turnIdx, userMsgIdx) in userMsgIndices.enumerated() {
+                    let userMsg = sorted[userMsgIdx]
+                    let virtualId = "virtual-\(userMsg.messageId)"
+                    let nextIdx = (turnIdx + 1 < userMsgIndices.count) ? userMsgIndices[turnIdx + 1] : sorted.count
+
+                    let promptText: String
+                    switch userMsg.content {
+                    case .text(let t): promptText = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                    default: promptText = userMsg.contentPreview.isEmpty ? "Message" : userMsg.contentPreview
+                    }
+
+                    let virtualTask = AgorTask(
+                        taskId: virtualId,
+                        sessionId: userMsg.sessionId,
+                        createdBy: "",
+                        fullPrompt: promptText.isEmpty ? "Message" : promptText,
+                        description: nil,
+                        status: .completed,
+                        firstMessageIndex: userMsg.index,
+                        lastMessageIndex: nil,
+                        toolUseCount: nil,
+                        gitState: nil,
+                        durationMs: nil,
+                        model: nil,
+                        normalizedSdkResponse: nil,
+                        createdAt: userMsg.timestamp,
+                        startedAt: nil,
+                        completedAt: nil
+                    )
+
+                    items.append(.taskHeader(virtualTask))
+                    if !collapsedTaskIds.contains(virtualId) {
+                        items.append(contentsOf: sorted[userMsgIdx..<nextIdx].map { .message($0) })
+                    }
+                }
+            }
+        } else {
+            // Normal mode: server-managed task grouping
+            let taskMap = Dictionary(grouping: messages) { $0.taskId ?? "" }
+            var handledTaskIds = Set<String>()
+
+            for task in tasks {
+                handledTaskIds.insert(task.taskId)
+                items.append(.taskHeader(task))
+                guard !collapsedTaskIds.contains(task.taskId) else { continue }
+                let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
+                items.append(contentsOf: taskMessages.map { .message($0) })
+            }
+
+            // Messages without a matching task
+            let orphanMessages = messages.filter { msg in
+                msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
+            }.sorted { $0.index < $1.index }
+            items.append(contentsOf: orphanMessages.map { .message($0) })
         }
-
-        // Messages without a task
-        let orphanMessages = messages.filter { msg in
-            msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
-        }.sorted { $0.index < $1.index }
-        items.append(contentsOf: orphanMessages.map { .message($0) })
 
         // Active streaming messages
         let streamingIds = Set(messages.map(\.messageId))
@@ -711,6 +785,20 @@ final class ChatViewModel {
         }
 
         displayItems = items
+    }
+
+    // Collapse all virtual task IDs except the one belonging to the last user message.
+    // Called after loading messages in sessions with no server-managed tasks.
+    private func initVirtualTaskCollapse() {
+        let userMsgs = messages.filter { $0.role == .user }.sorted { $0.index < $1.index }
+        guard userMsgs.count > 1 else { return }
+        for msg in userMsgs.dropLast() {
+            collapsedTaskIds.insert("virtual-\(msg.messageId)")
+        }
+        // Ensure the last virtual task is expanded
+        if let last = userMsgs.last {
+            collapsedTaskIds.remove("virtual-\(last.messageId)")
+        }
     }
 
     // MARK: - Socket Handlers
@@ -765,6 +853,11 @@ final class ChatViewModel {
             }
             // Add to messages if not already there
             if !self.messages.contains(where: { $0.messageId == message.messageId }) {
+                // For virtual-task sessions: when a new user message arrives, collapse the previous last virtual task
+                if self.tasks.isEmpty && message.role == .user,
+                   let prevLastUser = self.messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
+                    self.collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
+                }
                 self.messages.append(message)
                 self.rebuildDisplayItems()
                 AppLogger.shared.log("[Scroll] onMessageCreated → requestScrollToBottom (msg: \(message.messageId.prefix(8)), total: \(self.messages.count))", level: .debug, category: "Scroll")
