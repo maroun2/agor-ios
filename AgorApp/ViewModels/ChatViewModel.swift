@@ -343,34 +343,19 @@ final class ChatViewModel {
 
     private func loadTaskMessagesIfNeeded(_ task: AgorTask) async {
         guard let sessionId = currentSessionId else { return }
-        // Skip if we already have messages covering this task's index range or by taskId
-        let alreadyLoaded: Bool
-        if let start = task.firstMessageIndex {
-            alreadyLoaded = messages.contains(where: { $0.index >= start })
-        } else {
-            alreadyLoaded = messages.contains(where: { $0.taskId == task.taskId })
-        }
-        guard !alreadyLoaded else { return }
+        // Skip if we already have messages for this specific task
+        guard !messages.contains(where: { $0.taskId == task.taskId }) else { return }
 
         do {
-            // Prefer querying by index range so we also get null-task_id agent replies.
-            // Fall back to task_id query when firstMessageIndex is unavailable.
-            let query: [String: String]
-            if let start = task.firstMessageIndex {
-                query = [
-                    "session_id": sessionId,
-                    "index[$gte]": "\(start)",
-                    "$sort[index]": "1",
-                    "$limit": "200",
-                ]
-            } else {
-                query = [
+            // Query by task_id — matches web UI's approach (messagesByTask).
+            let response: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: [
                     "task_id": task.taskId,
                     "$sort[index]": "1",
                     "$limit": "200",
                 ]
-            }
-            let response: PaginatedResponse<Message> = try await client.getPaginated("/messages", query: query)
+            )
             guard currentSessionId == sessionId, !response.data.isEmpty else { return }
             let existingIds = Set(messages.map(\.messageId))
             let newMessages = response.data.filter { !existingIds.contains($0.messageId) }
@@ -599,37 +584,32 @@ final class ChatViewModel {
                 await loadTasks(sessionId)
             }
 
-            let count: PaginatedResponse<Message> = try await client.getPaginated(
-                "/messages",
-                query: ["session_id": sessionId, "$limit": "1"]
-            )
-            let serverTotal = count.total
+            // Fetch only messages newer than our latest — no total comparison.
+            // The old `serverTotal > messages.count + currentSkip` gate caused
+            // progressive backfilling: each poll loaded another batch until ALL
+            // server messages were in memory, breaking pagination.
             let lastIndex = messages.last?.index ?? 0
-
-            // If server has more messages than we know about, fetch the new ones
-            if serverTotal > messages.count + currentSkip {
-                let newMessages: PaginatedResponse<Message> = try await client.getPaginated(
-                    "/messages",
-                    query: [
-                        "session_id": sessionId,
-                        "index[$gt]": "\(lastIndex)",
-                        "$sort[index]": "1",
-                        "$limit": "50",
-                    ]
-                )
-                guard sessionId == self.currentSessionId else { return }
-                let existingIds = Set(messages.map(\.messageId))
-                let newOnly = newMessages.data.filter { !existingIds.contains($0.messageId) }
-                if !newOnly.isEmpty {
-                    // For virtual-task sessions: collapse previous last virtual task when new user msg arrives
-                    if tasks.isEmpty && newOnly.contains(where: { $0.role == .user }),
-                       let prevLastUser = messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
-                        collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
-                    }
-                    messages.append(contentsOf: newOnly)
-                    rebuildDisplayItems()
-                    requestScrollToBottom()
+            let newMessages: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: [
+                    "session_id": sessionId,
+                    "index[$gt]": "\(lastIndex)",
+                    "$sort[index]": "1",
+                    "$limit": "50",
+                ]
+            )
+            guard sessionId == self.currentSessionId else { return }
+            let existingIds = Set(messages.map(\.messageId))
+            let newOnly = newMessages.data.filter { !existingIds.contains($0.messageId) }
+            if !newOnly.isEmpty {
+                // For virtual-task sessions: collapse previous last virtual task when new user msg arrives
+                if tasks.isEmpty && newOnly.contains(where: { $0.role == .user }),
+                   let prevLastUser = messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
+                    collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
                 }
+                messages.append(contentsOf: newOnly)
+                rebuildDisplayItems()
+                requestScrollToBottom()
             }
 
             // Also refresh session state
@@ -773,43 +753,32 @@ final class ChatViewModel {
                 }
             }
         } else {
-            // Normal mode: server-managed task grouping with index-range fallback.
-            //
-            // Many backends set task_id only on the user's prompt message; assistant
-            // replies have task_id = null. Using firstMessageIndex we can assign
-            // null-task_id messages to the task whose index range covers them, so
-            // collapsing a task hides the agent's replies too — not just the prompt.
-            let sortedTasks = tasks.sorted { ($0.firstMessageIndex ?? Int.max) < ($1.firstMessageIndex ?? Int.max) }
-            var handledMsgIds = Set<String>()
+            // Normal mode: server-managed task grouping by task_id.
+            // Matches web UI approach (messagesByTask map).
+            let taskMap = Dictionary(grouping: messages) { $0.taskId ?? "" }
+            var handledTaskIds = Set<String>()
 
-            for (taskIdx, task) in sortedTasks.enumerated() {
+            for task in tasks {
+                handledTaskIds.insert(task.taskId)
                 items.append(.taskHeader(task))
-
-                let rangeStart = task.firstMessageIndex
-                let rangeEnd = (taskIdx + 1 < sortedTasks.count)
-                    ? sortedTasks[taskIdx + 1].firstMessageIndex
-                    : nil
-
-                // Collect all messages belonging to this task:
-                // primary — taskId matches; fallback — null taskId within index range
-                let taskMessages = messages.filter { msg in
-                    if msg.taskId == task.taskId { return true }
-                    guard msg.taskId == nil, let start = rangeStart else { return false }
-                    if let end = rangeEnd { return msg.index >= start && msg.index < end }
-                    return msg.index >= start
-                }.sorted { $0.index < $1.index }
-
-                taskMessages.forEach { handledMsgIds.insert($0.messageId) }
-
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
+                let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
                 items.append(contentsOf: taskMessages.map { .message($0) })
             }
 
-            // True orphans: not claimed by any task (neither by taskId nor by index range)
-            let orphanMessages = messages
-                .filter { !handledMsgIds.contains($0.messageId) }
-                .sorted { $0.index < $1.index }
-            items.append(contentsOf: orphanMessages.map { .message($0) })
+            // Orphan messages: null taskId or taskId not in our tasks list.
+            // Append after last expanded task (they're most likely agent replies
+            // for the current task whose task_id wasn't set yet).
+            let orphanMessages = messages.filter { msg in
+                msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
+            }.sorted { $0.index < $1.index }
+
+            if !orphanMessages.isEmpty {
+                // Only show orphans if the last task is expanded
+                if let lastTask = tasks.last, !collapsedTaskIds.contains(lastTask.taskId) {
+                    items.append(contentsOf: orphanMessages.map { .message($0) })
+                }
+            }
         }
 
         // Active streaming messages
