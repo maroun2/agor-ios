@@ -71,9 +71,9 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var emptyStateOverlay: some View {
-        if viewModel.isLoadingMessages && viewModel.messages.isEmpty {
+        if viewModel.isLoadingMessages && viewModel.displayItems.isEmpty {
             ProgressView("Loading messages...")
-        } else if viewModel.messages.isEmpty && viewModel.activeStreams.isEmpty && !viewModel.isLoadingMessages && viewModel.error == nil {
+        } else if viewModel.displayItems.isEmpty && viewModel.activeStreams.isEmpty && !viewModel.isLoadingMessages && viewModel.error == nil {
             ContentUnavailableView("No Messages", systemImage: "bubble.left", description: Text("Send a prompt to get started"))
         }
     }
@@ -148,7 +148,7 @@ struct ChatView: View {
                 error: viewModel.error!,
                 onRetry: {
                     viewModel.error = nil
-                    Task { await viewModel.loadMessages(sessionId) }
+                    viewModel.refreshCurrentSession()
                 }
             )
         }
@@ -177,23 +177,6 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    if viewModel.hasMore {
-                        Button {
-                            Task { await viewModel.loadMore() }
-                        } label: {
-                            if viewModel.isLoadingMessages {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Label("Load previous messages", systemImage: "arrow.up.circle")
-                                    .font(.subheadline)
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .padding(.vertical, 8)
-                        .disabled(viewModel.isLoadingMessages)
-                    }
                     ForEach(viewModel.displayItems) { item in
                         messageRow(item)
                     }
