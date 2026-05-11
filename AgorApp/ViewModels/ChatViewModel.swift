@@ -32,7 +32,11 @@ enum DisplayItem: Identifiable {
 final class ChatViewModel {
     var currentSessionId: String?
     var currentSession: Session?
-    var messages: [Message] = []
+    // Task-centric message storage (matches web UI's messagesByTask map)
+    var messagesByTask: [String: [Message]] = [:]
+    var loadedTaskIds: Set<String> = []
+    // Fallback flat array for sessions without server tasks (virtual-task mode)
+    var virtualMessages: [Message] = []
     var tasks: [AgorTask] = []
     var displayItems: [DisplayItem] = []
     var isLoadingMessages = false
@@ -76,14 +80,18 @@ final class ChatViewModel {
 
     func toggleTaskCollapsed(_ taskId: String) {
         if collapsedTaskIds.contains(taskId) {
+            // Expanding — load messages for this task
             collapsedTaskIds.remove(taskId)
             _rebuildDisplayItemsNow()
-            // Load messages for this task if not yet in memory
-            if let task = tasks.first(where: { $0.taskId == taskId }) {
-                Task { await loadTaskMessagesIfNeeded(task) }
+            if !taskId.hasPrefix("virtual-") {
+                Task { await loadTaskMessages(taskId) }
             }
         } else {
+            // Collapsing — unload messages to free memory (matches web UI)
             collapsedTaskIds.insert(taskId)
+            if !taskId.hasPrefix("virtual-") {
+                unloadTaskMessages(taskId)
+            }
             _rebuildDisplayItemsNow()
         }
     }
@@ -91,11 +99,17 @@ final class ChatViewModel {
     // Streaming
     var activeStreams: [String: StreamingMessage] = [:]
 
-    // Pagination
-    var hasMore = true
-    private var currentSkip = 0
-    private let pageSize = 20
-    private var messagePollingTimer: Timer?
+    // Polling timer (tasks + session state only, NOT messages)
+    private var pollingTimer: Timer?
+
+    // Convenience: all messages across loaded tasks (for voice, permissions, etc.)
+    var allMessages: [Message] {
+        if !tasks.isEmpty {
+            return messagesByTask.values.flatMap { $0 }.sorted { $0.index < $1.index }
+        } else {
+            return virtualMessages.sorted { $0.index < $1.index }
+        }
+    }
 
     // Voice mode
     var voiceService: ContinuousVoiceService?
@@ -157,27 +171,30 @@ final class ChatViewModel {
         // should render inline voice UI or receive voice-driven prompt updates.
 
         if sessionId == currentSessionId {
-            // Same session re-selected — do a soft refresh to pick up any missed events
+            // Same session re-selected — soft refresh
             AppLogger.shared.log("[Chat] selectSession \(sessionId) (soft refresh)", level: .debug, category: "Chat")
             Task {
                 await loadSession(sessionId)
                 await loadTasks(sessionId)
-                await checkForNewMessages(sessionId)
+                // Reload messages for the last (expanded) task
+                if let lastTaskId = tasks.last?.taskId, !collapsedTaskIds.contains(lastTaskId) {
+                    await loadTaskMessages(lastTaskId)
+                }
             }
             return
         }
         AppLogger.shared.log("[Chat] selectSession \(sessionId)", level: .info, category: "Chat")
-        stopMessagePolling()
+        stopPolling()
         currentSessionId = sessionId
-        messages = []
+        messagesByTask = [:]
+        loadedTaskIds = []
+        virtualMessages = []
         tasks = []
         displayItems = []
         activeStreams = [:]
         voiceStreamBuffer = ""
         voiceDidStreamCurrentMessage = false
         collapsedTaskIds = []
-        currentSkip = 0
-        hasMore = true
         error = nil
         // Restore draft for this session (set directly to avoid didSet writing back before session is set)
         promptText = draftText(for: sessionId)
@@ -189,14 +206,21 @@ final class ChatViewModel {
                 await markSessionViewed(sessionId)
             }
             await loadTasks(sessionId)
-            await loadMessages(sessionId)
-            startMessagePolling()
+            // Load messages for last (expanded) task — matches web UI lazy loading
+            if let lastTaskId = tasks.last?.taskId {
+                await loadTaskMessages(lastTaskId)
+            } else {
+                // No tasks — use virtual-task mode with session-based loading
+                await loadVirtualMessages(sessionId)
+            }
+            startPolling()
+            scrollToBottomToken += 1
         }
     }
 
     func refreshCurrentSession() {
         guard let sessionId = currentSessionId else { return }
-        stopMessagePolling()
+        stopPolling()
         // Clear stale streaming state (e.g., missed thinking:end while backgrounded)
         streamingService.clearStreams(for: sessionId)
         activeStreams = streamingService.activeStreams
@@ -208,16 +232,17 @@ final class ChatViewModel {
         lastNearBottomTime = Date()
         Task {
             await loadSession(sessionId)
-            // Re-evaluate voice state — agent may have finished while backgrounded.
-            // Socket patches are missed during background, so voiceSession is only
-            // fresh after loadSession() fetches from server.
-            await MainActor.run {
-                updateVoiceListening()
-            }
+            await MainActor.run { updateVoiceListening() }
             await loadTasks(sessionId)
-            resetMessagePagination()
-            await loadMessages(sessionId)
-            startMessagePolling()
+            // Reload messages for all currently-loaded tasks
+            for taskId in loadedTaskIds {
+                await loadTaskMessages(taskId)
+            }
+            // If virtual-task mode, reload
+            if tasks.isEmpty {
+                await loadVirtualMessages(sessionId)
+            }
+            startPolling()
         }
     }
 
@@ -268,103 +293,74 @@ final class ChatViewModel {
         }
     }
 
-    func loadMessages(_ sessionId: String) async {
+    // MARK: - Task-Centric Message Loading (matches web UI)
+
+    /// Load messages for a specific task by task_id.
+    /// Web UI equivalent: ReactiveSessionHandle.loadTaskMessages()
+    func loadTaskMessages(_ taskId: String) async {
+        guard let sessionId = currentSessionId else { return }
+        // Skip virtual task IDs
+        guard !taskId.hasPrefix("virtual-") else { return }
+
         isLoadingMessages = true
         do {
-            if currentSkip == 0 {
-                // Initial load: get the total first so we can jump to the last page
-                let count: PaginatedResponse<Message> = try await client.getPaginated(
-                    "/messages",
-                    query: ["session_id": sessionId, "$limit": "1"]
-                )
-                let total = count.total
-                let startSkip = max(0, total - pageSize)
-                let response: PaginatedResponse<Message> = try await client.getPaginated(
-                    "/messages",
-                    query: [
-                        "session_id": sessionId,
-                        "$sort[index]": "1",
-                        "$limit": "\(pageSize)",
-                        "$skip": "\(startSkip)",
-                    ]
-                )
-                if currentSessionId == sessionId {
-                    messages = response.data
-                    AppLogger.shared.log("[Chat] loadMessages: \(response.data.count) messages loaded", level: .debug, category: "Chat")
-                    hasMore = startSkip > 0
-                    // currentSkip tracks how many messages from the tail we've loaded
-                    // For "load earlier", we go backwards from startSkip
-                    currentSkip = startSkip
-                    // If this session has no server-managed tasks, initialize virtual task collapse
-                    if tasks.isEmpty { initVirtualTaskCollapse() }
-                    rebuildDisplayItems()
-                    scrollToBottomToken += 1
-                }
-            } else {
-                // Load earlier: fetch the page just before what we have
-                let prevSkip = max(0, currentSkip - pageSize)
-                let response: PaginatedResponse<Message> = try await client.getPaginated(
-                    "/messages",
-                    query: [
-                        "session_id": sessionId,
-                        "$sort[index]": "1",
-                        "$limit": "\(pageSize)",
-                        "$skip": "\(prevSkip)",
-                    ]
-                )
-                if currentSessionId == sessionId {
-                    messages = response.data + messages  // prepend older page
-                    AppLogger.shared.log("[Chat] loadMessages: \(response.data.count) messages loaded", level: .debug, category: "Chat")
-                    hasMore = prevSkip > 0
-                    currentSkip = prevSkip
-                    // Re-initialize virtual task collapse — older user messages may now be visible
-                    if tasks.isEmpty { initVirtualTaskCollapse() }
-                    rebuildDisplayItems()
-                }
-            }
-        } catch {
-            AppLogger.shared.log("[Chat] loadMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
-            self.error = "Failed to load messages"
-        }
-        isLoadingMessages = false
-    }
-
-    func loadMore() async {
-        guard hasMore, !isLoadingMessages, let sessionId = currentSessionId else { return }
-        await loadMessages(sessionId)
-    }
-
-    func resetMessagePagination() {
-        // Don't clear messages here — they'll be replaced on successful reload.
-        // selectSession already clears messages before switching sessions.
-        currentSkip = 0
-        hasMore = true
-    }
-
-    private func loadTaskMessagesIfNeeded(_ task: AgorTask) async {
-        guard let sessionId = currentSessionId else { return }
-        // Skip if we already have messages for this specific task
-        guard !messages.contains(where: { $0.taskId == task.taskId }) else { return }
-
-        do {
-            // Query by task_id — matches web UI's approach (messagesByTask).
             let response: PaginatedResponse<Message> = try await client.getPaginated(
                 "/messages",
                 query: [
-                    "task_id": task.taskId,
+                    "task_id": taskId,
                     "$sort[index]": "1",
                     "$limit": "200",
                 ]
             )
-            guard currentSessionId == sessionId, !response.data.isEmpty else { return }
-            let existingIds = Set(messages.map(\.messageId))
-            let newMessages = response.data.filter { !existingIds.contains($0.messageId) }
-            guard !newMessages.isEmpty else { return }
-            messages = (messages + newMessages).sorted { $0.index < $1.index }
+            guard currentSessionId == sessionId else { return }
+            messagesByTask[taskId] = response.data.sorted { $0.index < $1.index }
+            loadedTaskIds.insert(taskId)
+            AppLogger.shared.log("[Chat] loadTaskMessages: \(response.data.count) msgs for task \(taskId.prefix(8))", level: .debug, category: "Chat")
             rebuildDisplayItems()
         } catch {
-            // Non-fatal — task header still shows, just without messages
+            AppLogger.shared.log("[Chat] loadTaskMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
         }
+        isLoadingMessages = false
+    }
+
+    /// Unload messages for a collapsed task to free memory.
+    /// Web UI equivalent: ReactiveSessionHandle.unloadTaskMessages()
+    func unloadTaskMessages(_ taskId: String) {
+        messagesByTask.removeValue(forKey: taskId)
+        loadedTaskIds.remove(taskId)
+    }
+
+    /// Load messages for virtual-task mode (sessions without server tasks).
+    /// Uses session_id query with $skip/$limit (the only operators the backend supports).
+    private func loadVirtualMessages(_ sessionId: String) async {
+        isLoadingMessages = true
+        do {
+            // Get total to jump to last page
+            let count: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: ["session_id": sessionId, "$limit": "1"]
+            )
+            let total = count.total
+            let pageSize = 50
+            let startSkip = max(0, total - pageSize)
+            let response: PaginatedResponse<Message> = try await client.getPaginated(
+                "/messages",
+                query: [
+                    "session_id": sessionId,
+                    "$limit": "\(pageSize)",
+                    "$skip": "\(startSkip)",
+                ]
+            )
+            guard currentSessionId == sessionId else { return }
+            virtualMessages = response.data.sorted { $0.index < $1.index }
+            AppLogger.shared.log("[Chat] loadVirtualMessages: \(response.data.count) msgs loaded", level: .debug, category: "Chat")
+            initVirtualTaskCollapse()
+            rebuildDisplayItems()
+        } catch {
+            AppLogger.shared.log("[Chat] loadVirtualMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
+            self.error = "Failed to load messages"
+        }
+        isLoadingMessages = false
     }
 
     // MARK: - Send Prompt
@@ -393,13 +389,16 @@ final class ChatViewModel {
                     "/sessions/\(sessionId)/prompt",
                     body: PromptBody(prompt: text)
                 )
-                // Proactively refresh in case socket events were missed
+                // Proactively refresh tasks in case socket events were missed
                 try? await Task.sleep(for: .milliseconds(300))
                 if currentSessionId == sessionId {
                     AppLogger.shared.log("[Chat] sendPrompt: proactive refresh after send", level: .debug, category: "Chat")
                     await loadSession(sessionId)
                     await loadTasks(sessionId)
-                    await checkForNewMessages(sessionId)
+                    // Load messages for the new (last) task
+                    if let lastTaskId = self.tasks.last?.taskId {
+                        await loadTaskMessages(lastTaskId)
+                    }
                 } else if voiceSessionId == sessionId {
                     await loadSession(sessionId)
                 }
@@ -551,30 +550,31 @@ final class ChatViewModel {
         }
     }
 
-    // MARK: - Message Polling
+    // MARK: - Polling (tasks + session state only)
+    // Messages arrive via socket events — no message polling needed.
+    // The backend ignores index[$gt] and $sort when session_id is present,
+    // so message polling was fundamentally broken. Web UI also uses socket-only.
 
-    func startMessagePolling() {
-        stopMessagePolling()
-        // Must schedule on main RunLoop — Timer.scheduledTimer called from a Swift Task
-        // (cooperative thread pool) has no RunLoop and the timer never fires
+    func startPolling() {
+        stopPolling()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.messagePollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            self.pollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
                 guard let self, let sessionId = self.currentSessionId else { return }
-                Task { await self.checkForNewMessages(sessionId) }
+                Task { await self.pollForUpdates(sessionId) }
             }
         }
     }
 
-    func stopMessagePolling() {
-        messagePollingTimer?.invalidate()
-        messagePollingTimer = nil
+    func stopPolling() {
+        pollingTimer?.invalidate()
+        pollingTimer = nil
     }
 
-    private func checkForNewMessages(_ sessionId: String) async {
+    private func pollForUpdates(_ sessionId: String) async {
         guard sessionId == currentSessionId else { return }
         do {
-            // Check for new tasks (user's prompt appears as a task header)
+            // Check for new tasks
             let taskCount: PaginatedResponse<AgorTask> = try await client.getPaginated(
                 "/tasks",
                 query: ["session_id": sessionId, "$limit": "1"]
@@ -582,40 +582,16 @@ final class ChatViewModel {
             guard sessionId == currentSessionId else { return }
             if taskCount.total > tasks.count {
                 await loadTasks(sessionId)
-            }
-
-            // Fetch only messages newer than our latest — no total comparison.
-            // The old `serverTotal > messages.count + currentSkip` gate caused
-            // progressive backfilling: each poll loaded another batch until ALL
-            // server messages were in memory, breaking pagination.
-            let lastIndex = messages.last?.index ?? 0
-            let newMessages: PaginatedResponse<Message> = try await client.getPaginated(
-                "/messages",
-                query: [
-                    "session_id": sessionId,
-                    "index[$gt]": "\(lastIndex)",
-                    "$sort[index]": "1",
-                    "$limit": "50",
-                ]
-            )
-            guard sessionId == self.currentSessionId else { return }
-            let existingIds = Set(messages.map(\.messageId))
-            let newOnly = newMessages.data.filter { !existingIds.contains($0.messageId) }
-            if !newOnly.isEmpty {
-                // For virtual-task sessions: collapse previous last virtual task when new user msg arrives
-                if tasks.isEmpty && newOnly.contains(where: { $0.role == .user }),
-                   let prevLastUser = messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
-                    collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
+                // Auto-load messages for the new last task
+                if let lastTaskId = tasks.last?.taskId, !collapsedTaskIds.contains(lastTaskId) {
+                    await loadTaskMessages(lastTaskId)
                 }
-                messages.append(contentsOf: newOnly)
-                rebuildDisplayItems()
-                requestScrollToBottom()
             }
 
-            // Also refresh session state
+            // Refresh session state
             await loadSession(sessionId)
         } catch {
-            // Non-fatal — polling failures are silent
+            // Non-fatal
         }
     }
 
@@ -697,20 +673,17 @@ final class ChatViewModel {
     private func _rebuildDisplayItemsNow() {
         var items: [DisplayItem] = []
 
-        if tasks.isEmpty && !messages.isEmpty {
-            // Virtual task mode: no server-managed tasks — group messages by user message turns.
-            // Each user message starts a new collapsible group; all but the last are collapsed.
-            let sorted = messages.sorted { $0.index < $1.index }
+        if tasks.isEmpty && !virtualMessages.isEmpty {
+            // Virtual task mode: no server-managed tasks — group by user message turns.
+            let sorted = virtualMessages.sorted { $0.index < $1.index }
             var userMsgIndices: [Int] = []
             for (i, msg) in sorted.enumerated() {
                 if msg.role == .user { userMsgIndices.append(i) }
             }
 
             if userMsgIndices.isEmpty {
-                // No user messages at all — show everything flat
                 items.append(contentsOf: sorted.map { .message($0) })
             } else {
-                // Messages before the first user message (e.g. system messages) shown flat
                 let firstIdx = userMsgIndices[0]
                 if firstIdx > 0 {
                     items.append(contentsOf: sorted[0..<firstIdx].map { .message($0) })
@@ -752,39 +725,21 @@ final class ChatViewModel {
                     }
                 }
             }
-        } else {
-            // Normal mode: server-managed task grouping by task_id.
-            // Matches web UI approach (messagesByTask map).
-            let taskMap = Dictionary(grouping: messages) { $0.taskId ?? "" }
-            var handledTaskIds = Set<String>()
-
+        } else if !tasks.isEmpty {
+            // Normal mode: task-centric display matching web UI.
+            // Only show messages for loaded (expanded) tasks.
             for task in tasks {
-                handledTaskIds.insert(task.taskId)
                 items.append(.taskHeader(task))
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
-                let taskMessages = (taskMap[task.taskId] ?? []).sorted { $0.index < $1.index }
+                let taskMessages = (messagesByTask[task.taskId] ?? []).sorted { $0.index < $1.index }
                 items.append(contentsOf: taskMessages.map { .message($0) })
-            }
-
-            // Orphan messages: null taskId or taskId not in our tasks list.
-            // Append after last expanded task (they're most likely agent replies
-            // for the current task whose task_id wasn't set yet).
-            let orphanMessages = messages.filter { msg in
-                msg.taskId == nil || !handledTaskIds.contains(msg.taskId ?? "")
-            }.sorted { $0.index < $1.index }
-
-            if !orphanMessages.isEmpty {
-                // Only show orphans if the last task is expanded
-                if let lastTask = tasks.last, !collapsedTaskIds.contains(lastTask.taskId) {
-                    items.append(contentsOf: orphanMessages.map { .message($0) })
-                }
             }
         }
 
         // Active streaming messages
-        let streamingIds = Set(messages.map(\.messageId))
+        let allMsgIds = Set(allMessages.map(\.messageId))
         for (_, stream) in activeStreams where stream.sessionId == currentSessionId {
-            if !streamingIds.contains(stream.messageId) {
+            if !allMsgIds.contains(stream.messageId) {
                 items.append(.streaming(stream))
             }
         }
@@ -792,15 +747,12 @@ final class ChatViewModel {
         displayItems = items
     }
 
-    // Collapse all virtual task IDs except the one belonging to the last user message.
-    // Called after loading messages in sessions with no server-managed tasks.
     private func initVirtualTaskCollapse() {
-        let userMsgs = messages.filter { $0.role == .user }.sorted { $0.index < $1.index }
+        let userMsgs = virtualMessages.filter { $0.role == .user }.sorted { $0.index < $1.index }
         guard userMsgs.count > 1 else { return }
         for msg in userMsgs.dropLast() {
             collapsedTaskIds.insert("virtual-\(msg.messageId)")
         }
-        // Ensure the last virtual task is expanded
         if let last = userMsgs.last {
             collapsedTaskIds.remove("virtual-\(last.messageId)")
         }
@@ -840,55 +792,77 @@ final class ChatViewModel {
     private func setupSocketHandlers() {
         socketService.onMessageCreated { [weak self] message in
             guard let self else { return }
-            AppLogger.shared.log("[ChatVM] Received onMessageCreated: \(message.messageId.prefix(8)) session=\(message.sessionId)", level: .debug, category: "Chat")
+            AppLogger.shared.log("[ChatVM] onMessageCreated: \(message.messageId.prefix(8)) taskId=\(message.taskId?.prefix(8) ?? "nil") role=\(message.role.rawValue)", level: .debug, category: "Chat")
             self.handleVoiceMessageCreated(message)
-            guard message.sessionId == self.currentSessionId else {
-                AppLogger.shared.log("[ChatVM] Ignoring visible message \(message.messageId.prefix(8)) - session mismatch (\(message.sessionId) != \(self.currentSessionId ?? "nil"))", level: .debug, category: "Chat")
-                return
-            }
+            guard message.sessionId == self.currentSessionId else { return }
             // Remove from streaming (handoff)
             self.activeStreams.removeValue(forKey: message.messageId)
-            // If permission was just resolved, restore auto-scroll on first new assistant message
+            // Restore auto-scroll after permission resolution
             if let resolvedTime = lastResolvedPermissionTime,
-               Date().timeIntervalSince(resolvedTime) < 5.0, // Within 5s window
+               Date().timeIntervalSince(resolvedTime) < 5.0,
                message.role == .assistant {
-                AppLogger.shared.log("[Scroll] First message after permission → restoring userIsNearBottom", level: .debug, category: "Scroll")
                 userIsNearBottom = true
                 lastResolvedPermissionTime = nil
             }
-            // Add to messages if not already there
-            if !self.messages.contains(where: { $0.messageId == message.messageId }) {
-                // For virtual-task sessions: when a new user message arrives, collapse the previous last virtual task
-                if self.tasks.isEmpty && message.role == .user,
-                   let prevLastUser = self.messages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
+
+            if self.tasks.isEmpty {
+                // Virtual-task mode: append to virtualMessages
+                guard !self.virtualMessages.contains(where: { $0.messageId == message.messageId }) else { return }
+                if message.role == .user,
+                   let prevLastUser = self.virtualMessages.filter({ $0.role == .user }).max(by: { $0.index < $1.index }) {
                     self.collapsedTaskIds.insert("virtual-\(prevLastUser.messageId)")
                 }
-                self.messages.append(message)
+                self.virtualMessages.append(message)
                 self.rebuildDisplayItems()
-                AppLogger.shared.log("[Scroll] onMessageCreated → requestScrollToBottom (msg: \(message.messageId.prefix(8)), total: \(self.messages.count))", level: .debug, category: "Scroll")
                 self.requestScrollToBottom()
             } else {
-                AppLogger.shared.log("[ChatVM] Message \(message.messageId.prefix(8)) already exists in local list", level: .debug, category: "Chat")
+                // Task-centric mode: only track if task is loaded (matches web UI)
+                guard let taskId = message.taskId else {
+                    AppLogger.shared.log("[ChatVM] Ignoring null-taskId message \(message.messageId.prefix(8))", level: .debug, category: "Chat")
+                    return
+                }
+                guard self.loadedTaskIds.contains(taskId) else {
+                    AppLogger.shared.log("[ChatVM] Ignoring message for unloaded task \(taskId.prefix(8))", level: .debug, category: "Chat")
+                    return
+                }
+                var taskMsgs = self.messagesByTask[taskId] ?? []
+                guard !taskMsgs.contains(where: { $0.messageId == message.messageId }) else { return }
+                taskMsgs.append(message)
+                taskMsgs.sort { $0.index < $1.index }
+                self.messagesByTask[taskId] = taskMsgs
+                self.rebuildDisplayItems()
+                self.requestScrollToBottom()
             }
         }
 
         socketService.onMessagePatched { [weak self] message in
             guard let self, message.sessionId == self.currentSessionId else { return }
-            if let idx = self.messages.firstIndex(where: { $0.messageId == message.messageId }) {
-                self.messages[idx] = message
-                self.rebuildDisplayItems()
+            if self.tasks.isEmpty {
+                if let idx = self.virtualMessages.firstIndex(where: { $0.messageId == message.messageId }) {
+                    self.virtualMessages[idx] = message
+                    self.rebuildDisplayItems()
+                }
+            } else if let taskId = message.taskId, var taskMsgs = self.messagesByTask[taskId] {
+                if let idx = taskMsgs.firstIndex(where: { $0.messageId == message.messageId }) {
+                    taskMsgs[idx] = message
+                    self.messagesByTask[taskId] = taskMsgs
+                    self.rebuildDisplayItems()
+                }
             }
         }
 
         socketService.onTaskCreated { [weak self] task in
             guard let self, task.sessionId == self.currentSessionId else { return }
             if !self.tasks.contains(where: { $0.taskId == task.taskId }) {
-                // Collapse the previously-last task so only the new one stays expanded
+                // Collapse previously-last task, unload its messages
                 if let previousLastId = self.tasks.last?.taskId {
                     self.collapsedTaskIds.insert(previousLastId)
+                    self.unloadTaskMessages(previousLastId)
                 }
                 self.tasks.append(task)
                 self.rebuildDisplayItems()
+                // Load messages for the new task
+                Task { await self.loadTaskMessages(task.taskId) }
             }
         }
 
@@ -927,13 +901,13 @@ final class ChatViewModel {
             if session.status == .awaitingPermission || session.status == .awaitingInput {
                 let permId = self.currentPendingPermissionId
                 let inputId = self.currentPendingInputId
-                AppLogger.shared.log("[Scroll] session needs attention — permId: \(permId?.prefix(8) ?? "nil"), inputId: \(inputId?.prefix(8) ?? "nil"), msgs: \(self.messages.count)", level: .debug, category: "Scroll")
+                AppLogger.shared.log("[Scroll] session needs attention — permId: \(permId?.prefix(8) ?? "nil"), inputId: \(inputId?.prefix(8) ?? "nil"), msgs: \(self.allMessages.count)", level: .debug, category: "Scroll")
                 if let msgId = permId ?? inputId {
                     self.scrollToMessageInProgress = true
                     self.scrollToMessageId = "msg-\(msgId)"
                     AppLogger.shared.log("[Scroll] → scrollToMessageId = msg-\(msgId.prefix(8))", level: .debug, category: "Scroll")
                 } else {
-                    AppLogger.shared.log("[Scroll] ⚠️ no pending permission/input message found in \(self.messages.count) messages", level: .warning, category: "Scroll")
+                    AppLogger.shared.log("[Scroll] ⚠️ no pending permission/input message found in \(self.allMessages.count) messages", level: .warning, category: "Scroll")
                 }
             }
 
@@ -957,8 +931,7 @@ final class ChatViewModel {
     }
 
     var currentPendingPermissionId: String? {
-        // Find LAST pending permission (highest index = most recent)
-        for msg in messages.reversed() {
+        for msg in allMessages.reversed() {
             if case .permissionRequest(let perm) = msg.content, perm.isPending {
                 return msg.messageId
             }
@@ -967,8 +940,7 @@ final class ChatViewModel {
     }
 
     var currentPendingInputId: String? {
-        // Find LAST pending input (highest index = most recent)
-        for msg in messages.reversed() {
+        for msg in allMessages.reversed() {
             if case .inputRequest(let input) = msg.content, input.isPending {
                 return msg.messageId
             }
@@ -1027,7 +999,7 @@ final class ChatViewModel {
 
         voiceSessionId = currentSessionId
         voiceSession = currentSession
-        voiceLastAssistantMessage = messages.last(where: { $0.role == .assistant })
+        voiceLastAssistantMessage = allMessages.last(where: { $0.role == .assistant })
         voicePendingPromptText = nil
         UIApplication.shared.isIdleTimerDisabled = true
 

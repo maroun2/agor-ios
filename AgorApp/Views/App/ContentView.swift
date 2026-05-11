@@ -56,52 +56,56 @@ struct MainNavigationView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(
-                viewModel: navigationVM,
-                selectedSessionId: $selectedSessionId,
-                appViewModel: appViewModel,
-                socketService: socketService,
-                chatVM: chatVM,
-                onLogout: {
-                    socketService.disconnect()
-                    navigationVM.clearCache()
-                    appViewModel.authService.logout()
-                },
-                onServerSwitch: { profile in
-                    Task {
+        ZStack(alignment: .topTrailing) {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                SidebarView(
+                    viewModel: navigationVM,
+                    selectedSessionId: $selectedSessionId,
+                    appViewModel: appViewModel,
+                    socketService: socketService,
+                    chatVM: chatVM,
+                    onLogout: {
+                        socketService.disconnect()
                         navigationVM.clearCache()
-                        await appViewModel.switchServer(to: profile, socketService: socketService)
-                        await navigationVM.refresh()
-                    }
-                },
-                onClearCache: {
-                    navigationVM.clearCache()
-                    Task { await navigationVM.refresh() }
-                }
-            )
-        } detail: {
-            if let sessionId = selectedSessionId {
-                ChatView(viewModel: chatVM, sessionId: sessionId, socketService: socketService, navigationVM: navigationVM)
-                    // Voice floating button — must be inside detail so it renders
-                    // above the pushed view on iPhone (NavigationSplitView collapses
-                    // to a stack; overlays on the split view sit behind pushed views).
-                    .overlay(alignment: .topTrailing) {
-                        if chatVM.voiceModeEnabled, sessionId != chatVM.voiceSessionId {
-                            VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
-                                selectedSessionId = chatVM.voiceSessionId
-                            }
-                            .padding(.trailing, 16)
-                            .padding(.top, 60)
-                            .transition(.scale.combined(with: .opacity))
+                        appViewModel.authService.logout()
+                    },
+                    onServerSwitch: { profile in
+                        Task {
+                            navigationVM.clearCache()
+                            await appViewModel.switchServer(to: profile, socketService: socketService)
+                            await navigationVM.refresh()
                         }
+                    },
+                    onClearCache: {
+                        navigationVM.clearCache()
+                        Task { await navigationVM.refresh() }
                     }
-            } else {
-                ContentUnavailableView(
-                    "Select a Session",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Choose a session from the sidebar to start chatting")
                 )
+            } detail: {
+                if let sessionId = selectedSessionId {
+                    ChatView(
+                        viewModel: chatVM,
+                        sessionId: sessionId,
+                        socketService: socketService,
+                        navigationVM: navigationVM
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Select a Session",
+                        systemImage: "bubble.left.and.bubble.right",
+                        description: Text("Choose a session from the sidebar to start chatting")
+                    )
+                }
+            }
+
+            if shouldShowVoiceFloatingButton, let voiceSessionId = chatVM.voiceSessionId {
+                VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
+                    selectedSessionId = voiceSessionId
+                }
+                .padding(.trailing, 16)
+                .padding(.top, 60)
+                .zIndex(1000)
+                .transition(.scale.combined(with: .opacity))
             }
         }
         .toastOverlay(manager: toastManager) { sessionId in
@@ -209,6 +213,12 @@ struct MainNavigationView: View {
         }
     }
 
+    private var shouldShowVoiceFloatingButton: Bool {
+        chatVM.voiceModeEnabled &&
+        chatVM.voiceSessionId != nil &&
+        selectedSessionId != chatVM.voiceSessionId
+    }
+
     // MARK: - Background Recovery
 
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
@@ -219,7 +229,7 @@ struct MainNavigationView: View {
             wasBackgrounded = true
             notificationManager.isBackgrounded = true
             socketService.stopHealthCheck()
-            chatVM.stopMessagePolling()
+            chatVM.stopPolling()
             navigationVM.stopPolling()
             // Voice stays running in background — user disabled it explicitly to stop it
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling)", level: .info, category: "App")
