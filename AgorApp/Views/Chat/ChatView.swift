@@ -178,11 +178,21 @@ struct ChatView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     if viewModel.hasMore {
-                        Button("Load earlier messages") {
+                        Button {
                             Task { await viewModel.loadMore() }
+                        } label: {
+                            if viewModel.isLoadingMessages {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Label("Load previous messages", systemImage: "arrow.up.circle")
+                                    .font(.subheadline)
+                            }
                         }
-                        .font(.caption)
-                        .padding()
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padding(.vertical, 8)
+                        .disabled(viewModel.isLoadingMessages)
                     }
                     ForEach(viewModel.displayItems) { item in
                         messageRow(item)
