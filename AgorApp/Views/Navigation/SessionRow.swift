@@ -33,10 +33,18 @@ struct SessionRow: View {
 
             Spacer()
 
-            if showAttentionBadge && session.status.needsAttention {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
+            HStack(spacing: 4) {
+                if session.status == .running {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.circle")
+                        .foregroundStyle(.blue)
+                        .font(.caption)
+                        .symbolEffect(.rotate, isActive: true)
+                }
+                if showAttentionBadge && session.status.needsAttention {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                }
             }
         }
         .padding(.vertical, 2)
