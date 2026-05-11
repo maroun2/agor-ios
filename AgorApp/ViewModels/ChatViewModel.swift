@@ -785,6 +785,10 @@ final class ChatViewModel {
         socketService.onTaskCreated { [weak self] task in
             guard let self, task.sessionId == self.currentSessionId else { return }
             if !self.tasks.contains(where: { $0.taskId == task.taskId }) {
+                // Collapse the previously-last task so only the new one stays expanded
+                if let previousLastId = self.tasks.last?.taskId {
+                    self.collapsedTaskIds.insert(previousLastId)
+                }
                 self.tasks.append(task)
                 self.rebuildDisplayItems()
             }
