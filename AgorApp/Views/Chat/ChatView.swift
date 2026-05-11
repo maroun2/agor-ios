@@ -250,6 +250,11 @@ struct ChatView: View {
         case .streaming(let streaming):
             StreamingMessageView(streaming: streaming)
                 .id(item.id)
+        case .olderTasksBanner(let count):
+            OlderTasksBanner(hiddenCount: count) {
+                viewModel.showOlderTasks()
+            }
+            .id(item.id)
         }
     }
 
@@ -350,6 +355,32 @@ struct PlanModeBadge: View {
             .padding(.vertical, 2)
             .background(.purple.opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
             .foregroundStyle(.purple)
+    }
+}
+
+// MARK: - Older Tasks Banner
+
+private struct OlderTasksBanner: View {
+    let hiddenCount: Int
+    let onShow: () -> Void
+
+    var body: some View {
+        Button(action: onShow) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption)
+                Text("Show \(hiddenCount) older \(hiddenCount == 1 ? "task" : "tasks")")
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(.quaternary.opacity(0.3))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
     }
 }
 

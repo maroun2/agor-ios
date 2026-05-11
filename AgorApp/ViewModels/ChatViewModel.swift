@@ -7,12 +7,14 @@ enum DisplayItem: Identifiable {
     case taskHeader(AgorTask)
     case message(Message)
     case streaming(StreamingMessage)
+    case olderTasksBanner(Int) // count of hidden older tasks
 
     var id: String {
         switch self {
         case .taskHeader(let task): "task-\(task.taskId)"
         case .message(let msg): "msg-\(msg.messageId)"
         case .streaming(let s): "stream-\(s.messageId)"
+        case .olderTasksBanner: "older-tasks-banner"
         }
     }
 
@@ -21,6 +23,7 @@ enum DisplayItem: Identifiable {
         case .taskHeader(let t): t.sessionId
         case .message(let m): m.sessionId
         case .streaming(let s): s.sessionId
+        case .olderTasksBanner: ""
         }
     }
 }
@@ -61,6 +64,9 @@ final class ChatViewModel {
 
     // Collapsed tasks
     var collapsedTaskIds: Set<String> = []
+    // How many recent tasks to show (older ones hidden behind "Show N older" banner)
+    private let defaultVisibleTaskLimit = 20
+    var visibleTaskLimit = 20
 
     // Incremented only when a new message arrives at the bottom (not when prepending old ones)
     var scrollToBottomToken: Int = 0
@@ -94,6 +100,12 @@ final class ChatViewModel {
             }
             _rebuildDisplayItemsNow()
         }
+    }
+
+    /// Reveal more older task headers (doubles the visible limit each tap)
+    func showOlderTasks() {
+        visibleTaskLimit = min(visibleTaskLimit + defaultVisibleTaskLimit, tasks.count)
+        rebuildDisplayItems()
     }
 
     // Streaming
@@ -195,6 +207,7 @@ final class ChatViewModel {
         voiceStreamBuffer = ""
         voiceDidStreamCurrentMessage = false
         collapsedTaskIds = []
+        visibleTaskLimit = defaultVisibleTaskLimit
         error = nil
         // Restore draft for this session (set directly to avoid didSet writing back before session is set)
         promptText = draftText(for: sessionId)
@@ -684,15 +697,26 @@ final class ChatViewModel {
             if userMsgIndices.isEmpty {
                 items.append(contentsOf: sorted.map { .message($0) })
             } else {
-                let firstIdx = userMsgIndices[0]
-                if firstIdx > 0 {
-                    items.append(contentsOf: sorted[0..<firstIdx].map { .message($0) })
+                // Apply visibility limit to virtual tasks too
+                let totalTurns = userMsgIndices.count
+                let visibleStartTurn = max(0, totalTurns - visibleTaskLimit)
+                let hiddenVirtualCount = visibleStartTurn
+
+                if hiddenVirtualCount > 0 {
+                    items.append(.olderTasksBanner(hiddenVirtualCount))
+                } else {
+                    // Show pre-first-user messages only when all turns visible
+                    let firstIdx = userMsgIndices[0]
+                    if firstIdx > 0 {
+                        items.append(contentsOf: sorted[0..<firstIdx].map { .message($0) })
+                    }
                 }
 
-                for (turnIdx, userMsgIdx) in userMsgIndices.enumerated() {
+                for turnIdx in visibleStartTurn..<totalTurns {
+                    let userMsgIdx = userMsgIndices[turnIdx]
                     let userMsg = sorted[userMsgIdx]
                     let virtualId = "virtual-\(userMsg.messageId)"
-                    let nextIdx = (turnIdx + 1 < userMsgIndices.count) ? userMsgIndices[turnIdx + 1] : sorted.count
+                    let nextIdx = (turnIdx + 1 < totalTurns) ? userMsgIndices[turnIdx + 1] : sorted.count
 
                     let promptText: String
                     switch userMsg.content {
@@ -727,8 +751,22 @@ final class ChatViewModel {
             }
         } else if !tasks.isEmpty {
             // Normal mode: task-centric display matching web UI.
-            // Only show messages for loaded (expanded) tasks.
-            for task in tasks {
+            // Hide old task headers entirely when there are many tasks.
+            let visibleTasks: ArraySlice<AgorTask>
+            let hiddenCount: Int
+            if tasks.count > visibleTaskLimit {
+                hiddenCount = tasks.count - visibleTaskLimit
+                visibleTasks = tasks.suffix(visibleTaskLimit)
+            } else {
+                hiddenCount = 0
+                visibleTasks = tasks[...]
+            }
+
+            if hiddenCount > 0 {
+                items.append(.olderTasksBanner(hiddenCount))
+            }
+
+            for task in visibleTasks {
                 items.append(.taskHeader(task))
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
                 let taskMessages = (messagesByTask[task.taskId] ?? []).sorted { $0.index < $1.index }
