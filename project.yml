@@ -45,6 +45,7 @@ targets:
         NSSpeechRecognitionUsageDescription: Agor transcribes your speech locally on-device for voice prompts
         UIBackgroundModes:
           - audio
+          - fetch
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp
       SWIFT_VERSION: "5.0"
