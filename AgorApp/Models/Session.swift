@@ -41,6 +41,7 @@ enum AgenticToolName: String, Codable, CaseIterable {
     case codex
     case gemini
     case opencode
+    case copilot
 
     var displayLabel: String {
         switch self {
@@ -48,6 +49,7 @@ enum AgenticToolName: String, Codable, CaseIterable {
         case .codex: "Codex"
         case .gemini: "Gemini"
         case .opencode: "OpenCode"
+        case .copilot: "Copilot"
         }
     }
 
@@ -57,6 +59,7 @@ enum AgenticToolName: String, Codable, CaseIterable {
         case .codex: "terminal"
         case .gemini: "diamond"
         case .opencode: "chevron.left.forwardslash.chevron.right"
+        case .copilot: "person.2"
         }
     }
 }
