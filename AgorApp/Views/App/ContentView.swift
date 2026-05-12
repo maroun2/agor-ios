@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum ReconnectPhase {
     case idle
@@ -231,12 +232,37 @@ struct MainNavigationView: View {
             socketService.stopHealthCheck()
             chatVM.stopPolling()
             navigationVM.stopPolling()
-            // Voice stays running in background — user disabled it explicitly to stop it
-            AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling)", level: .info, category: "App")
+
+            // If voice mode is active, play silent audio to keep the process alive.
+            // The audio background mode prevents iOS from suspending us, so the
+            // socket stays connected and voice mode continues working.
+            if chatVM.voiceModeEnabled {
+                chatVM.voiceService?.startBackgroundKeepAlive()
+                AppLogger.shared.log("[App] lifecycle: voice active — silent audio keep-alive started", level: .info, category: "App")
+            }
+
+            // Request ~30s extended execution for one HTTP poll before suspension.
+            // This fires even without voice mode — catches status changes missed
+            // while the socket was dying.
+            let bgTaskId = UIApplication.shared.beginBackgroundTask {
+                // Expiration handler — nothing to clean up
+            }
+            if bgTaskId != .invalid {
+                Task {
+                    await BackgroundSessionPoller.shared.pollOnce()
+                    UIApplication.shared.endBackgroundTask(bgTaskId)
+                }
+            }
+
+            AppLogger.shared.log("[App] lifecycle: \(oldLabel) → background (stopped polling, began background task)", level: .info, category: "App")
 
         case .active where wasBackgrounded:
             wasBackgrounded = false
             notificationManager.isBackgrounded = false
+
+            // Stop silent audio keep-alive (no longer needed in foreground)
+            chatVM.voiceService?.stopBackgroundKeepAlive()
+
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
                 // Phase 1: Reconnecting

@@ -30,6 +30,11 @@ final class BackgroundSessionPoller {
         }
     }
 
+    /// One-shot poll callable from the foreground (e.g. during `beginBackgroundTask`).
+    func pollOnce() async {
+        await pollSessionStatuses()
+    }
+
     private func handleBackgroundPoll(task: BGAppRefreshTask) {
         // Schedule the next poll before doing work
         scheduleNextPoll()

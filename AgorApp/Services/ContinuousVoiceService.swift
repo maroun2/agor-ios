@@ -17,6 +17,9 @@ final class ContinuousVoiceService {
     // Kept alive for the tone duration
     private var toneEngine: AVAudioEngine?
 
+    // Silent audio player keeps the app alive in background via audio background mode
+    private var silentPlayer: AVAudioPlayer?
+
     var state: State = .disabled
     var currentAudioLevel: Float = 0.0
     var transcriptionProgress: String = ""
@@ -140,9 +143,70 @@ final class ContinuousVoiceService {
             currentRecordingURL = nil
         }
         tts.stop()
+        stopBackgroundKeepAlive()
         isPaused = false
         state = .disabled
         AppLogger.shared.log("[Voice] Continuous voice mode stopped", level: .info, category: "Voice")
+    }
+
+    // MARK: - Background Keep-Alive
+
+    /// Play silent audio in a loop to keep the app alive via the `audio` background mode.
+    /// The audio session is already `.playAndRecord` from VAD — this just prevents iOS
+    /// from suspending the process so the socket stays connected.
+    func startBackgroundKeepAlive() {
+        guard silentPlayer == nil else { return }
+
+        let wavData = Self.silentWAVData()
+        do {
+            let player = try AVAudioPlayer(data: wavData)
+            player.numberOfLoops = -1
+            player.volume = 0.0
+            player.play()
+            silentPlayer = player
+            AppLogger.shared.log("[Voice] Background keep-alive started (silent audio)", level: .info, category: "Voice")
+        } catch {
+            AppLogger.shared.log("[Voice] Background keep-alive failed: \(error.localizedDescription)", level: .error, category: "Voice")
+        }
+    }
+
+    func stopBackgroundKeepAlive() {
+        guard silentPlayer != nil else { return }
+        silentPlayer?.stop()
+        silentPlayer = nil
+        AppLogger.shared.log("[Voice] Background keep-alive stopped", level: .info, category: "Voice")
+    }
+
+    /// Generate a 1-second silent 16-bit mono WAV in memory.
+    private static func silentWAVData() -> Data {
+        let sampleRate: UInt32 = 44100
+        let numChannels: UInt16 = 1
+        let bitsPerSample: UInt16 = 16
+        let numSamples = Int(sampleRate) // 1 second
+        let dataSize = UInt32(numSamples * Int(numChannels) * Int(bitsPerSample / 8))
+        let fileSize: UInt32 = 36 + dataSize
+
+        var d = Data()
+        // RIFF header
+        d.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // "RIFF"
+        withUnsafeBytes(of: fileSize.littleEndian) { d.append(contentsOf: $0) }
+        d.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // "WAVE"
+        // fmt chunk
+        d.append(contentsOf: [0x66, 0x6D, 0x74, 0x20]) // "fmt "
+        withUnsafeBytes(of: UInt32(16).littleEndian) { d.append(contentsOf: $0) }
+        withUnsafeBytes(of: UInt16(1).littleEndian) { d.append(contentsOf: $0) } // PCM
+        withUnsafeBytes(of: numChannels.littleEndian) { d.append(contentsOf: $0) }
+        withUnsafeBytes(of: sampleRate.littleEndian) { d.append(contentsOf: $0) }
+        let byteRate = sampleRate * UInt32(numChannels) * UInt32(bitsPerSample / 8)
+        withUnsafeBytes(of: byteRate.littleEndian) { d.append(contentsOf: $0) }
+        let blockAlign = numChannels * (bitsPerSample / 8)
+        withUnsafeBytes(of: blockAlign.littleEndian) { d.append(contentsOf: $0) }
+        withUnsafeBytes(of: bitsPerSample.littleEndian) { d.append(contentsOf: $0) }
+        // data chunk
+        d.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
+        withUnsafeBytes(of: dataSize.littleEndian) { d.append(contentsOf: $0) }
+        d.append(Data(count: Int(dataSize))) // all zeros = silence
+        return d
     }
 
     // Pause VAD while agent is running — keeps voice mode active, no beep on resume.
