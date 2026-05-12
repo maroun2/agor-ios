@@ -36,11 +36,29 @@ enum SessionStatus: String, Codable, CaseIterable {
 
 // MARK: - Agentic Tool
 
-enum AgenticToolName: String, Codable {
+enum AgenticToolName: String, Codable, CaseIterable {
     case claudeCode = "claude-code"
     case codex
     case gemini
     case opencode
+
+    var displayLabel: String {
+        switch self {
+        case .claudeCode: "Claude Code"
+        case .codex: "Codex"
+        case .gemini: "Gemini"
+        case .opencode: "OpenCode"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .claudeCode: "sparkle"
+        case .codex: "terminal"
+        case .gemini: "diamond"
+        case .opencode: "chevron.left.forwardslash.chevron.right"
+        }
+    }
 }
 
 // MARK: - Permission Mode
