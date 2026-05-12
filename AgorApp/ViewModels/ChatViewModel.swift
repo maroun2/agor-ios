@@ -532,6 +532,7 @@ final class ChatViewModel {
         let worktreeId = session.worktreeId
         let agenticTool = session.agenticTool
         let sessionTitle = session.title
+        let unixUsername = session.unixUsername
 
         Task {
             do {
@@ -551,6 +552,9 @@ final class ChatViewModel {
                 ]
                 if let sessionTitle, !sessionTitle.isEmpty {
                     createData["title"] = sessionTitle
+                }
+                if let unixUsername {
+                    createData["unix_username"] = unixUsername
                 }
                 let newSession: Session = try await socketService.serviceCreate(
                     service: "sessions",

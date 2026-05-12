@@ -129,6 +129,7 @@ struct SidebarView: View {
                                         worktreeNode: wtNode,
                                         viewModel: viewModel,
                                         socketService: socketService,
+                                        currentUser: appViewModel.currentUser,
                                         selectedSessionId: $selectedSessionId
                                     )
                                 }
@@ -440,6 +441,9 @@ private struct CleanAndResetButton: View {
             if let title = session.title, !title.isEmpty {
                 body["title"] = title
             }
+            if let unixUsername = session.unixUsername {
+                body["unix_username"] = unixUsername
+            }
             let newSession: Session = try await socketService.serviceCreate(
                 service: "sessions",
                 data: body
@@ -461,6 +465,7 @@ private struct WorktreeSection: View {
     let worktreeNode: WorktreeNode
     let viewModel: NavigationViewModel
     let socketService: SocketService
+    var currentUser: User?
     @Binding var selectedSessionId: String?
     @State private var showFileBrowser = false
     @State private var sessionFileBrowserWorktreeId: String?
@@ -564,6 +569,9 @@ private struct WorktreeSection: View {
             ]
             if let name, !name.isEmpty {
                 body["title"] = name
+            }
+            if let unixUsername = currentUser?.unixUsername {
+                body["unix_username"] = unixUsername
             }
             let newSession: Session = try await socketService.serviceCreate(
                 service: "sessions",
