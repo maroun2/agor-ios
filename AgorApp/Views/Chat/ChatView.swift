@@ -255,6 +255,9 @@ struct ChatView: View {
                 viewModel.showOlderTasks()
             }
             .id(item.id)
+        case .taskError(_, let errorText):
+            TaskErrorBubble(errorText: errorText)
+                .id(item.id)
         }
     }
 
@@ -355,6 +358,30 @@ struct PlanModeBadge: View {
             .padding(.vertical, 2)
             .background(.purple.opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
             .foregroundStyle(.purple)
+    }
+}
+
+// MARK: - Task Error Bubble
+
+private struct TaskErrorBubble: View {
+    let errorText: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.body)
+            Text(errorText)
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.red.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
     }
 }
 
