@@ -389,6 +389,14 @@ final class ChatViewModel {
         sendPrompt(to: sessionId, text: text, showSendingState: true)
     }
 
+    /// Server response shape for prompt endpoint
+    private struct PromptResponse: Codable {
+        let success: Bool?
+        let queued: Bool?
+        let queue_position: Int?
+        // Server may also return task/session info — we only need these fields
+    }
+
     private func sendPrompt(to sessionId: String, text: String, showSendingState: Bool) {
         if showSendingState {
             isSendingPrompt = true
@@ -398,10 +406,19 @@ final class ChatViewModel {
                 struct PromptBody: Codable {
                     let prompt: String
                 }
-                _ = try await client.postRaw(
+                let responseData = try await client.postRaw(
                     "/sessions/\(sessionId)/prompt",
                     body: PromptBody(prompt: text)
                 )
+
+                // Parse response to detect queued vs immediate execution
+                if let parsed = try? JSONDecoder.agor.decode(PromptResponse.self, from: responseData),
+                   parsed.queued == true {
+                    let pos = parsed.queue_position ?? 0
+                    AppLogger.shared.log("[Chat] sendPrompt: queued at position \(pos)", level: .info, category: "Chat")
+                    self.error = "Prompt queued (position \(pos)) — session is busy"
+                }
+
                 // Proactively refresh tasks in case socket events were missed
                 try? await Task.sleep(for: .milliseconds(300))
                 if currentSessionId == sessionId {
@@ -909,6 +926,14 @@ final class ChatViewModel {
             if let idx = self.tasks.firstIndex(where: { $0.taskId == task.taskId }) {
                 self.tasks[idx] = task
                 self.rebuildDisplayItems()
+                // Surface error when task fails with no messages (agent crashed immediately)
+                if task.status == .failed {
+                    let hasMessages = !(self.messagesByTask[task.taskId]?.isEmpty ?? true)
+                    if !hasMessages {
+                        self.error = "Task failed — agent could not process the prompt"
+                        AppLogger.shared.log("[Chat] task \(task.taskId.prefix(8)) failed with 0 messages", level: .error, category: "Chat")
+                    }
+                }
             }
         }
 
