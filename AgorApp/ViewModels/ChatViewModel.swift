@@ -8,6 +8,7 @@ enum DisplayItem: Identifiable {
     case message(Message)
     case streaming(StreamingMessage)
     case olderTasksBanner(Int) // count of hidden older tasks
+    case taskError(String, String) // (taskId, error text) — inline error under failed task
 
     var id: String {
         switch self {
@@ -15,6 +16,7 @@ enum DisplayItem: Identifiable {
         case .message(let msg): "msg-\(msg.messageId)"
         case .streaming(let s): "stream-\(s.messageId)"
         case .olderTasksBanner: "older-tasks-banner"
+        case .taskError(let taskId, _): "error-\(taskId)"
         }
     }
 
@@ -24,6 +26,7 @@ enum DisplayItem: Identifiable {
         case .message(let m): m.sessionId
         case .streaming(let s): s.sessionId
         case .olderTasksBanner: ""
+        case .taskError: ""
         }
     }
 }
@@ -64,6 +67,8 @@ final class ChatViewModel {
 
     // Collapsed tasks
     var collapsedTaskIds: Set<String> = []
+    // Per-task error messages (shown inline in chat under failed task headers)
+    var taskErrors: [String: String] = [:]
     // How many recent tasks to show (older ones hidden behind "Show N older" banner)
     private let defaultVisibleTaskLimit = 20
     var visibleTaskLimit = 20
@@ -207,6 +212,7 @@ final class ChatViewModel {
         voiceStreamBuffer = ""
         voiceDidStreamCurrentMessage = false
         collapsedTaskIds = []
+        taskErrors = [:]
         visibleTaskLimit = defaultVisibleTaskLimit
         error = nil
         // Restore draft for this session (set directly to avoid didSet writing back before session is set)
@@ -785,6 +791,9 @@ final class ChatViewModel {
 
             for task in visibleTasks {
                 items.append(.taskHeader(task))
+                if let errorText = taskErrors[task.taskId] {
+                    items.append(.taskError(task.taskId, errorText))
+                }
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
                 let taskMessages = (messagesByTask[task.taskId] ?? []).sorted { $0.index < $1.index }
                 items.append(contentsOf: taskMessages.map { .message($0) })
@@ -926,16 +935,20 @@ final class ChatViewModel {
             if let idx = self.tasks.firstIndex(where: { $0.taskId == task.taskId }) {
                 self.tasks[idx] = task
                 self.rebuildDisplayItems()
-                // When task fails, fetch its messages — executor creates a system error message
-                // with the actual error text. If no messages exist, show generic error.
+                // When task fails, fetch its messages — executor may create a system error message
+                // with the actual error text. Show error inline under the task header.
                 if task.status == .failed {
                     Task {
                         await self.loadTaskMessages(task.taskId)
                         let msgs = self.messagesByTask[task.taskId] ?? []
                         if msgs.isEmpty {
-                            self.error = "Task failed — agent could not start"
-                        } else if let errorMsg = msgs.first(where: { $0.role == .system }) {
-                            self.error = "Task failed: \(errorMsg.contentPreview)"
+                            self.taskErrors[task.taskId] = "Agent could not start — check server logs for details"
+                            self.rebuildDisplayItems()
+                        } else if let errorMsg = msgs.first(where: { $0.role == .system }),
+                                  self.messagesByTask[task.taskId]?.count == 1 {
+                            // Single system message = just the error, show it inline too
+                            self.taskErrors[task.taskId] = errorMsg.contentPreview
+                            self.rebuildDisplayItems()
                         }
                         AppLogger.shared.log("[Chat] task \(task.taskId.prefix(8)) failed (\(msgs.count) msgs)", level: .error, category: "Chat")
                     }
