@@ -926,12 +926,18 @@ final class ChatViewModel {
             if let idx = self.tasks.firstIndex(where: { $0.taskId == task.taskId }) {
                 self.tasks[idx] = task
                 self.rebuildDisplayItems()
-                // Surface error when task fails with no messages (agent crashed immediately)
+                // When task fails, fetch its messages — executor creates a system error message
+                // with the actual error text. If no messages exist, show generic error.
                 if task.status == .failed {
-                    let hasMessages = !(self.messagesByTask[task.taskId]?.isEmpty ?? true)
-                    if !hasMessages {
-                        self.error = "Task failed — agent could not process the prompt"
-                        AppLogger.shared.log("[Chat] task \(task.taskId.prefix(8)) failed with 0 messages", level: .error, category: "Chat")
+                    Task {
+                        await self.loadTaskMessages(task.taskId)
+                        let msgs = self.messagesByTask[task.taskId] ?? []
+                        if msgs.isEmpty {
+                            self.error = "Task failed — agent could not start"
+                        } else if let errorMsg = msgs.first(where: { $0.role == .system }) {
+                            self.error = "Task failed: \(errorMsg.contentPreview)"
+                        }
+                        AppLogger.shared.log("[Chat] task \(task.taskId.prefix(8)) failed (\(msgs.count) msgs)", level: .error, category: "Chat")
                     }
                 }
             }
