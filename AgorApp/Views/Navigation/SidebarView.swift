@@ -464,8 +464,9 @@ private struct WorktreeSection: View {
     @Binding var selectedSessionId: String?
     @State private var showFileBrowser = false
     @State private var sessionFileBrowserWorktreeId: String?
-    @State private var showNewSessionAlert = false
+    @State private var showNewSessionSheet = false
     @State private var newSessionName = ""
+    @State private var newSessionTool: AgenticToolName = .claudeCode
 
     var body: some View {
         // Worktree header — Button fully captures tap, never leaks to List selection
@@ -495,15 +496,17 @@ private struct WorktreeSection: View {
         )) { target in
             FileBrowserView(viewModel: FileBrowserViewModel(worktreeId: target.id, socketService: socketService))
         }
-        .alert("New Session", isPresented: $showNewSessionAlert) {
-            TextField("Session name", text: $newSessionName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                Task { await createSession(worktreeId: worktreeNode.worktree.worktreeId, name: name.isEmpty ? nil : name) }
-            }
-        } message: {
-            Text("Enter a name for the new session on this worktree.")
+        .sheet(isPresented: $showNewSessionSheet) {
+            NewSessionSheet(
+                worktreeName: worktreeNode.worktree.name,
+                sessionName: $newSessionName,
+                agenticTool: $newSessionTool,
+                onCreate: {
+                    let name = newSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    showNewSessionSheet = false
+                    Task { await createSession(worktreeId: worktreeNode.worktree.worktreeId, name: name.isEmpty ? nil : name, tool: newSessionTool) }
+                }
+            )
         }
 
         if worktreeNode.isExpanded {
@@ -532,7 +535,7 @@ private struct WorktreeSection: View {
                     ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
                 }
             }
-            Button { newSessionName = ""; showNewSessionAlert = true } label: {
+            Button { newSessionName = ""; newSessionTool = .claudeCode; showNewSessionSheet = true } label: {
                 Label("New Session", systemImage: "plus.bubble")
                     .font(.caption).foregroundStyle(Color.accentColor)
             }
@@ -542,7 +545,7 @@ private struct WorktreeSection: View {
     private var worktreeLabel: some View {
         WorktreeRow(worktree: worktreeNode.worktree, repoName: worktreeNode.repoName, attentionCount: worktreeNode.attentionCount)
             .contextMenu {
-                Button { newSessionName = ""; showNewSessionAlert = true } label: {
+                Button { newSessionName = ""; newSessionTool = .claudeCode; showNewSessionSheet = true } label: {
                     Label("New Session", systemImage: "plus.bubble")
                 }
                 Button { showFileBrowser = true } label: {
@@ -551,12 +554,12 @@ private struct WorktreeSection: View {
             }
     }
 
-    private func createSession(worktreeId: String, name: String?) async {
-        AppLogger.shared.log("[Sidebar] createSession worktreeId=\(String(worktreeId.prefix(8))) name=\(name ?? "<nil>")", level: .info, category: "Nav")
+    private func createSession(worktreeId: String, name: String?, tool: AgenticToolName = .claudeCode) async {
+        AppLogger.shared.log("[Sidebar] createSession worktreeId=\(String(worktreeId.prefix(8))) tool=\(tool.rawValue) name=\(name ?? "<nil>")", level: .info, category: "Nav")
         do {
             var body: [String: Any] = [
                 "worktree_id": worktreeId,
-                "agentic_tool": "claude-code",
+                "agentic_tool": tool.rawValue,
                 "status": "idle"
             ]
             if let name, !name.isEmpty {
@@ -572,6 +575,61 @@ private struct WorktreeSection: View {
         } catch {
             AppLogger.shared.log("[Sidebar] createSession ERROR: \(error)", level: .error, category: "Nav")
         }
+    }
+}
+
+// MARK: - New Session Sheet
+
+private struct NewSessionSheet: View {
+    let worktreeName: String
+    @Binding var sessionName: String
+    @Binding var agenticTool: AgenticToolName
+    let onCreate: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Session Name") {
+                    TextField("Optional name", text: $sessionName)
+                        .autocorrectionDisabled()
+                }
+                Section("Agent") {
+                    ForEach(AgenticToolName.allCases, id: \.self) { tool in
+                        Button {
+                            agenticTool = tool
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: tool.iconName)
+                                    .frame(width: 20)
+                                    .foregroundStyle(agenticTool == tool ? .primary : .secondary)
+                                Text(tool.displayLabel)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if agenticTool == tool {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("New Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create", action: onCreate)
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 
