@@ -143,7 +143,9 @@ final class SocketService {
         guard let socket else { return }
         guard let token = client.accessToken else {
             AppLogger.shared.log("[Socket] FeathersJS auth: no token — triggering re-login", level: .warning, category: "Socket")
-            DispatchQueue.main.async { self.onAuthFailure?() }
+            Task { @MainActor [weak self] in
+                self?.onAuthFailure?()
+            }
             return
         }
 
@@ -172,10 +174,14 @@ final class SocketService {
                             let refreshed = await self.client.tryRefreshToken()
                             if refreshed {
                                 AppLogger.shared.log("[Socket] token refreshed — re-authenticating socket", level: .info, category: "Socket")
-                                DispatchQueue.main.async { self.authenticateWithFeathers() }
+                                Task { @MainActor [weak self] in
+                                    self?.authenticateWithFeathers()
+                                }
                             } else {
                                 AppLogger.shared.log("[Socket] token refresh failed — triggering re-login", level: .error, category: "Socket")
-                                DispatchQueue.main.async { self.onAuthFailure?() }
+                                Task { @MainActor [weak self] in
+                                    self?.onAuthFailure?()
+                                }
                             }
                         }
                     }
@@ -185,8 +191,8 @@ final class SocketService {
                 // Success: [null, {accessToken: "...", user: {...}}]
                 AppLogger.shared.log("Socket connected", category: "Socket")
                 AppLogger.shared.log("[Socket] FeathersJS auth success — joined authenticated channel, real-time events active", level: .info, category: "Socket")
-                DispatchQueue.main.async {
-                    self.connectionState = .connected
+                Task { @MainActor [weak self] in
+                    self?.connectionState = .connected
                 }
             }
     }
@@ -265,7 +271,8 @@ final class SocketService {
                 AppLogger.shared.log("[Socket] connect_error looks auth-related — refreshing token and reconnecting", level: .info, category: "Socket")
                 Task {
                     let refreshed = await self.client.tryRefreshToken()
-                    DispatchQueue.main.async {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
                         if refreshed {
                             AppLogger.shared.log("[Socket] token refreshed — reconnecting", level: .info, category: "Socket")
                             self.reconnect()
@@ -608,7 +615,7 @@ final class SocketService {
                 return
             }
             let decoded = try decoder.decode(T.self, from: jsonData)
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 handler(decoded)
             }
         } catch {

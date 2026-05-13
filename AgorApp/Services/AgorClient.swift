@@ -188,7 +188,9 @@ final class AgorClient {
                 // This is the circuit breaker — stops the 401 flood and rate-limit cascade.
                 refreshToken = nil
                 AppLogger.shared.log("[HTTP] Token refresh failed permanently — triggering session expired handler", level: .error, category: "Auth")
-                DispatchQueue.main.async { self.onSessionExpired?() }
+                Task { @MainActor [weak self] in
+                    self?.onSessionExpired?()
+                }
                 throw AgorAPIError.tokenRefreshFailed
             }
         }
