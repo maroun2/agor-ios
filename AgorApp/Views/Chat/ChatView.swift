@@ -49,6 +49,9 @@ struct ChatView: View {
                 if state == .connected, let vm = fileBrowserVM, vm.files.isEmpty {
                     Task { await vm.loadFiles() }
                 }
+                if state == .connected {
+                    viewModel.refreshCurrentSession()
+                }
             }
             .alert("Reset Session?", isPresented: $showResetAlert) {
                 Button("Cancel", role: .cancel) {}
