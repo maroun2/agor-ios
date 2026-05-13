@@ -63,7 +63,7 @@ private struct InlineLinkedTextView: View {
     let onOpenSession: ((String) -> Void)?
 
     var body: some View {
-        let segments = buildSegments()
+        _ = buildSegments()
 
         // Use a FlowLayout of Text + Buttons interleaved
         // Since SwiftUI Text concatenation doesn't support tap handlers on segments,

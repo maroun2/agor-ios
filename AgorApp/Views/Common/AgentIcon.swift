@@ -18,6 +18,7 @@ struct AgentIcon: View {
         case .codex: "cube"
         case .gemini: "diamond"
         case .opencode: "chevron.left.forwardslash.chevron.right"
+        case .copilot: "person.2.fill"
         }
     }
 
@@ -27,6 +28,7 @@ struct AgentIcon: View {
         case .codex: .green
         case .gemini: .blue
         case .opencode: .purple
+        case .copilot: .indigo
         }
     }
 }

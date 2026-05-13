@@ -600,8 +600,10 @@ final class ChatViewModel {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.pollingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
-                guard let self, let sessionId = self.currentSessionId else { return }
-                Task { await self.pollForUpdates(sessionId) }
+                Task { @MainActor [weak self] in
+                    guard let self, let sessionId = self.currentSessionId else { return }
+                    await self.pollForUpdates(sessionId)
+                }
             }
         }
     }

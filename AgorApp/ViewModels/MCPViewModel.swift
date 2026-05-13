@@ -20,8 +20,8 @@ final class MCPViewModel {
     func loadAll() async {
         isLoading = true
         error = nil
-        async let sessionServers = loadSessionServers()
-        async let available = loadAvailableServers()
+        async let sessionServers: Void = loadSessionServers()
+        async let available: Void = loadAvailableServers()
         await sessionServers
         await available
 
