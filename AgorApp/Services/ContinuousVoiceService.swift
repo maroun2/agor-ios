@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 
+@MainActor
 @Observable
 final class ContinuousVoiceService {
     enum State {

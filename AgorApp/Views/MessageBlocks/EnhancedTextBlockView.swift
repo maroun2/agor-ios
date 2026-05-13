@@ -63,8 +63,6 @@ private struct InlineLinkedTextView: View {
     let onOpenSession: ((String) -> Void)?
 
     var body: some View {
-        _ = buildSegments()
-
         // Use a FlowLayout of Text + Buttons interleaved
         // Since SwiftUI Text concatenation doesn't support tap handlers on segments,
         // render markdown normally and add small inline link chips for detected paths
@@ -98,7 +96,7 @@ private struct InlineLinkedTextView: View {
     }
 
     private func buildSegments() -> [TextSegment] {
-        // Not used for rendering but kept for potential future inline text approach
+        // Kept for a potential future inline text rendering approach.
         []
     }
 
