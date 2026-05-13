@@ -3,7 +3,7 @@ import AVFoundation
 
 @MainActor
 @Observable
-final class TextToSpeechService: NSObject, AVSpeechSynthesizerDelegate {
+final class TextToSpeechService: NSObject, @preconcurrency AVSpeechSynthesizerDelegate {
     enum SpeechType {
         case status
         case streamChunk   // Streaming TTS — queues naturally, interrupted by status
