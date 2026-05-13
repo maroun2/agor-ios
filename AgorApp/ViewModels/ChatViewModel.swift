@@ -283,12 +283,22 @@ final class ChatViewModel {
 
     private func loadTasks(_ sessionId: String) async {
         do {
+            let count: PaginatedResponse<AgorTask> = try await client.getPaginated(
+                "/tasks",
+                query: [
+                    "session_id": sessionId,
+                    "$limit": "1",
+                ]
+            )
+            let taskWindowSize = 100
+            let skip = max(0, count.total - taskWindowSize)
             let response: PaginatedResponse<AgorTask> = try await client.getPaginated(
                 "/tasks",
                 query: [
                     "session_id": sessionId,
                     "$sort[created_at]": "1",
-                    "$limit": "100",
+                    "$limit": "\(taskWindowSize)",
+                    "$skip": "\(skip)",
                 ]
             )
             if currentSessionId == sessionId {
@@ -959,6 +969,17 @@ final class ChatViewModel {
                         AppLogger.shared.log("[Chat] task \(task.taskId.prefix(8)) failed (\(msgs.count) msgs)", level: .error, category: "Chat")
                     }
                 }
+            } else {
+                AppLogger.shared.log("[ChatVM] Recovering unknown patched task \(task.taskId.prefix(8))", level: .debug, category: "Chat")
+                if let previousLastId = self.tasks.last?.taskId, previousLastId != task.taskId {
+                    self.collapsedTaskIds.insert(previousLastId)
+                    self.unloadTaskMessages(previousLastId)
+                }
+                self.tasks.append(task)
+                self.tasks.sort { $0.createdAt < $1.createdAt }
+                self.collapsedTaskIds.remove(task.taskId)
+                self.rebuildDisplayItems()
+                Task { await self.loadTaskMessages(task.taskId) }
             }
         }
 
