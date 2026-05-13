@@ -253,9 +253,13 @@ final class ChatViewModel {
             await loadSession(sessionId)
             await MainActor.run { updateVoiceListening() }
             await loadTasks(sessionId)
+            let loadedIds = loadedTaskIds
             // Reload messages for all currently-loaded tasks
-            for taskId in loadedTaskIds {
+            for taskId in loadedIds {
                 await loadTaskMessages(taskId)
+            }
+            if !tasks.isEmpty, loadedIds.isEmpty, let lastTaskId = tasks.last?.taskId {
+                await loadTaskMessages(lastTaskId)
             }
             // If virtual-task mode, reload
             if tasks.isEmpty {
@@ -283,22 +287,12 @@ final class ChatViewModel {
 
     private func loadTasks(_ sessionId: String) async {
         do {
-            let count: PaginatedResponse<AgorTask> = try await client.getPaginated(
-                "/tasks",
-                query: [
-                    "session_id": sessionId,
-                    "$limit": "1",
-                ]
-            )
-            let taskWindowSize = 100
-            let skip = max(0, count.total - taskWindowSize)
             let response: PaginatedResponse<AgorTask> = try await client.getPaginated(
                 "/tasks",
                 query: [
                     "session_id": sessionId,
                     "$sort[created_at]": "1",
-                    "$limit": "\(taskWindowSize)",
-                    "$skip": "\(skip)",
+                    "$limit": "10000",
                 ]
             )
             if currentSessionId == sessionId {
@@ -307,7 +301,7 @@ final class ChatViewModel {
                 // that onTaskCreated already added to the local list.
                 let serverIds = Set(response.data.map(\.taskId))
                 let unconfirmed = tasks.filter { !serverIds.contains($0.taskId) }
-                let merged = response.data + unconfirmed
+                let merged = (response.data + unconfirmed).sorted { $0.createdAt < $1.createdAt }
                 tasks = merged
                 AppLogger.shared.log("[Chat] loadTasks: \(response.data.count) from server + \(unconfirmed.count) unconfirmed local", level: .debug, category: "Chat")
                 // Collapse all real tasks except the last one; preserve any virtual task collapse state.
@@ -724,6 +718,9 @@ final class ChatViewModel {
 
     private func _rebuildDisplayItemsNow() {
         var items: [DisplayItem] = []
+        let sessionStreams = activeStreams.values
+            .filter { $0.sessionId == currentSessionId }
+            .sorted { $0.timestamp < $1.timestamp }
 
         if tasks.isEmpty && !virtualMessages.isEmpty {
             // Virtual task mode: no server-managed tasks — group by user message turns.
@@ -813,15 +810,21 @@ final class ChatViewModel {
                 guard !collapsedTaskIds.contains(task.taskId) else { continue }
                 let taskMessages = (messagesByTask[task.taskId] ?? []).sorted { $0.index < $1.index }
                 items.append(contentsOf: taskMessages.map { .message($0) })
+                let taskMessageIds = Set(taskMessages.map(\.messageId))
+                let taskStreams = sessionStreams.filter {
+                    $0.taskId == task.taskId && !taskMessageIds.contains($0.messageId)
+                }
+                items.append(contentsOf: taskStreams.map { .streaming($0) })
             }
         }
 
-        // Active streaming messages
-        let allMsgIds = Set(allMessages.map(\.messageId))
-        for (_, stream) in activeStreams where stream.sessionId == currentSessionId {
-            if !allMsgIds.contains(stream.messageId) {
-                items.append(.streaming(stream))
-            }
+        // Orphan streams without a task_id still render at the bottom so they are never lost.
+        let renderedStreamIds = Set(items.compactMap { item -> String? in
+            if case .streaming(let stream) = item { return stream.messageId }
+            return nil
+        })
+        for stream in sessionStreams where !renderedStreamIds.contains(stream.messageId) {
+            items.append(.streaming(stream))
         }
 
         displayItems = items
@@ -940,6 +943,7 @@ final class ChatViewModel {
                     self.unloadTaskMessages(previousLastId)
                 }
                 self.tasks.append(task)
+                self.tasks.sort { $0.createdAt < $1.createdAt }
                 self.rebuildDisplayItems()
                 // Load messages for the new task
                 Task { await self.loadTaskMessages(task.taskId) }
