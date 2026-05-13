@@ -12,6 +12,7 @@ let package = Package(
         .package(url: "https://github.com/socketio/socket.io-client-swift.git", from: "16.1.1"),
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.2.1"),
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.12.4"),
     ],
     targets: [
         .executableTarget(
@@ -21,6 +22,7 @@ let package = Package(
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 "Highlightr",
                 .product(name: "WhisperKit", package: "WhisperKit"),
+                .product(name: "FluidAudio", package: "FluidAudio"),
             ],
             path: "AgorApp",
             exclude: ["Info.plist"],
