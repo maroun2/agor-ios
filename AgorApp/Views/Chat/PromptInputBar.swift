@@ -121,9 +121,10 @@ struct PromptInputBar: View {
                                 .controlSize(.small)
                                 .frame(width: 36, height: 36)
                         } else {
-                            Image(systemName: "arrow.up.circle.fill")
+                            Image(systemName: viewModel.canQueuePrompt ? "list.bullet.circle.fill" : "arrow.up.circle.fill")
                                 .font(.system(size: 28))
                                 .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(viewModel.canQueuePrompt ? .orange : .tint)
                                 .frame(width: 36, height: 36)
                         }
                     }
@@ -218,14 +219,14 @@ struct PromptInputBar: View {
 
     private var canSend: Bool {
         !viewModel.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && viewModel.isSessionPromptable
+            && (viewModel.isSessionPromptable || viewModel.canQueuePrompt)
             && !viewModel.isSendingPrompt
     }
 
     private var placeholder: String {
         guard let session = viewModel.currentSession else { return "Type a prompt..." }
         switch session.status {
-        case .running: return "Type your next message..."
+        case .running: return "Queue your next message..."
         case .awaitingPermission: return "Waiting for permission..."
         case .awaitingInput: return "Waiting for input..."
         case .idle: return "Type a prompt..."

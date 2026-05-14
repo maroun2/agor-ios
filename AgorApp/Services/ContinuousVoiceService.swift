@@ -24,6 +24,7 @@ final class ContinuousVoiceService {
     var state: State = .disabled
     var currentAudioLevel: Float = 0.0
     var transcriptionProgress: String = ""
+    var allowRecordingDuringTTS = false
 
     let vad: VoiceActivityDetector
     let transcription: TranscriptionService  // Exposed for initialization
@@ -255,7 +256,7 @@ final class ContinuousVoiceService {
     // MARK: - Speech Handlers
 
     private func handleSpeechStart() {
-        guard state == .listening else {
+        guard state == .listening || (allowRecordingDuringTTS && state == .speaking) else {
             AppLogger.shared.log("[Voice] ⚠️ Speech start ignored - not in listening state (current: \(state))", level: .warning, category: "Voice")
             return
         }
@@ -263,7 +264,7 @@ final class ContinuousVoiceService {
         AppLogger.shared.log("[Voice] 🎬 Speech detected - recorder already running (pre-roll active)", level: .info, category: "Voice")
 
         // Stop TTS if speaking (user can interrupt)
-        if tts.isSpeaking {
+        if tts.isSpeaking && !allowRecordingDuringTTS {
             AppLogger.shared.log("[Voice] 🛑 Stopping TTS - user is speaking", level: .debug, category: "Voice")
             tts.stop()
         }

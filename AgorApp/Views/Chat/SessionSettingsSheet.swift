@@ -3,18 +3,29 @@ import SwiftUI
 struct SessionSettingsSheet: View {
     let session: Session
     let socketService: SocketService
+    let queuedVoiceModeEnabled: Bool
+    let onQueuedVoiceModeChanged: (Bool) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var permissionMode: PermissionMode
     @State private var model: String
+    @State private var queuedVoiceMode: Bool
     @State private var isSaving = false
     @State private var error: String?
 
-    init(session: Session, socketService: SocketService) {
+    init(
+        session: Session,
+        socketService: SocketService,
+        queuedVoiceModeEnabled: Bool,
+        onQueuedVoiceModeChanged: @escaping (Bool) -> Void
+    ) {
         self.session = session
         self.socketService = socketService
+        self.queuedVoiceModeEnabled = queuedVoiceModeEnabled
+        self.onQueuedVoiceModeChanged = onQueuedVoiceModeChanged
         self._permissionMode = State(initialValue: session.permissionConfig?.mode ?? .default)
         self._model = State(initialValue: session.modelConfig?.model ?? "")
+        self._queuedVoiceMode = State(initialValue: queuedVoiceModeEnabled)
     }
 
     var body: some View {
@@ -60,6 +71,13 @@ struct SessionSettingsSheet: View {
                     }
                 }
 
+                Section("Voice") {
+                    Toggle("Queued Voice Mode", isOn: $queuedVoiceMode)
+                    Text("Keep listening while the agent is busy and queue new transcripts for this session.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let error {
                     Section {
                         Text(error)
@@ -78,7 +96,13 @@ struct SessionSettingsSheet: View {
                     Button("Save") {
                         Task { await save() }
                     }
-                    .disabled(isSaving || permissionMode == (session.permissionConfig?.mode ?? .default))
+                    .disabled(
+                        isSaving ||
+                        (
+                            permissionMode == (session.permissionConfig?.mode ?? .default) &&
+                            queuedVoiceMode == queuedVoiceModeEnabled
+                        )
+                    )
                     .bold()
                 }
             }
@@ -96,6 +120,7 @@ struct SessionSettingsSheet: View {
                     "permission_config": ["mode": permissionMode.rawValue]
                 ]
             )
+            onQueuedVoiceModeChanged(queuedVoiceMode)
             dismiss()
         } catch {
             self.error = "Failed to save: \(error.localizedDescription)"
