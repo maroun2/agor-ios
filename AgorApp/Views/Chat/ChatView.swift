@@ -94,7 +94,14 @@ struct ChatView: View {
 
     @ViewBuilder private var sessionSettingsSheet: some View {
         if let session = viewModel.currentSession {
-            SessionSettingsSheet(session: session, socketService: socketService)
+            SessionSettingsSheet(
+                session: session,
+                socketService: socketService,
+                queuedVoiceModeEnabled: viewModel.queuedVoiceModeEnabled(for: session.sessionId),
+                onQueuedVoiceModeChanged: { isEnabled in
+                    viewModel.setQueuedVoiceModeEnabled(isEnabled, for: session.sessionId)
+                }
+            )
         }
     }
 
@@ -262,6 +269,13 @@ struct ChatView: View {
         case .taskError(_, let errorText):
             TaskErrorBubble(errorText: errorText)
                 .id(item.id)
+        case .outboundPrompt(let prompt):
+            OutboundPromptBubble(
+                prompt: prompt,
+                onRetry: { viewModel.retryPendingSend(prompt.id) },
+                onDismiss: { viewModel.dismissOutboundPrompt(prompt.id) }
+            )
+            .id(item.id)
         }
     }
 
@@ -386,6 +400,98 @@ private struct TaskErrorBubble: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
+    }
+}
+
+private struct OutboundPromptBubble: View {
+    let prompt: OutboundPrompt
+    let onRetry: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 4) {
+                statusIcon
+                    .font(.caption2)
+                    .foregroundStyle(statusColor)
+                Text(statusText)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(prompt.text)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                if prompt.status == .failed {
+                    HStack(spacing: 12) {
+                        Button("Dismiss", action: onDismiss)
+                            .font(.caption.weight(.medium))
+                        Button("Retry", action: onRetry)
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12))
+            .frame(maxWidth: 300, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var statusIcon: Image {
+        switch prompt.status {
+        case .queuedLocal, .queuedRemote:
+            return Image(systemName: "list.bullet.circle")
+        case .sending, .pendingAck:
+            return Image(systemName: "clock")
+        case .failed:
+            return Image(systemName: "exclamationmark.circle.fill")
+        }
+    }
+
+    private var statusText: String {
+        switch prompt.status {
+        case .queuedLocal:
+            return "Queued"
+        case .queuedRemote:
+            if let position = prompt.queuePosition {
+                return "Queued on server (\(position))"
+            }
+            return "Queued on server"
+        case .sending:
+            return "Sending"
+        case .pendingAck:
+            return "Pending"
+        case .failed:
+            return "Failed to send"
+        }
+    }
+
+    private var statusColor: Color {
+        switch prompt.status {
+        case .failed:
+            return .red
+        case .queuedLocal, .queuedRemote:
+            return .orange
+        case .sending, .pendingAck:
+            return .blue
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch prompt.status {
+        case .failed:
+            return .red.opacity(0.12)
+        case .queuedLocal, .queuedRemote:
+            return .orange.opacity(0.14)
+        case .sending, .pendingAck:
+            return .tint.opacity(0.15)
+        }
     }
 }
 
