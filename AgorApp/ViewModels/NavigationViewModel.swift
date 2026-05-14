@@ -51,15 +51,36 @@ final class NavigationViewModel {
     // Stored so @Observable tracks changes and computed sections recompute reactively
     var favoriteSessionIds: Set<String> = []
 
+    /// Sessions for list presentation:
+    /// favorites first, then most recently updated, preserving a stable order for ties.
+    func orderedSessionsForDisplay(_ sessions: [Session]) -> [Session] {
+        sessions.enumerated()
+            .sorted { lhs, rhs in
+                let lhsIsFavorite = favoriteSessionIds.contains(lhs.element.sessionId)
+                let rhsIsFavorite = favoriteSessionIds.contains(rhs.element.sessionId)
+                if lhsIsFavorite != rhsIsFavorite {
+                    return lhsIsFavorite && !rhsIsFavorite
+                }
+
+                if lhs.element.lastUpdated != rhs.element.lastUpdated {
+                    return lhs.element.lastUpdated > rhs.element.lastUpdated
+                }
+
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     // Sessions needing attention (awaiting permission or input)
     var attentionSessions: [Session] {
         boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.filter { $0.status.needsAttention && !$0.isScheduled } } }
     }
 
-    // Important sessions: ready-for-prompt + running + favorites + 3 most recent
+    // Important sessions: favorites + ready-for-prompt + running + 3 most recent
     // Excludes attention sessions (they have their own section above)
     var importantSessions: [Session] {
         let all = boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
         let attentionIds = Set(attentionSessions.map(\.sessionId))
         var seen = Set<String>()
         var result: [Session] = []
@@ -73,19 +94,18 @@ final class NavigationViewModel {
             result.append(session)
         }
 
-        // 1. Ready for prompt — agent finished, user hasn't reviewed yet
+        // 1. Favorites
+        for s in all where favoriteSessionIds.contains(s.sessionId) { add(s) }
+
+        // 2. Ready for prompt — agent finished, user hasn't reviewed yet
         for s in all where s.readyForPrompt == true { add(s) }
 
-        // 2. Running sessions
+        // 3. Running sessions
         for s in all where s.status == .running { add(s) }
-
-        // 3. Favorites (local)
-        for s in all where favoriteSessionIds.contains(s.sessionId) { add(s) }
 
         // 4. Last 3 recently updated (not already included)
         let recent = all
             .filter { !seen.contains($0.sessionId) && !attentionIds.contains($0.sessionId) }
-            .sorted { $0.lastUpdated > $1.lastUpdated }
             .prefix(3)
         for s in recent { add(s) }
 
@@ -259,7 +279,7 @@ final class NavigationViewModel {
     private func assignSessions(_ sessionsByWorktreeId: [String: [Session]]) {
         for board in boardNodes {
             for wt in board.worktrees {
-                let sessions = sessionsByWorktreeId[wt.worktree.worktreeId] ?? []
+                let sessions = orderedSessionsForDisplay(sessionsByWorktreeId[wt.worktree.worktreeId] ?? [])
                 let newIds = Set(sessions.map(\.sessionId))
                 let oldIds = Set(wt.sessions.map(\.sessionId))
                 if oldIds != newIds || wt.sessions.count != sessions.count {
@@ -309,7 +329,7 @@ final class NavigationViewModel {
             // Assign pre-fetched sessions if available; otherwise skip (caller fetches separately)
             if let sessionsByWorktreeId {
                 for wt in boardNode.worktrees {
-                    let sessions = sessionsByWorktreeId[wt.worktree.worktreeId] ?? []
+                    let sessions = orderedSessionsForDisplay(sessionsByWorktreeId[wt.worktree.worktreeId] ?? [])
                     wt.sessions = sessions
                     wt.isExpanded = !collapsedWorktreeIds.contains(wt.worktree.worktreeId)
                 }
@@ -326,7 +346,7 @@ final class NavigationViewModel {
     func loadSessions(for worktreeNode: WorktreeNode) async {
         worktreeNode.isLoading = true
         let grouped = await fetchAllSessions()
-        let sessions = grouped[worktreeNode.worktree.worktreeId] ?? []
+        let sessions = orderedSessionsForDisplay(grouped[worktreeNode.worktree.worktreeId] ?? [])
         let newIds = Set(sessions.map(\.sessionId))
         let oldIds = Set(worktreeNode.sessions.map(\.sessionId))
         if oldIds != newIds || worktreeNode.sessions.count != sessions.count {
@@ -411,6 +431,7 @@ final class NavigationViewModel {
                             AppLogger.shared.log("[Nav] onSessionPatched \(sessionId): \(oldStatus) → \(newStatus)", level: .debug, category: "Nav")
                         }
                     }
+                    wt.sessions = orderedSessionsForDisplay(wt.sessions)
                     return
                 }
             }

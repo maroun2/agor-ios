@@ -23,12 +23,27 @@ struct SidebarView: View {
         List(selection: $selectedSessionId) {
             // Server tab bar
             Section {
-                ServerTabBar(
-                    profiles: ServerProfileManager.shared.profiles,
-                    activeProfileId: ServerProfileManager.shared.activeProfileId,
-                    connectionState: socketService.connectionState,
-                    onSelect: { profile in onServerSwitch?(profile) }
-                )
+                HStack(spacing: 8) {
+                    ServerTabBar(
+                        profiles: ServerProfileManager.shared.profiles,
+                        activeProfileId: ServerProfileManager.shared.activeProfileId,
+                        connectionState: socketService.connectionState,
+                        onSelect: { profile in onServerSwitch?(profile) }
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(.secondary.opacity(0.12), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Settings")
+                }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
@@ -179,24 +194,6 @@ struct SidebarView: View {
                 }
             }
 
-            // Settings footer
-            Section {
-                Button {
-                    showSettings = true
-                } label: {
-                    HStack {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(.secondary)
-                        Text("Settings")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text(GitVersion.hash)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .listRowBackground(Color.clear)
-            }
         }
         .listStyle(.sidebar)
         .navigationTitle("")
@@ -526,7 +523,7 @@ private struct WorktreeSection: View {
             if worktreeNode.sessions.isEmpty {
                 Text("No sessions").font(.caption).foregroundStyle(.secondary)
             }
-            ForEach(worktreeNode.sessions) { session in
+            ForEach(viewModel.orderedSessionsForDisplay(worktreeNode.sessions)) { session in
                 NavigationLink(value: session.sessionId) {
                     SessionRow(session: session)
                 }
