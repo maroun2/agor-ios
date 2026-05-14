@@ -5,6 +5,7 @@ struct ChatView: View {
     let sessionId: String
     let socketService: SocketService
     let navigationVM: NavigationViewModel
+    let onOpenSession: ((String) -> Void)?
 
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showFileBrowser = false
@@ -298,7 +299,7 @@ struct ChatView: View {
     private func navigateToSession(_ hash: String) {
         let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
         if let session = allSessions.first(where: { $0.sessionId.hasPrefix(hash) || $0.sessionId == hash }) {
-            viewModel.selectSession(session.sessionId)
+            onOpenSession?(session.sessionId)
         }
     }
 }
