@@ -88,7 +88,8 @@ struct MainNavigationView: View {
                         viewModel: chatVM,
                         sessionId: sessionId,
                         socketService: socketService,
-                        navigationVM: navigationVM
+                        navigationVM: navigationVM,
+                        onOpenSession: { selectedSessionId = $0 }
                     )
                 } else {
                     ContentUnavailableView(
@@ -119,14 +120,14 @@ struct MainNavigationView: View {
             }
         }
         .onChange(of: selectedSessionId) { _, newValue in
-            if let sessionId = newValue {
+            if let sessionId = newValue, sessionId != chatVM.currentSessionId {
                 chatVM.selectSession(sessionId)
             }
             notificationManager.activeSessionId = newValue
         }
         .onChange(of: chatVM.currentSessionId) { _, newValue in
-            if newValue == nil {
-                selectedSessionId = nil
+            if selectedSessionId != newValue {
+                selectedSessionId = newValue
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
@@ -215,9 +216,10 @@ struct MainNavigationView: View {
     }
 
     private var shouldShowVoiceFloatingButton: Bool {
+        let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
         chatVM.voiceModeEnabled &&
         chatVM.voiceSessionId != nil &&
-        selectedSessionId != chatVM.voiceSessionId
+        visibleSessionId != chatVM.voiceSessionId
     }
 
     // MARK: - Background Recovery
