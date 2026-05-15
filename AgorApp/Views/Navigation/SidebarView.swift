@@ -60,6 +60,33 @@ struct SidebarView: View {
             }
 
             if searchText.isEmpty {
+                if !viewModel.favoriteSessions.isEmpty {
+                    Section {
+                        ForEach(viewModel.favoriteSessions) { session in
+                            let ctx = viewModel.findContext(for: session)
+                            NavigationLink(value: session.sessionId) {
+                                ImportantSessionRow(
+                                    session: session,
+                                    isFavorite: true,
+                                    boardName: ctx?.boardName,
+                                    worktreeName: ctx?.worktreeName,
+                                    boardIcon: ctx?.boardIcon
+                                )
+                            }
+                            .contextMenu {
+                                FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                                BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
+                                Divider()
+                                CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                                ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
+                            }
+                        }
+                    } header: {
+                        Label("Favorites", systemImage: "star.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                }
+
                 // Needs Attention Section
                 if !viewModel.attentionSessions.isEmpty {
                     Section {

@@ -76,7 +76,14 @@ final class NavigationViewModel {
         boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions.filter { $0.status.needsAttention && !$0.isScheduled } } }
     }
 
-    // Important sessions: favorites + ready-for-prompt + running + 3 most recent
+    var favoriteSessions: [Session] {
+        boardNodes
+            .flatMap { $0.worktrees.flatMap(\.sessions) }
+            .filter { favoriteSessionIds.contains($0.sessionId) && !$0.isScheduled }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    // Important sessions: ready-for-prompt + running + 3 most recent
     // Excludes attention sessions (they have their own section above)
     var importantSessions: [Session] {
         let all = boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
@@ -87,23 +94,21 @@ final class NavigationViewModel {
 
         func add(_ session: Session) {
             guard !seen.contains(session.sessionId),
-                  !attentionIds.contains(session.sessionId) else { return }
+                  !attentionIds.contains(session.sessionId),
+                  !favoriteSessionIds.contains(session.sessionId) else { return }
             // Exclude untitled/auto-generated sessions unless favorited
             guard session.hasExplicitTitle || favoriteSessionIds.contains(session.sessionId) else { return }
             seen.insert(session.sessionId)
             result.append(session)
         }
 
-        // 1. Favorites
-        for s in all where favoriteSessionIds.contains(s.sessionId) { add(s) }
-
-        // 2. Ready for prompt — agent finished, user hasn't reviewed yet
+        // 1. Ready for prompt — agent finished, user hasn't reviewed yet
         for s in all where s.readyForPrompt == true { add(s) }
 
-        // 3. Running sessions
+        // 2. Running sessions
         for s in all where s.status == .running { add(s) }
 
-        // 4. Last 3 recently updated (not already included)
+        // 3. Last 3 recently updated (not already included)
         let recent = all
             .filter { !seen.contains($0.sessionId) && !attentionIds.contains($0.sessionId) }
             .prefix(3)

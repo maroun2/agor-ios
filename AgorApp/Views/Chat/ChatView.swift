@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var showResetAlert = false
     @State private var fileBrowserVM: FileBrowserViewModel?
     @State private var mcpVM: MCPViewModel?
+    @State private var isQueueExpanded = true
 
     var body: some View {
         chatContent
@@ -70,6 +71,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             statusBanners
             messageScrollView
+            queuedMessagesDrawer
             PromptInputBar(viewModel: viewModel)
         }
     }
@@ -184,6 +186,47 @@ struct ChatView: View {
         }
     }
 
+    @ViewBuilder private var queuedMessagesDrawer: some View {
+        if !viewModel.queuedMessages.isEmpty {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isQueueExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "text.badge.plus")
+                            .foregroundStyle(.orange)
+                        Text("Queued Messages (\(viewModel.queuedMessages.count))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isQueueExpanded ? 90 : 0))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.orange.opacity(0.08))
+                }
+                .buttonStyle(.plain)
+
+                if isQueueExpanded {
+                    VStack(spacing: 8) {
+                        ForEach(Array(viewModel.queuedMessages.enumerated()), id: \.element.messageId) { index, message in
+                            queuedMessageRow(message, fallbackIndex: index + 1)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                    .background(.orange.opacity(0.04))
+                }
+            }
+        }
+    }
+
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -234,6 +277,32 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    private func queuedMessageRow(_ message: Message, fallbackIndex: Int) -> some View {
+        HStack(spacing: 10) {
+            Text("\(message.queuePosition ?? fallbackIndex).")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(message.contentPreview.isEmpty ? (messageText(message) ?? "Queued message") : message.contentPreview)
+                .font(.callout)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                viewModel.removeQueuedMessage(message)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.background, in: RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder private func messageRow(_ item: DisplayItem) -> some View {
@@ -314,6 +383,23 @@ struct ChatView: View {
         let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
         if let session = allSessions.first(where: { $0.sessionId.hasPrefix(hash) || $0.sessionId == hash }) {
             onOpenSession?(session.sessionId)
+        }
+    }
+
+    private func messageText(_ message: Message) -> String? {
+        switch message.content {
+        case .text(let text):
+            return text
+        case .blocks(let blocks):
+            let text = blocks.compactMap { block -> String? in
+                if case .text(let content) = block {
+                    return content.text
+                }
+                return nil
+            }.joined(separator: " ")
+            return text.isEmpty ? nil : text
+        default:
+            return nil
         }
     }
 }

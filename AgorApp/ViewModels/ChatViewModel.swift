@@ -83,6 +83,7 @@ final class ChatViewModel {
     private var outboundPromptsBySession: [String: [OutboundPrompt]] = [:]
     private var queuedVoiceModeSessionIds: Set<String> = []
     var outboundPrompts: [OutboundPrompt] = []
+    var queuedMessages: [Message] = []
 
     var promptText: String = "" {
         didSet {
@@ -256,6 +257,7 @@ final class ChatViewModel {
         visibleTaskLimit = defaultVisibleTaskLimit
         error = nil
         outboundPrompts = outboundPromptsBySession[sessionId] ?? []
+        queuedMessages = []
         // Restore draft for this session (set directly to avoid didSet writing back before session is set)
         promptText = draftText(for: sessionId)
 
@@ -273,8 +275,8 @@ final class ChatViewModel {
                 // No tasks — use virtual-task mode with session-based loading
                 await loadVirtualMessages(sessionId)
             }
+            await loadQueuedMessages(sessionId)
             reconcileOutboundPrompts(for: sessionId)
-            processDeferredQueueIfPossible()
             startPolling()
             scrollToBottomToken += 1
         }
@@ -311,8 +313,8 @@ final class ChatViewModel {
             if tasks.isEmpty {
                 await loadVirtualMessages(sessionId)
             }
+            await loadQueuedMessages(sessionId)
             reconcileOutboundPrompts(for: sessionId)
-            processDeferredQueueIfPossible()
             startPolling()
         }
     }
@@ -330,6 +332,19 @@ final class ChatViewModel {
             }
         } catch {
             self.error = "Failed to load session"
+        }
+    }
+
+    private func loadQueuedMessages(_ sessionId: String) async {
+        do {
+            let response: PaginatedResponse<Message> = try await client.getPaginated(
+                "/sessions/\(sessionId)/messages/queue"
+            )
+            guard currentSessionId == sessionId else { return }
+            queuedMessages = response.data.sorted { ($0.queuePosition ?? 0) < ($1.queuePosition ?? 0) }
+            reconcileRemoteQueuedPrompts(for: sessionId)
+        } catch {
+            AppLogger.shared.log("[Chat] loadQueuedMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
         }
     }
 
@@ -442,21 +457,6 @@ final class ChatViewModel {
         let text = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let sessionId = currentSessionId else { return }
         AppLogger.shared.log("[Chat] sendPrompt to \(sessionId) (\(text.count) chars)", level: .debug, category: "Chat")
-        if shouldQueuePromptLocally(for: sessionId) {
-            clearPromptInput(preserveDraft: false)
-            if sessionId == voiceSessionId {
-                voicePendingPromptText = nil
-            }
-            _ = appendOutboundPrompt(
-                text: text,
-                sessionId: sessionId,
-                source: .typed,
-                status: .queuedLocal
-            )
-            error = nil
-            return
-        }
-
         let outboundId = appendOutboundPrompt(
             text: text,
             sessionId: sessionId,
@@ -468,7 +468,12 @@ final class ChatViewModel {
             voicePendingPromptText = nil
         }
         clearPromptInput(preserveDraft: true)
-        sendPrompt(to: sessionId, text: text, outboundId: outboundId, showSendingState: true)
+        if isSessionQueueable(sessionId: sessionId) {
+            let source: OutboundPromptSource = sessionId == voiceSessionId ? .voice : .typed
+            queueMessage(to: sessionId, text: text, outboundId: outboundId, source: source, showSendingState: true)
+        } else {
+            sendPrompt(to: sessionId, text: text, outboundId: outboundId, showSendingState: true)
+        }
     }
 
     /// Server response shape for prompt endpoint
@@ -477,6 +482,11 @@ final class ChatViewModel {
         let queued: Bool?
         let queue_position: Int?
         // Server may also return task/session info — we only need these fields
+    }
+
+    private struct QueueResponse: Codable {
+        let success: Bool
+        let message: Message
     }
 
     private func sendPrompt(to sessionId: String, text: String, outboundId: String, showSendingState: Bool) {
@@ -499,6 +509,9 @@ final class ChatViewModel {
                     let pos = parsed.queue_position ?? 0
                     AppLogger.shared.log("[Chat] sendPrompt: queued at position \(pos)", level: .info, category: "Chat")
                     updateOutboundPrompt(outboundId, status: .queuedRemote, queuePosition: pos > 0 ? pos : nil)
+                    if sessionId == currentSessionId {
+                        await loadQueuedMessages(sessionId)
+                    }
                 } else {
                     updateOutboundPrompt(outboundId, status: .pendingAck)
                 }
@@ -526,17 +539,60 @@ final class ChatViewModel {
                 AppLogger.shared.log("[Chat] sendPrompt ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
                 self.error = "Failed to send prompt: \(error.localizedDescription)"
                 updateOutboundPrompt(outboundId, status: .failed)
-                if sessionId == currentSessionId,
-                   outboundPrompt(for: outboundId)?.source == .typed,
-                   let failedText = pendingSendText ?? outboundPrompt(for: outboundId)?.text {
-                    promptText = failedText
+                if let prompt = outboundPrompt(for: outboundId) {
+                    let failedText = pendingSendText ?? prompt.text
+                    restoreFailedPrompt(text: failedText, sessionId: sessionId, source: prompt.source)
                 }
                 pendingSendText = nil
             }
             if showSendingState {
                 isSendingPrompt = false
             }
-            processDeferredQueueIfPossible()
+        }
+    }
+
+    private func queueMessage(
+        to sessionId: String,
+        text: String,
+        outboundId: String,
+        source: OutboundPromptSource,
+        showSendingState: Bool
+    ) {
+        if showSendingState {
+            isSendingPrompt = true
+        }
+        Task {
+            do {
+                struct QueueBody: Codable {
+                    let prompt: String
+                }
+
+                let response: QueueResponse = try await client.post(
+                    "/sessions/\(sessionId)/messages/queue",
+                    body: QueueBody(prompt: text)
+                )
+
+                if sessionId == currentSessionId {
+                    upsertQueuedMessage(response.message)
+                }
+                updateOutboundPrompt(outboundId, status: .queuedRemote, queuePosition: response.message.queuePosition)
+                pendingSendText = nil
+                if sessionId == currentSessionId {
+                    UserDefaults.standard.removeObject(forKey: Self.draftKeyPrefix + sessionId)
+                }
+                self.error = nil
+                reconcileRemoteQueuedPrompts(for: sessionId)
+            } catch {
+                AppLogger.shared.log("[Chat] queueMessage ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
+                self.error = "Failed to queue message: \(error.localizedDescription)"
+                updateOutboundPrompt(outboundId, status: .failed)
+                restoreFailedPrompt(text: text, sessionId: sessionId, source: source)
+                pendingSendText = nil
+                updateVoiceListening()
+            }
+            if showSendingState {
+                isSendingPrompt = false
+            }
         }
     }
     // MARK: - File Upload
@@ -1029,6 +1085,27 @@ final class ChatViewModel {
             }
         }
 
+        socketService.onMessageRemoved { [weak self] message in
+            guard let self else { return }
+            guard message.sessionId == self.currentSessionId || message.sessionId == self.voiceSessionId else { return }
+            if message.sessionId == self.currentSessionId {
+                self.queuedMessages.removeAll { $0.messageId == message.messageId }
+            }
+            self.promoteQueuedPromptToPendingAck(for: message)
+            if message.sessionId == self.currentSessionId {
+                self.rebuildDisplayItems()
+            }
+        }
+
+        socketService.onMessageQueued { [weak self] message in
+            guard let self else { return }
+            guard message.sessionId == self.currentSessionId || message.sessionId == self.voiceSessionId else { return }
+            if message.sessionId == self.currentSessionId {
+                self.upsertQueuedMessage(message)
+            }
+            self.promotePromptToRemoteQueued(for: message)
+        }
+
         socketService.onTaskCreated { [weak self] task in
             guard let self, task.sessionId == self.currentSessionId else { return }
             if !self.tasks.contains(where: { $0.taskId == task.taskId }) {
@@ -1105,9 +1182,6 @@ final class ChatViewModel {
                 self.activeStreams = self.streamingService.activeStreams
                 self.rebuildDisplayItems()
             }
-            if session.status == .idle || session.readyForPrompt == true {
-                self.processDeferredQueueIfPossible()
-            }
             // Auto-scroll to current pending permission/input card when session needs attention
             if session.status == .awaitingPermission || session.status == .awaitingInput {
                 let permId = self.currentPendingPermissionId
@@ -1137,7 +1211,7 @@ final class ChatViewModel {
         currentSession?.isPromptable ?? false
     }
 
-    var canQueuePrompt: Bool {
+    var isSessionQueueable: Bool {
         currentSession?.status == .running
     }
 
@@ -1327,22 +1401,31 @@ final class ChatViewModel {
         }
 
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(5000)) // Give user time to review
+            let reviewDelayMs = self.queuedVoiceModeEnabled(for: sessionId) ? 1000 : 5000
+            try? await Task.sleep(for: .milliseconds(reviewDelayMs))
             guard self.voiceSessionId == sessionId else { return }
 
-            if self.queuedVoiceModeEnabled(for: sessionId), self.shouldQueuePromptLocally(for: sessionId) {
-                self.voicePendingPromptText = nil
-                if self.currentSessionId == sessionId,
-                   self.promptText.trimmingCharacters(in: .whitespacesAndNewlines) == text {
-                    self.promptText = ""
-                }
-                _ = self.appendOutboundPrompt(
+            if self.queuedVoiceModeEnabled(for: sessionId), self.isSessionQueueable(sessionId: sessionId) {
+                let outboundId = self.appendOutboundPrompt(
                     text: text,
                     sessionId: sessionId,
                     source: .voice,
-                    status: .queuedLocal
+                    status: .sending
                 )
-                self.processDeferredQueueIfPossible()
+                self.voicePendingPromptText = nil
+                if self.currentSessionId == sessionId,
+                   self.promptText.trimmingCharacters(in: .whitespacesAndNewlines) == text {
+                    self.clearPromptInput(preserveDraft: true)
+                }
+                self.pendingSendText = text
+                self.queueMessage(
+                    to: sessionId,
+                    text: text,
+                    outboundId: outboundId,
+                    source: .voice,
+                    showSendingState: false
+                )
+                self.updateVoiceListening()
                 return
             }
 
@@ -1581,21 +1664,26 @@ final class ChatViewModel {
 
     func retryPendingSend(_ outboundId: String) {
         guard let prompt = outboundPrompt(for: outboundId) else { return }
-        guard prompt.status == .failed || prompt.status == .queuedLocal else { return }
-
-        if shouldQueuePromptLocally(for: prompt.sessionId) {
-            updateOutboundPrompt(outboundId, status: .queuedLocal, queuePosition: nil)
-            return
-        }
+        guard prompt.status == .failed || prompt.status == .queuedLocal || prompt.status == .queuedRemote else { return }
 
         pendingSendText = prompt.text
         updateOutboundPrompt(outboundId, status: .sending, queuePosition: nil)
-        sendPrompt(
-            to: prompt.sessionId,
-            text: prompt.text,
-            outboundId: outboundId,
-            showSendingState: prompt.sessionId == currentSessionId
-        )
+        if isSessionQueueable(sessionId: prompt.sessionId) {
+            queueMessage(
+                to: prompt.sessionId,
+                text: prompt.text,
+                outboundId: outboundId,
+                source: prompt.source,
+                showSendingState: prompt.sessionId == currentSessionId
+            )
+        } else {
+            sendPrompt(
+                to: prompt.sessionId,
+                text: prompt.text,
+                outboundId: outboundId,
+                showSendingState: prompt.sessionId == currentSessionId
+            )
+        }
     }
 
     func dismissOutboundPrompt(_ outboundId: String) {
@@ -1631,7 +1719,7 @@ final class ChatViewModel {
         }
     }
 
-    private func shouldQueuePromptLocally(for sessionId: String) -> Bool {
+    func isSessionQueueable(sessionId: String) -> Bool {
         if currentSessionId == sessionId {
             return currentSession?.status == .running
         }
@@ -1707,27 +1795,6 @@ final class ChatViewModel {
         }
     }
 
-    private func processDeferredQueueIfPossible() {
-        guard !isSendingPrompt else { return }
-        let candidateSessionIds = [currentSessionId, voiceSessionId].compactMap { $0 }
-
-        for sessionId in candidateSessionIds {
-            guard !shouldQueuePromptLocally(for: sessionId) else { continue }
-            guard let next = (outboundPromptsBySession[sessionId] ?? []).first(where: { $0.status == .queuedLocal }) else {
-                continue
-            }
-            pendingSendText = next.text
-            updateOutboundPrompt(next.id, status: .sending, queuePosition: nil)
-            sendPrompt(
-                to: sessionId,
-                text: next.text,
-                outboundId: next.id,
-                showSendingState: sessionId == currentSessionId
-            )
-            return
-        }
-    }
-
     private func reconcileOutboundPrompt(with message: Message) {
         guard let promptText = messageText(message)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1762,6 +1829,107 @@ final class ChatViewModel {
 
         outboundPromptsBySession[sessionId] = prompts
         syncOutboundPrompts(sessionId: sessionId)
+    }
+
+    private func reconcileRemoteQueuedPrompts(for sessionId: String) {
+        guard var prompts = outboundPromptsBySession[sessionId], !prompts.isEmpty else { return }
+        let queuedByText = Dictionary(
+            queuedMessages
+                .filter { $0.sessionId == sessionId }
+                .compactMap { message -> (String, Int?)? in
+                    guard let text = messageText(message)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !text.isEmpty else { return nil }
+                    return (text, message.queuePosition)
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        for index in prompts.indices {
+            let normalized = prompts[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let position = queuedByText[normalized] {
+                prompts[index].status = .queuedRemote
+                prompts[index].queuePosition = position
+            }
+        }
+
+        outboundPromptsBySession[sessionId] = prompts
+        syncOutboundPrompts(sessionId: sessionId)
+    }
+
+    private func restoreFailedPrompt(text: String, sessionId: String, source: OutboundPromptSource) {
+        if source == .voice {
+            voicePendingPromptText = text
+        }
+        if sessionId == currentSessionId {
+            promptText = text
+        }
+    }
+
+    private func upsertQueuedMessage(_ message: Message) {
+        guard message.status == "queued" || message.queuePosition != nil else { return }
+        queuedMessages.removeAll { $0.messageId == message.messageId }
+        queuedMessages.append(message)
+        queuedMessages.sort { ($0.queuePosition ?? 0) < ($1.queuePosition ?? 0) }
+    }
+
+    private func promotePromptToRemoteQueued(for message: Message) {
+        guard let text = messageText(message)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty,
+              var prompts = outboundPromptsBySession[message.sessionId],
+              let index = prompts.firstIndex(where: {
+                  $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text
+              }) else { return }
+
+        prompts[index].status = .queuedRemote
+        prompts[index].queuePosition = message.queuePosition
+        outboundPromptsBySession[message.sessionId] = prompts
+        syncOutboundPrompts(sessionId: message.sessionId)
+    }
+
+    private func promoteQueuedPromptToPendingAck(for message: Message) {
+        guard let text = messageText(message)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty,
+              var prompts = outboundPromptsBySession[message.sessionId],
+              let index = prompts.firstIndex(where: {
+                  $0.status == .queuedRemote &&
+                  $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text
+              }) else { return }
+
+        prompts[index].status = .pendingAck
+        prompts[index].queuePosition = nil
+        outboundPromptsBySession[message.sessionId] = prompts
+        syncOutboundPrompts(sessionId: message.sessionId)
+    }
+
+    func removeQueuedMessage(_ message: Message) {
+        queuedMessages.removeAll { $0.messageId == message.messageId }
+        removeMatchingQueuedOutboundPrompt(for: message)
+        Task {
+            do {
+                _ = try await client.delete("/messages/\(message.messageId)")
+            } catch {
+                AppLogger.shared.log("[Chat] removeQueuedMessage ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
+                self.error = "Failed to remove queued message: \(error.localizedDescription)"
+                if let sessionId = currentSessionId {
+                    await loadQueuedMessages(sessionId)
+                }
+            }
+        }
+    }
+
+    private func removeMatchingQueuedOutboundPrompt(for message: Message) {
+        guard let text = messageText(message)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty,
+              var prompts = outboundPromptsBySession[message.sessionId] else { return }
+
+        guard let index = prompts.firstIndex(where: {
+            ($0.status == .queuedRemote || $0.status == .queuedLocal) &&
+            $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text
+        }) else { return }
+
+        prompts.remove(at: index)
+        outboundPromptsBySession[message.sessionId] = prompts
+        syncOutboundPrompts(sessionId: message.sessionId)
     }
 
     private func messageText(_ message: Message) -> String? {

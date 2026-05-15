@@ -121,11 +121,17 @@ struct PromptInputBar: View {
                                 .controlSize(.small)
                                 .frame(width: 36, height: 36)
                         } else {
-                            Image(systemName: viewModel.canQueuePrompt ? "list.bullet.circle.fill" : "arrow.up.circle.fill")
-                                .font(.system(size: 28))
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(viewModel.canQueuePrompt ? .orange : .tint)
-                                .frame(width: 36, height: 36)
+                            if viewModel.isSessionQueueable {
+                                Image(systemName: "text.badge.plus")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(.orange)
+                                    .frame(width: 36, height: 36)
+                            } else {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 28))
+                                    .symbolRenderingMode(.hierarchical)
+                                    .frame(width: 36, height: 36)
+                            }
                         }
                     }
                     .disabled(!canSend)
@@ -219,14 +225,14 @@ struct PromptInputBar: View {
 
     private var canSend: Bool {
         !viewModel.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && (viewModel.isSessionPromptable || viewModel.canQueuePrompt)
+            && (viewModel.isSessionPromptable || viewModel.isSessionQueueable)
             && !viewModel.isSendingPrompt
     }
 
     private var placeholder: String {
         guard let session = viewModel.currentSession else { return "Type a prompt..." }
         switch session.status {
-        case .running: return "Queue your next message..."
+        case .running: return "Queue a message..."
         case .awaitingPermission: return "Waiting for permission..."
         case .awaitingInput: return "Waiting for input..."
         case .idle: return "Type a prompt..."
