@@ -576,7 +576,7 @@ private struct OutboundPromptBubble: View {
         case .queuedLocal, .queuedRemote:
             return .orange.opacity(0.14)
         case .sending, .pendingAck:
-            return .tint.opacity(0.15)
+            return .accentColor.opacity(0.15)
         }
     }
 }

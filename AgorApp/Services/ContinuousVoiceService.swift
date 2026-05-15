@@ -326,9 +326,11 @@ final class ContinuousVoiceService {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.preRollRestartTimer = Timer.scheduledTimer(withTimeInterval: self.preRollMaxDuration, repeats: false) { [weak self] _ in
-                guard let self, self.state == .listening else { return }
-                AppLogger.shared.log("[Voice] 🔄 Rolling pre-roll restart (keeps buffer ≤ \(self.preRollMaxDuration)s)", level: .debug, category: "Voice")
-                self.startPreRollRecorder()
+                Task { @MainActor [weak self] in
+                    guard let self, self.state == .listening else { return }
+                    AppLogger.shared.log("[Voice] 🔄 Rolling pre-roll restart (keeps buffer ≤ \(self.preRollMaxDuration)s)", level: .debug, category: "Voice")
+                    self.startPreRollRecorder()
+                }
             }
         }
     }

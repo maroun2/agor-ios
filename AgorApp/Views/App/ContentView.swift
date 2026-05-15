@@ -217,9 +217,9 @@ struct MainNavigationView: View {
 
     private var shouldShowVoiceFloatingButton: Bool {
         let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
-        chatVM.voiceModeEnabled &&
-        chatVM.voiceSessionId != nil &&
-        visibleSessionId != chatVM.voiceSessionId
+        return chatVM.voiceModeEnabled &&
+            chatVM.voiceSessionId != nil &&
+            visibleSessionId != chatVM.voiceSessionId
     }
 
     // MARK: - Background Recovery
