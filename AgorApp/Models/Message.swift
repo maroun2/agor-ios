@@ -255,6 +255,7 @@ struct Message: Identifiable {
     var toolUses: [ToolUse]?
     var parentToolUseId: String?
     var status: String?
+    var queuePosition: Int?
     var metadata: MessageMetadata?
 
     var id: String { messageId }
@@ -281,6 +282,7 @@ extension Message: Codable {
         case content
         case toolUses = "tool_uses"
         case parentToolUseId = "parent_tool_use_id"
+        case queuePosition = "queue_position"
         case status, metadata
     }
 
@@ -298,6 +300,7 @@ extension Message: Codable {
         toolUses = try container.decodeIfPresent([ToolUse].self, forKey: .toolUses)
         parentToolUseId = try container.decodeIfPresent(String.self, forKey: .parentToolUseId)
         status = try container.decodeIfPresent(String.self, forKey: .status)
+        queuePosition = try container.decodeIfPresent(Int.self, forKey: .queuePosition)
         metadata = try container.decodeIfPresent(MessageMetadata.self, forKey: .metadata)
 
         // Decode content based on message type
@@ -333,6 +336,7 @@ extension Message: Codable {
         try container.encodeIfPresent(toolUses, forKey: .toolUses)
         try container.encodeIfPresent(parentToolUseId, forKey: .parentToolUseId)
         try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(queuePosition, forKey: .queuePosition)
         try container.encodeIfPresent(metadata, forKey: .metadata)
 
         switch content {

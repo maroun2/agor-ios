@@ -22,6 +22,8 @@ final class SocketService {
     private var taskPatchedHandlers: [(AgorTask) -> Void] = []
     private var messageCreatedHandlers: [(Message) -> Void] = []
     private var messagePatchedHandlers: [(Message) -> Void] = []
+    private var messageRemovedHandlers: [(Message) -> Void] = []
+    private var messageQueuedHandlers: [(Message) -> Void] = []
 
     // Streaming callbacks (single subscriber is fine — only ChatVM uses these)
     var onStreamingStart: ((StreamingStartEvent) -> Void)?
@@ -65,6 +67,14 @@ final class SocketService {
 
     func onMessagePatched(_ handler: @escaping (Message) -> Void) {
         messagePatchedHandlers.append(handler)
+    }
+
+    func onMessageRemoved(_ handler: @escaping (Message) -> Void) {
+        messageRemovedHandlers.append(handler)
+    }
+
+    func onMessageQueued(_ handler: @escaping (Message) -> Void) {
+        messageQueuedHandlers.append(handler)
     }
 
     // MARK: - Connection
@@ -327,6 +337,20 @@ final class SocketService {
             self?.handleDecodable(data) { (message: Message) in
                 AppLogger.shared.log("[Socket] ← event \"messages patched\" messageId=\(message.messageId) session=\(message.sessionId)", level: .debug, category: "Socket")
                 self?.messagePatchedHandlers.forEach { $0(message) }
+            }
+        }
+
+        socket.on("messages removed") { [weak self] data, _ in
+            self?.handleDecodable(data) { (message: Message) in
+                AppLogger.shared.log("[Socket] ← event \"messages removed\" messageId=\(message.messageId) session=\(message.sessionId)", level: .debug, category: "Socket")
+                self?.messageRemovedHandlers.forEach { $0(message) }
+            }
+        }
+
+        socket.on("messages queued") { [weak self] data, _ in
+            self?.handleDecodable(data) { (message: Message) in
+                AppLogger.shared.log("[Socket] ← event \"messages queued\" messageId=\(message.messageId) session=\(message.sessionId)", level: .debug, category: "Socket")
+                self?.messageQueuedHandlers.forEach { $0(message) }
             }
         }
 

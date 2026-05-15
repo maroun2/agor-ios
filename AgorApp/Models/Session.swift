@@ -197,6 +197,10 @@ struct Session: Codable, Identifiable {
         status == .idle || readyForPrompt == true
     }
 
+    var canAcceptInput: Bool {
+        status == .idle || status == .running || readyForPrompt == true
+    }
+
     var isScheduled: Bool {
         scheduledFromWorktree == true || (title?.hasPrefix("[Scheduled ") == true)
     }
