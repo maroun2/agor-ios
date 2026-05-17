@@ -1,0 +1,23 @@
+{
+  "name": "Agor",
+  "identifier": "com.agor.AgorApp",
+  "subtitle": "AI agent orchestration from your iPhone",
+  "description": "Agor is a multiplayer canvas for orchestrating Claude Code, Codex, and Gemini sessions. Manage git worktrees, track AI conversations, visualize work on spatial boards, and collaborate in real-time — all from your iPhone.",
+  "iconURL": "https://raw.githubusercontent.com/maroun2/agor-ios/main/AgorApp/Assets.xcassets/AppIcon.appiconset/icon.png",
+  "tintColor": "#6366F1",
+  "homepage": "https://agor.live",
+  "apps": [
+    {
+      "name": "Agor",
+      "bundleIdentifier": "com.agor.AgorApp",
+      "developerName": "Roman Mikulencak",
+      "subtitle": "AI agent orchestration from your iPhone",
+      "localizedDescription": "Agor is a multiplayer canvas for orchestrating Claude Code, Codex, and Gemini sessions. Manage git worktrees, track AI conversations, visualize work on spatial boards, and collaborate in real-time.",
+      "iconURL": "https://raw.githubusercontent.com/maroun2/agor-ios/main/AgorApp/Assets.xcassets/AppIcon.appiconset/icon.png",
+      "tintColor": "#6366F1",
+      "screenshotURLs": [],
+      "versions": []
+    }
+  ],
+  "news": []
+}
