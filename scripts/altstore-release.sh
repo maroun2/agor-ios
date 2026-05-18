@@ -12,11 +12,12 @@
 #
 # What it does:
 #   1. Regenerates Xcode project (xcodegen)
-#   2. Archives the app
-#   3. Exports IPA with ad-hoc signing
-#   4. Creates a GitHub release with the IPA attached
-#   5. Updates altstore-source.json with the new version
-#   6. Commits and pushes the updated JSON
+#   2. Resolves SPM package dependencies
+#   3. Archives the app
+#   4. Exports IPA with ad-hoc signing
+#   5. Creates a GitHub release with the IPA attached
+#   6. Updates altstore-source.json with the new version
+#   7. Commits and pushes the updated JSON
 
 set -euo pipefail
 
@@ -66,7 +67,13 @@ echo "=== Agor iOS Release ${VERSION} (build ${BUILD}, ${COMMIT}) ==="
 echo "→ Regenerating Xcode project..."
 xcodegen generate
 
-# --- Step 2: Archive ---
+# --- Step 2: Resolve packages ---
+echo "→ Resolving SPM dependencies..."
+xcodebuild -resolvePackageDependencies \
+  -project AgorApp.xcodeproj \
+  -scheme "$SCHEME"
+
+# --- Step 3: Archive ---
 echo "→ Archiving..."
 xcodebuild archive \
   -project AgorApp.xcodeproj \
@@ -74,17 +81,17 @@ xcodebuild archive \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE_PATH" \
+  -allowProvisioningUpdates \
   MARKETING_VERSION="$VERSION" \
-  CURRENT_PROJECT_VERSION="$BUILD" \
-  | tail -1
+  CURRENT_PROJECT_VERSION="$BUILD"
 
-# --- Step 3: Export IPA ---
+# --- Step 4: Export IPA ---
 echo "→ Exporting IPA..."
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_PATH" \
   -exportOptionsPlist "$EXPORT_PLIST" \
   -exportPath "$EXPORT_DIR" \
-  | tail -1
+  -allowProvisioningUpdates
 
 IPA_PATH="$EXPORT_DIR/${SCHEME}.ipa"
 if [[ ! -f "$IPA_PATH" ]]; then
@@ -97,7 +104,7 @@ cp "$IPA_PATH" "/tmp/${IPA_NAME}"
 IPA_SIZE=$(stat -f%z "/tmp/${IPA_NAME}" 2>/dev/null || stat -c%s "/tmp/${IPA_NAME}")
 echo "→ IPA ready: /tmp/${IPA_NAME} (${IPA_SIZE} bytes)"
 
-# --- Step 4: Create GitHub release ---
+# --- Step 5: Create GitHub release ---
 echo "→ Creating GitHub release ${TAG}..."
 gh release create "$TAG" \
   --repo "$REPO" \
@@ -108,7 +115,7 @@ gh release create "$TAG" \
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${IPA_NAME}"
 echo "→ Download URL: ${DOWNLOAD_URL}"
 
-# --- Step 5: Update altstore-source.json ---
+# --- Step 6: Update altstore-source.json ---
 echo "→ Updating altstore-source.json..."
 TODAY=$(date -u +"%Y-%m-%d")
 
@@ -128,7 +135,7 @@ JSONEOF
 jq --argjson v "$NEW_VERSION" '.apps[0].versions = [$v] + .apps[0].versions' "$SOURCE_JSON" > "${SOURCE_JSON}.tmp"
 mv "${SOURCE_JSON}.tmp" "$SOURCE_JSON"
 
-# --- Step 6: Commit and push ---
+# --- Step 7: Commit and push ---
 echo "→ Committing updated source JSON..."
 git add "$SOURCE_JSON"
 git commit -m "Release Agor iOS v${VERSION}"
