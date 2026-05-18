@@ -2,7 +2,7 @@
 # altstore-release.sh — Build IPA, create GitHub release, update AltStore source JSON
 #
 # Usage:
-#   ./scripts/altstore-release.sh --version 1.0 --build 1
+#   ./scripts/altstore-release.sh --version X.Y
 #
 # Prerequisites:
 #   - macOS with Xcode 16+ and xcodegen installed
@@ -31,17 +31,15 @@ SOURCE_JSON="$ROOT_DIR/altstore-source.json"
 
 # --- Parse args ---
 VERSION=""
-BUILD=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
-    --build)   BUILD="$2";   shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
 
-if [[ -z "$VERSION" || -z "$BUILD" ]]; then
-  echo "Usage: $0 --version X.Y --build N"
+if [[ -z "$VERSION" ]]; then
+  echo "Usage: $0 --version X.Y"
   exit 1
 fi
 
@@ -50,8 +48,6 @@ IPA_NAME="Agor-${VERSION}.ipa"
 ARCHIVE_PATH="/tmp/AgorApp-${VERSION}.xcarchive"
 EXPORT_DIR="/tmp/AgorApp-export-${VERSION}"
 
-echo "=== Agor iOS Release ${VERSION} (build ${BUILD}) ==="
-
 # --- Preflight checks ---
 command -v xcodegen >/dev/null || { echo "ERROR: xcodegen not found"; exit 1; }
 command -v xcodebuild >/dev/null || { echo "ERROR: xcodebuild not found"; exit 1; }
@@ -59,6 +55,12 @@ command -v gh >/dev/null || { echo "ERROR: gh CLI not found"; exit 1; }
 command -v jq >/dev/null || { echo "ERROR: jq not found (brew install jq)"; exit 1; }
 
 cd "$ROOT_DIR"
+
+# --- Auto-derive build number from git ---
+BUILD=$(git rev-list --count HEAD)
+COMMIT=$(git rev-parse --short HEAD)
+
+echo "=== Agor iOS Release ${VERSION} (build ${BUILD}, ${COMMIT}) ==="
 
 # --- Step 1: Regenerate project ---
 echo "→ Regenerating Xcode project..."
@@ -100,7 +102,7 @@ echo "→ Creating GitHub release ${TAG}..."
 gh release create "$TAG" \
   --repo "$REPO" \
   --title "Agor iOS v${VERSION}" \
-  --notes "Agor iOS v${VERSION} (build ${BUILD})" \
+  --notes "Agor iOS v${VERSION} - build ${BUILD} (${COMMIT})" \
   "/tmp/${IPA_NAME}"
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${IPA_NAME}"
@@ -114,7 +116,7 @@ NEW_VERSION=$(cat <<JSONEOF
 {
   "version": "${VERSION}",
   "date": "${TODAY}",
-  "localizedDescription": "Agor iOS v${VERSION}",
+  "localizedDescription": "Agor iOS v${VERSION} (${COMMIT})",
   "downloadURL": "${DOWNLOAD_URL}",
   "size": ${IPA_SIZE},
   "minOSVersion": "${MIN_OS}"
