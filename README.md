@@ -1,62 +1,135 @@
-# Agor iOS
+# Agor for iOS
 
-Native iPhone app for [Agor](https://agor.live) — browse boards, worktrees, and sessions, chat with AI agents, approve permissions, answer questions, send prompts, and browse files, all with real-time streaming and markdown rendering.
+Native iPhone client for [Agor](https://agor.live) — orchestrate Claude Code, Codex, and Gemini sessions, manage git worktrees, and collaborate with AI agents in real-time, all from your phone.
 
-Connects to the FeathersJS daemon using the same REST + WebSocket APIs as the web UI. Built entirely against the existing API — no server-side changes required. See [`context/concepts/api-reference.md`](../../context/concepts/api-reference.md) for the full API documentation.
-
----
+<p align="center">
+  <img src="screenshots/sidebar.jpg" alt="Session sidebar with favorites and multi-server tabs" width="250">
+  &nbsp;&nbsp;
+  <img src="screenshots/chat.jpg" alt="Chat with inline images, tool use, and thinking blocks" width="250">
+  &nbsp;&nbsp;
+  <img src="screenshots/workflow.jpg" alt="PR merge workflow with voice input" width="250">
+</p>
 
 ## Features
 
-### Navigation
-- **Sidebar** with expandable board/worktree/session tree
-- **Important Sessions** section — favorited, running, readyForPrompt, and recent sessions with board icons
-- **Needs Attention** section — sessions awaiting permission or input (excludes scheduled sessions)
-- **Sidebar caching** — instant display on launch from cached data, background refresh from API
-- **Periodic polling** — sidebar stays fresh with 45-second refresh cycles for expanded nodes
+- **Multi-server sidebar** — switch between Agor instances, browse boards → worktrees → sessions in a tree
+- **Favorites & Important** — pin sessions, surface running/attention-needed ones automatically
+- **Rich chat** — markdown rendering, syntax-highlighted code, inline images, collapsible thinking/tool blocks
+- **Real-time streaming** — plain text while streaming, full markdown after completion
+- **Permissions & input** — approve/deny tool execution and answer agent questions inline
+- **Voice input** — dictate prompts with live waveform visualization
+- **File browser** — navigate worktree files, view text and images
+- **Session controls** — start, stop, archive, reset sessions; status icons with animations
+- **Notifications** — local alerts when favorited sessions finish; cross-session toasts
+- **Auto-reconnect** — phased reconnect banner on foreground resume, smart URL handling
 
-### Chat
-- **Rich markdown rendering** via Textual with syntax-highlighted code blocks (Highlightr)
-- **Real-time streaming** — plain text while streaming (fast), full markdown after completion
-- **Thinking blocks** — collapsible with elapsed time
-- **Tool use/result blocks** — collapsible with tool icons and input/output previews
-- **Task headers** — collapsible dividers grouping messages by task
-- **Prompt input** — multi-line with draft persistence across session switches
-- **Pagination** — load earlier messages on scroll
+## Install
 
-### Permissions & Input
-- **Inline permission cards** — approve/deny tool execution directly in the chat flow
-- **Inline input cards** — answer agent questions with radio/checkbox options or free text
-- **Attention bar** — tappable banner that scrolls to the pending card
-- **Plan mode** — visual indicator when session is in read-only plan mode
+### AltStore / SideStore
 
-### Session Management
-- **SF Symbol status icons** — idle, running (animated), stopping, awaiting permission/input, timed out, completed, failed
-- **Stop button** — merged into the status icon position when session is running
-- **Archive** and **reset** from the chat toolbar
-- **Agent icons** — star for Claude Code, distinct icons for Codex, Gemini, OpenCode
+Add this source URL to [AltStore](https://altstore.io) or [SideStore](https://sidestore.io):
 
-### File Browser
-- **Virtual directory tree** navigation built from the flat file API
-- **Text files** displayed in monospaced font with text selection
-- **Images** (png, jpg, gif, webp) displayed inline from base64
-- Accessible from worktree context menu ("Browse Files") or folder icon in chat toolbar
+```
+https://raw.githubusercontent.com/maroun2/agor-ios/main/altstore-source.json
+```
 
-### Settings
-- Account info (emoji, name, email)
-- Connection status and server URL
-- Version and git commit hash
-- Logout
+### Build from Source
 
-### Notifications & Background Recovery
-- **Local notifications** when favorited sessions finish (running -> idle)
-- **Cross-session toasts** — permission needed, question asked, completed, failed
-- **Reconnect banner** — phased "Reconnecting..." -> "Updating..." -> "Updated" on foreground resume
-- **Smart URL handling** — auto-adds port 3030, tries https fallback, validates via `/health` before login
+Requires macOS 15+, Xcode 16.x, and an iPhone with iOS 18+. See [Build & Deploy](#build--deploy) below.
 
----
+## Build & Deploy
 
-## Architecture
+### Requirements
+
+- macOS 15 (Sequoia) or later
+- Xcode 16.x (NOT 26.x — requires macOS 26)
+- Free Apple ID (no paid Developer Program needed for personal device)
+- iPhone with iOS 18+
+- [xcodegen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
+
+### Signing Setup (one-time)
+
+1. Open Xcode → Settings → Accounts → `+` → Apple ID
+2. Click your account → Manage Certificates → `+` → Apple Development
+3. Get your Team ID:
+   ```bash
+   security find-certificate -a | grep "Apple Development"
+   # Look for the 10-character string in parentheses
+   ```
+4. Set it in `project.yml`:
+   ```yaml
+   settings:
+     DEVELOPMENT_TEAM: "YOUR10CHARID"
+   ```
+
+### Generate Project & Build
+
+```bash
+xcodegen generate
+```
+
+### Deploy to iPhone
+
+The `deploy.sh` script handles build, signing, and install in one step:
+
+```bash
+bash deploy.sh
+```
+
+Or build and install manually:
+
+```bash
+xcodebuild -project AgorApp.xcodeproj \
+  -scheme AgorApp \
+  -destination 'platform=iOS,id=<device-udid>' \
+  -allowProvisioningUpdates \
+  -derivedDataPath .build/DerivedData \
+  build
+
+xcrun devicectl device install app \
+  --device <device-udid> \
+  .build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app
+```
+
+Find your device UDID with `xcrun devicectl list devices`.
+
+### First-Time Device Setup
+
+1. Enable **Developer Mode**: Settings → Privacy & Security → Developer Mode → ON (requires restart)
+2. Pair: `xcrun devicectl manage pair --device <device-id>`
+3. After first install, trust the certificate: Settings → General → VPN & Device Management → Apple Development → Trust
+
+### Connecting to the Daemon
+
+On the login screen, enter your daemon address:
+- **Local network:** `192.168.x.x` (find your Mac's IP with `ipconfig getifaddr en0`)
+- **Remote:** any URL you use to access the daemon
+
+The app automatically adds `http://` and `:3030` if missing, tries https fallback, and validates via `/health` before login.
+
+<details>
+<summary><strong>Simulator</strong></summary>
+
+```bash
+xcodebuild -project AgorApp.xcodeproj \
+  -scheme AgorApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -derivedDataPath .build/DerivedData \
+  build
+
+# Find simulator UUIDs
+xcrun simctl list devices available | grep iPhone
+
+# Boot, install, launch
+xcrun simctl boot <simulator-uuid>
+xcrun simctl install <simulator-uuid> .build/DerivedData/Build/Products/Debug-iphonesimulator/AgorApp.app
+xcrun simctl launch <simulator-uuid> com.agor.AgorApp
+```
+
+</details>
+
+<details>
+<summary><strong>Architecture</strong></summary>
 
 ```
 Views (SwiftUI) -> ViewModels (@Observable) -> Services -> Network (REST / Socket.IO)
@@ -144,9 +217,7 @@ AgorApp/
     +-- JSONCoding.swift                  # Custom decoders for polymorphic content
 ```
 
----
-
-## Tech Stack
+### Tech Stack
 
 | Dependency | Purpose |
 |------------|---------|
@@ -157,9 +228,12 @@ AgorApp/
 | **URLSession** | Native HTTP, no extra deps |
 | **Keychain** | Secure JWT + refresh token storage |
 
----
+</details>
 
-## API Endpoints
+<details>
+<summary><strong>API Reference</strong></summary>
+
+### REST Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -179,9 +253,7 @@ AgorApp/
 | `/users` | GET | Current user info |
 | `/health` | GET | Server health check |
 
----
-
-## WebSocket Events
+### WebSocket Events
 
 FeathersJS emits events as `"<service> <action>"`:
 
@@ -200,117 +272,7 @@ FeathersJS emits events as `"<service> <action>"`:
 | `messages thinking:chunk` | Append thinking text |
 | `messages thinking:end` | End thinking block |
 
----
-
-## Build & Deploy
-
-### Requirements
-
-- macOS 15 (Sequoia) or later
-- Xcode 16.x (NOT 26.x — requires macOS 26)
-- Free Apple ID (no paid Developer Program needed for personal device)
-- iPhone with iOS 18+
-- [xcodegen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
-
-### Xcode Setup
-
-Download Xcode 16.x from [developer.apple.com/download/all](https://developer.apple.com/download/all).
-
-Extract the `.xip` to a local APFS volume (not exFAT/NTFS):
-
-```bash
-cd /Applications   # or /Volumes/YourDrive
-xip -x ~/Downloads/Xcode_16.x.xip
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-sudo xcodebuild -runFirstLaunch
-xcodebuild -downloadPlatform iOS
-```
-
-### Signing Setup (one-time)
-
-1. Open Xcode → Settings → Accounts → `+` → Apple ID
-2. Click your account → Manage Certificates → `+` → Apple Development
-3. Get your Team ID:
-   ```bash
-   security find-certificate -a | grep "Apple Development"
-   # Look for the 10-character string in parentheses
-   ```
-4. Set it in `project.yml`:
-   ```yaml
-   settings:
-     DEVELOPMENT_TEAM: "YOUR10CHARID"
-   ```
-
-### Generate Project & Build
-
-```bash
-cd apps/agor-ios
-xcodegen generate
-```
-
-### Deploy to iPhone
-
-The `deploy.sh` script handles build, signing, and install in one step:
-
-```bash
-cd apps/agor-ios
-bash deploy.sh
-```
-
-Or build and install manually:
-
-```bash
-xcodebuild -project AgorApp.xcodeproj \
-  -scheme AgorApp \
-  -destination 'platform=iOS,id=<device-udid>' \
-  -allowProvisioningUpdates \
-  -derivedDataPath .build/DerivedData \
-  build
-
-xcrun devicectl device install app \
-  --device <device-udid> \
-  .build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app
-```
-
-Find your device UDID with `xcrun devicectl list devices`.
-
-### First-Time Device Setup
-
-1. Enable **Developer Mode**: Settings → Privacy & Security → Developer Mode → ON (requires restart)
-2. Pair: `xcrun devicectl manage pair --device <device-id>`
-3. After first install, trust the certificate: Settings → General → VPN & Device Management → Apple Development → Trust
-
-### Simulator
-
-```bash
-xcodebuild -project AgorApp.xcodeproj \
-  -scheme AgorApp \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -derivedDataPath .build/DerivedData \
-  build
-
-# Find simulator UUIDs
-xcrun simctl list devices available | grep iPhone
-
-# Boot, install, launch
-xcrun simctl boot <simulator-uuid>
-xcrun simctl install <simulator-uuid> .build/DerivedData/Build/Products/Debug-iphonesimulator/AgorApp.app
-xcrun simctl launch <simulator-uuid> com.agor.AgorApp
-```
-
----
-
-## Connecting to the Daemon
-
-On the login screen, enter your daemon address:
-- **Local network:** `192.168.x.x` (find your Mac's IP with `ipconfig getifaddr en0`)
-- **Remote:** any URL you use to access the daemon
-
-The app automatically adds `http://` and `:3030` if missing, tries https fallback, and validates via `/health` before login.
-
-The daemon must be running (`pnpm dev` in `apps/agor-daemon`).
-
----
+</details>
 
 ## Notes
 
@@ -321,3 +283,7 @@ The daemon must be running (`pnpm dev` in `apps/agor-daemon`).
 - **No background push notifications** — local notifications fire for in-app events only. APNs would require server-side changes
 - **Xcode 26.x won't open on macOS 15** — it requires macOS 26 (Tahoe). Use Xcode 16.x
 - If `xcodebuild` fails with "No Account for Team", open Xcode GUI and press Cmd+R once to refresh the session
+
+## License
+
+[MIT](LICENSE)
