@@ -286,4 +286,4 @@ FeathersJS emits events as `"<service> <action>"`:
 
 ## License
 
-[MIT](LICENSE)
+[CC BY-NC 4.0](LICENSE) — free to use and modify with attribution, non-commercial only.
