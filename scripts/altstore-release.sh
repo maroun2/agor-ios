@@ -7,14 +7,13 @@
 # Prerequisites:
 #   - macOS with Xcode 16+ and xcodegen installed
 #   - gh CLI authenticated (https://cli.github.com)
-#   - Valid provisioning profile for ad-hoc distribution
 #   - jq installed (brew install jq)
 #
 # What it does:
 #   1. Regenerates Xcode project (xcodegen)
 #   2. Resolves SPM package dependencies
-#   3. Archives the app
-#   4. Exports IPA with ad-hoc signing
+#   3. Archives the app (unsigned — AltStore re-signs on device)
+#   4. Packages .app into IPA
 #   5. Creates a GitHub release with the IPA attached
 #   6. Updates altstore-source.json with the new version
 #   7. Commits and pushes the updated JSON
@@ -27,7 +26,6 @@ BUNDLE_ID="com.agor.AgorApp"
 MIN_OS="18.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-EXPORT_PLIST="$SCRIPT_DIR/altstore-export-options.plist"
 SOURCE_JSON="$ROOT_DIR/altstore-source.json"
 
 # --- Parse args ---
@@ -47,7 +45,6 @@ fi
 TAG="v${VERSION}-ios"
 IPA_NAME="Agor-${VERSION}.ipa"
 ARCHIVE_PATH="/tmp/AgorApp-${VERSION}.xcarchive"
-EXPORT_DIR="/tmp/AgorApp-export-${VERSION}"
 
 # --- Preflight checks ---
 command -v xcodegen >/dev/null || { echo "ERROR: xcodegen not found"; exit 1; }
@@ -73,7 +70,7 @@ xcodebuild -resolvePackageDependencies \
   -project AgorApp.xcodeproj \
   -scheme "$SCHEME"
 
-# --- Step 3: Archive ---
+# --- Step 3: Archive (unsigned for AltStore) ---
 echo "→ Archiving..."
 xcodebuild archive \
   -project AgorApp.xcodeproj \
@@ -81,26 +78,30 @@ xcodebuild archive \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE_PATH" \
-  -allowProvisioningUpdates \
+  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD"
 
-# --- Step 4: Export IPA ---
-echo "→ Exporting IPA..."
-xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE_PATH" \
-  -exportOptionsPlist "$EXPORT_PLIST" \
-  -exportPath "$EXPORT_DIR" \
-  -allowProvisioningUpdates
-
-IPA_PATH="$EXPORT_DIR/${SCHEME}.ipa"
-if [[ ! -f "$IPA_PATH" ]]; then
-  echo "ERROR: IPA not found at $IPA_PATH"
-  ls -la "$EXPORT_DIR"/
+# --- Step 4: Package IPA ---
+echo "→ Packaging IPA..."
+APP_PATH=$(find "$ARCHIVE_PATH/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
+if [[ -z "$APP_PATH" ]]; then
+  echo "ERROR: No .app found in archive"
+  ls -laR "$ARCHIVE_PATH/Products/" 2>/dev/null || echo "Products dir missing"
   exit 1
 fi
 
-cp "$IPA_PATH" "/tmp/${IPA_NAME}"
+IPA_STAGING="/tmp/AgorApp-ipa-staging"
+rm -rf "$IPA_STAGING"
+mkdir -p "$IPA_STAGING/Payload"
+cp -R "$APP_PATH" "$IPA_STAGING/Payload/"
+cd "$IPA_STAGING"
+zip -qr "/tmp/${IPA_NAME}" Payload
+cd "$ROOT_DIR"
+rm -rf "$IPA_STAGING"
+
 IPA_SIZE=$(stat -f%z "/tmp/${IPA_NAME}" 2>/dev/null || stat -c%s "/tmp/${IPA_NAME}")
 echo "→ IPA ready: /tmp/${IPA_NAME} (${IPA_SIZE} bytes)"
 
