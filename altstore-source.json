@@ -16,7 +16,16 @@
       "iconURL": "https://raw.githubusercontent.com/maroun2/agor-ios/main/AgorApp/Assets.xcassets/AppIcon.appiconset/icon.png",
       "tintColor": "#6366F1",
       "screenshotURLs": [],
-      "versions": []
+      "versions": [
+        {
+          "version": "1.0",
+          "date": "2026-05-18",
+          "localizedDescription": "Agor iOS v1.0 (65316e9)",
+          "downloadURL": "https://github.com/maroun2/agor-ios/releases/download/v1.0-ios/Agor-1.0.ipa",
+          "size": 9208413,
+          "minOSVersion": "18.0"
+        }
+      ]
     }
   ],
   "news": []
