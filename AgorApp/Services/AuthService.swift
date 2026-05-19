@@ -224,6 +224,9 @@ final class AuthService {
             let response: AuthResponse = try await client.post("/authentication", body: body)
             client.accessToken = response.accessToken
             client.refreshToken = response.refreshToken
+            if let user = response.user {
+                currentUser = user
+            }
             pm.saveToken(response.accessToken, key: .accessToken, profileId: profileId)
             if let refresh = response.refreshToken {
                 pm.saveToken(refresh, key: .refreshToken, profileId: profileId)
