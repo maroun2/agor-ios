@@ -15,12 +15,19 @@ struct FileBrowserView: View {
                     ProgressView("Loading files...")
                 } else if let error = viewModel.error, viewModel.files.isEmpty {
                     ContentUnavailableView {
-                        Label("Error", systemImage: "exclamationmark.triangle")
+                        Label(
+                            viewModel.isWorktreeGone ? "Worktree Removed" : "Error",
+                            systemImage: viewModel.isWorktreeGone ? "trash" : "exclamationmark.triangle"
+                        )
                     } description: {
                         Text(error)
                     } actions: {
-                        Button("Retry") {
-                            Task { await viewModel.loadFiles() }
+                        if viewModel.isWorktreeGone {
+                            Button("Close") { dismiss() }
+                        } else {
+                            Button("Retry") {
+                                Task { await viewModel.loadFiles() }
+                            }
                         }
                     }
                 } else {
