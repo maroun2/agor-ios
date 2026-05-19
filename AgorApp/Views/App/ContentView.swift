@@ -151,6 +151,7 @@ struct MainNavigationView: View {
                     if success {
                         AppLogger.shared.log("[App] Silent re-auth succeeded — reconnecting socket", level: .info, category: "App")
                         socketService.reconnect()
+                        await appViewModel.authService.fetchCurrentUser()
                     } else {
                         AppLogger.shared.log("[App] Silent re-auth failed — forcing logout", level: .error, category: "App")
                         socketService.disconnect()
