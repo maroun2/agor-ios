@@ -8,6 +8,8 @@ final class FileBrowserViewModel {
     var isLoading = false
     private var hasLoadedOnce = false
     var error: String?
+    /// True when the server reports the worktree no longer exists (stale ID)
+    var isWorktreeGone = false
     var fileDetail: FileDetail?
     var isLoadingFile = false
     /// Set by chat links to auto-navigate to a specific file when the browser opens
@@ -60,6 +62,7 @@ final class FileBrowserViewModel {
         AppLogger.shared.log("[FileBrowser] loadFiles worktreeId=\(worktreeId) path=\"\(displayPath)\"", level: .debug, category: "FileBrowser")
         isLoading = true
         error = nil
+        isWorktreeGone = false
         do {
             // Use Socket.IO like the web UI — auth is resolved at socket connection level
             files = try await socketService.serviceFind(
@@ -71,7 +74,13 @@ final class FileBrowserViewModel {
             AppLogger.shared.log("[FileBrowser] loadFiles OK: \(dirCount) dirs, \(fileCount) files", level: .debug, category: "FileBrowser")
         } catch {
             AppLogger.shared.log("[FileBrowser] loadFiles ERROR: \(error.localizedDescription)", level: .error, category: "FileBrowser")
-            self.error = "Failed to load files: \(error.localizedDescription)"
+            if Self.isWorktreeNotFound(error) {
+                isWorktreeGone = true
+                self.error = "This worktree no longer exists on the server."
+                SidebarCache.clear()
+            } else {
+                self.error = "Failed to load files: \(error.localizedDescription)"
+            }
         }
         isLoading = false
     }
@@ -133,8 +142,25 @@ final class FileBrowserViewModel {
             AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
         } catch {
             AppLogger.shared.log("[FileBrowser] loadFileDetail ERROR: \(error.localizedDescription)", level: .error, category: "FileBrowser")
-            self.error = "Failed to load file: \(error.localizedDescription)"
+            if Self.isWorktreeNotFound(error) {
+                isWorktreeGone = true
+                self.error = "This worktree no longer exists on the server."
+                SidebarCache.clear()
+            } else {
+                self.error = "Failed to load file: \(error.localizedDescription)"
+            }
         }
         isLoadingFile = false
+    }
+
+    // MARK: - Stale Worktree Detection
+
+    private static func isWorktreeNotFound(_ error: Error) -> Bool {
+        if case AgorAPIError.httpError(let code, let body) = error {
+            let msg = (body ?? "").lowercased()
+            if msg.contains("worktree") && msg.contains("not found") { return true }
+            if code == 404 { return true }
+        }
+        return false
     }
 }
