@@ -32,6 +32,20 @@ struct PromptInputBar: View {
                         }
                     }
 
+                    // Send button — only shown while actively recording
+                    if viewModel.voiceService?.state == .recording {
+                        Button {
+                            HapticFeedback.light()
+                            viewModel.voiceService?.sendRecordingNow()
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 22))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.green)
+                                .frame(width: 30, height: 36)
+                        }
+                    }
+
                     // Disable voice button
                     Button {
                         HapticFeedback.light()

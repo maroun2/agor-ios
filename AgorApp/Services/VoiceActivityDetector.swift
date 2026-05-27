@@ -307,19 +307,17 @@ final class VoiceActivityDetector {
     private func startSilenceTimer() {
         cancelSilenceTimer()
         let duration = config.silenceDuration
-        DispatchQueue.main.async { [weak self] in
-            self?.silenceTimer = Timer.scheduledTimer(
-                withTimeInterval: duration,
-                repeats: false
-            ) { [weak self] _ in
-                guard let self, self.state == .speechDetected else { return }
-                self.state = .listening
-                AppLogger.shared.log(
-                    "[VAD] 🔇 Speech END (debounce=\(String(format: "%.1f", duration))s)",
-                    level: .info, category: "Voice"
-                )
-                self.onSpeechEnd?()
-            }
+        silenceTimer = Timer.scheduledTimer(
+            withTimeInterval: duration,
+            repeats: false
+        ) { [weak self] _ in
+            guard let self, self.state == .speechDetected else { return }
+            self.state = .listening
+            AppLogger.shared.log(
+                "[VAD] 🔇 Speech END (debounce=\(String(format: "%.1f", duration))s)",
+                level: .info, category: "Voice"
+            )
+            self.onSpeechEnd?()
         }
         AppLogger.shared.log(
             "[VAD] ⏱️ Silence timer started (\(String(format: "%.1f", duration))s)",
