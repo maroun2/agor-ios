@@ -1655,6 +1655,10 @@ final class ChatViewModel {
         voiceModeEnabled && currentSessionId == voiceSessionId
     }
 
+    var shouldShowVoiceFloatingButton: Bool {
+        voiceModeEnabled && voiceSessionId != nil && currentSessionId != voiceSessionId
+    }
+
     private func draftText(for sessionId: String) -> String {
         if sessionId == voiceSessionId, let voicePendingPromptText {
             return voicePendingPromptText

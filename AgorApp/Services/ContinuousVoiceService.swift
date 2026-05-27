@@ -31,9 +31,6 @@ final class ContinuousVoiceService {
     private let tts: TextToSpeechService
     private var audioRecorder: AVAudioRecorder?
     private var currentRecordingURL: URL?
-    private var preRollRestartTimer: Timer?
-    private let preRollMaxDuration: TimeInterval = 2.0  // Max pre-roll buffer before speech
-
     // Callbacks
     var onTranscription: ((String) -> Void)?
     var onTTSFinished: (() -> Void)?
@@ -135,8 +132,13 @@ final class ContinuousVoiceService {
         onTTSFinished?()
     }
 
+    func sendRecordingNow() {
+        guard state == .recording else { return }
+        AppLogger.shared.log("[Voice] ⏩ Manual send triggered", level: .info, category: "Voice")
+        Task { await stopRecordingAndTranscribe() }
+    }
+
     func stopListening() {
-        cancelPreRollTimer()
         vad.stopListening()
         audioRecorder?.stop()
         audioRecorder = nil
@@ -229,7 +231,6 @@ final class ContinuousVoiceService {
             break
         }
 
-        cancelPreRollTimer()
         vad.stopListening()
         audioRecorder?.stop()
         audioRecorder = nil
@@ -270,7 +271,6 @@ final class ContinuousVoiceService {
         }
 
         // Recorder is already running from pre-roll — just transition state
-        cancelPreRollTimer()
         state = .recording
         AppLogger.shared.log("[Voice] 🔔 Playing beep: recordingStart", level: .info, category: "Voice")
         playTone(frequency: 880, duration: 0.07)  // A5 — "start recording"
@@ -321,23 +321,6 @@ final class ContinuousVoiceService {
             AppLogger.shared.log("[Voice] ❌ Pre-roll recorder failed: \(error.localizedDescription)", level: .error, category: "Voice")
         }
 
-        // Rolling restart: keep pre-roll buffer short to avoid capturing TTS or old audio
-        preRollRestartTimer?.invalidate()
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.preRollRestartTimer = Timer.scheduledTimer(withTimeInterval: self.preRollMaxDuration, repeats: false) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self, self.state == .listening else { return }
-                    AppLogger.shared.log("[Voice] 🔄 Rolling pre-roll restart (keeps buffer ≤ \(self.preRollMaxDuration)s)", level: .debug, category: "Voice")
-                    self.startPreRollRecorder()
-                }
-            }
-        }
-    }
-
-    private func cancelPreRollTimer() {
-        preRollRestartTimer?.invalidate()
-        preRollRestartTimer = nil
     }
 
     /// Play a short sine-wave tone through AVAudioEngine.

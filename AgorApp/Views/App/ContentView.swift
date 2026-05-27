@@ -57,8 +57,7 @@ struct MainNavigationView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(
                     viewModel: navigationVM,
                     selectedSessionId: $selectedSessionId,
@@ -100,16 +99,7 @@ struct MainNavigationView: View {
                 }
             }
 
-            if shouldShowVoiceFloatingButton, let voiceSessionId = chatVM.voiceSessionId {
-                VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
-                    selectedSessionId = voiceSessionId
-                }
-                .padding(.trailing, 16)
-                .padding(.top, 60)
-                .zIndex(1000)
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
+        .voiceFloatingOverlay(chatVM: chatVM, onNavigate: { selectedSessionId = $0 })
         .toastOverlay(manager: toastManager) { sessionId in
             selectedSessionId = sessionId
         }
@@ -213,13 +203,6 @@ struct MainNavigationView: View {
                 ConnectionIndicator(socketService: socketService)
             }
         }
-    }
-
-    private var shouldShowVoiceFloatingButton: Bool {
-        let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
-        return chatVM.voiceModeEnabled &&
-            chatVM.voiceSessionId != nil &&
-            visibleSessionId != chatVM.voiceSessionId
     }
 
     // MARK: - Background Recovery
