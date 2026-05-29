@@ -83,6 +83,29 @@ final class NavigationViewModel {
             .sorted { $0.lastUpdated > $1.lastUpdated }
     }
 
+    // Running sessions: status == .running, not attention, not scheduled
+    var runningSessions: [Session] {
+        let attentionIds = Set(attentionSessions.map(\.sessionId))
+        return boardNodes
+            .flatMap { $0.worktrees.flatMap(\.sessions) }
+            .filter { $0.status == .running && !$0.isScheduled && !attentionIds.contains($0.sessionId) }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    // Finished sessions: readyForPrompt == true, not scheduled, not already in Running or Favorites
+    var finishedSessions: [Session] {
+        let runningIds = Set(runningSessions.map(\.sessionId))
+        return boardNodes
+            .flatMap { $0.worktrees.flatMap(\.sessions) }
+            .filter {
+                $0.readyForPrompt == true &&
+                !$0.isScheduled &&
+                !runningIds.contains($0.sessionId) &&
+                !favoriteSessionIds.contains($0.sessionId)
+            }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
     // Important sessions: ready-for-prompt + running + 3 most recent
     // Excludes attention sessions (they have their own section above)
     var importantSessions: [Session] {
