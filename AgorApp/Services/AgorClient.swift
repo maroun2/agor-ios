@@ -35,6 +35,11 @@ final class AgorClient {
     /// Wire this to logout in the app entry point.
     var onSessionExpired: (() -> Void)?
 
+    /// Called when JWT refresh fails (or no refresh token) before giving up.
+    /// Should attempt password-based re-login with stored credentials.
+    /// Throw on failure so AgorClient knows to proceed to onSessionExpired.
+    var onSilentReAuth: (() async throws -> Void)?
+
     private let session: URLSession
     private let decoder = JSONDecoder.agor
     private let encoder = JSONEncoder.agor
@@ -172,22 +177,40 @@ final class AgorClient {
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         let statusCode = httpResponse.statusCode
 
-        // Handle 401 with token refresh
-        if statusCode == 401 && attemptRefresh && refreshToken != nil {
-            AppLogger.shared.log("[HTTP] ← 401 \(label) (\(elapsedMs)ms, \(data.count) bytes) — attempting token refresh", level: .debug, category: "HTTP")
-            do {
-                try await refreshAccessToken()
-                // Retry with new token
+        // Handle 401: try JWT refresh → silentReAuth → give up
+        if statusCode == 401 && attemptRefresh {
+            AppLogger.shared.log("[HTTP] ← 401 \(label) (\(elapsedMs)ms) — attempting auth recovery", level: .debug, category: "HTTP")
+            var tokenRefreshed = false
+
+            // Step 1: JWT refresh if we have a refresh token
+            if refreshToken != nil {
+                do {
+                    try await refreshAccessToken()
+                    tokenRefreshed = true
+                } catch {
+                    refreshToken = nil
+                    AppLogger.shared.log("[HTTP] JWT refresh failed — falling back to silent re-auth", level: .warning, category: "Auth")
+                }
+            }
+
+            // Step 2: silentReAuth if JWT refresh failed or no refresh token
+            if !tokenRefreshed, let reAuth = onSilentReAuth {
+                do {
+                    try await reAuth()
+                    tokenRefreshed = true
+                    AppLogger.shared.log("[HTTP] Silent re-auth succeeded — retrying request", level: .info, category: "Auth")
+                } catch {
+                    AppLogger.shared.log("[HTTP] Silent re-auth failed — session expired", level: .error, category: "Auth")
+                }
+            }
+
+            if tokenRefreshed {
                 var retryRequest = request
                 if let token = accessToken {
                     retryRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 }
                 return try await executeRaw(retryRequest, attemptRefresh: false)
-            } catch {
-                // Nil out the refresh token so no further requests attempt a refresh.
-                // This is the circuit breaker — stops the 401 flood and rate-limit cascade.
-                refreshToken = nil
-                AppLogger.shared.log("[HTTP] Token refresh failed permanently — triggering session expired handler", level: .error, category: "Auth")
+            } else {
                 Task { @MainActor [weak self] in
                     self?.onSessionExpired?()
                 }

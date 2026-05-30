@@ -343,6 +343,8 @@ final class ChatViewModel {
             guard currentSessionId == sessionId else { return }
             queuedMessages = response.data.sorted { ($0.queuePosition ?? 0) < ($1.queuePosition ?? 0) }
             reconcileRemoteQueuedPrompts(for: sessionId)
+        } catch AgorAPIError.httpError(let statusCode, _) where statusCode == 404 {
+            // Queue endpoint not implemented on this backend — silently skip
         } catch {
             AppLogger.shared.log("[Chat] loadQueuedMessages ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
         }
