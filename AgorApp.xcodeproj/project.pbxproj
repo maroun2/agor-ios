@@ -90,6 +90,14 @@
 		FB5F102F2CFF0E6F560FF865 /* Repo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F4192EE4627122322579D6 /* Repo.swift */; };
 		FD12496D1E21111AF4E15D22 /* GitVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81CFE6381FDD29480EFA395 /* GitVersion.swift */; };
 		FE7F2BF1FF419B1F6A3015B8 /* ServerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB406D72E327BCC5B760B154 /* ServerProfile.swift */; };
+		BBF100001BBF10001BBF1001B /* AgorWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100001AAF10001AAF1001A /* AgorWidgets.swift */; };
+		BBF100002BBF10002BBF1002B /* SharedWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100002AAF10002AAF1002A /* SharedWidgetData.swift */; };
+		BBF100003BBF10003BBF1003B /* SessionConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100003AAF10003AAF1003A /* SessionConfiguration.swift */; };
+		BBF100004BBF10004BBF1004B /* SessionTimelineProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100004AAF10004AAF1004A /* SessionTimelineProvider.swift */; };
+		BBF100005BBF10005BBF1005B /* VoiceLauncherWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100005AAF10005AAF1005A /* VoiceLauncherWidget.swift */; };
+		BBF100006BBF10006BBF1006B /* SessionCardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100006AAF10006AAF1006A /* SessionCardWidget.swift */; };
+		BBF100007BBF10007BBF1007B /* AgorWidgets.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = AAF100008AAF10008AAF1008A /* AgorWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		BBF100008BBF10008BBF1008B /* WidgetDataWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100009AAF10009AAF1009A /* WidgetDataWriter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -172,7 +180,30 @@
 		FA1B2E3C4D5E6F7A8B9C0D12 /* ImageBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBlockView.swift; sourceTree = "<group>"; };
 		FA7C3E2B1A4D9F80B2CE5D64 /* VoiceFloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceFloatingButton.swift; sourceTree = "<group>"; };
 		FC71207C8865D4E80E36A220 /* WorktreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRow.swift; sourceTree = "<group>"; };
+		AAF100001AAF10001AAF1001A /* AgorWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgorWidgets.swift; sourceTree = "<group>"; };
+		AAF100002AAF10002AAF1002A /* SharedWidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedWidgetData.swift; sourceTree = "<group>"; };
+		AAF100003AAF10003AAF1003A /* SessionConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionConfiguration.swift; sourceTree = "<group>"; };
+		AAF100004AAF10004AAF1004A /* SessionTimelineProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineProvider.swift; sourceTree = "<group>"; };
+		AAF100005AAF10005AAF1005A /* VoiceLauncherWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceLauncherWidget.swift; sourceTree = "<group>"; };
+		AAF100006AAF10006AAF1006A /* SessionCardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCardWidget.swift; sourceTree = "<group>"; };
+		AAF100007AAF10007AAF1007A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AAF100008AAF10008AAF1008A /* AgorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAF100009AAF10009AAF1009A /* WidgetDataWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataWriter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DDF100004DDF10004DDF1004D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BBF100007BBF10007BBF1007B /* AgorWidgets.appex in CopyFiles */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B7586B77701F01BC5B4E16A3 /* Frameworks */ = {
@@ -184,6 +215,13 @@
 				7626452A6EEDDE43FD30C38F /* Highlightr in Frameworks */,
 				A64D1F14CDC83982EFE2519C /* WhisperKit in Frameworks */,
 				F1A2B3C4D5E6F7081234ABCD /* FluidAudio in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDF100002DDF10002DDF1002D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,6 +288,7 @@
 			isa = PBXGroup;
 			children = (
 				0BDAD469A7A12056A04EAD83 /* AgorApp */,
+				CCF100001CCF10001CCF1001C /* AgorWidgets */,
 				D00AFC90AD6CE126C9E4E2F9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -357,6 +396,7 @@
 			isa = PBXGroup;
 			children = (
 				9D7E4A344E99EB593C21C406 /* AgorApp.app */,
+				AAF100008AAF10008AAF1008A /* AgorWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -379,6 +419,7 @@
 				04685C617F12BA61D59F5298 /* VoiceActivityDetector.swift */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* CrashLogService.swift */,
 				2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */,
+				AAF100009AAF10009AAF1009A /* WidgetDataWriter.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -403,7 +444,39 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
+		CCF100001CCF10001CCF1001C /* AgorWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				AAF100001AAF10001AAF1001A /* AgorWidgets.swift */,
+				AAF100002AAF10002AAF1002A /* SharedWidgetData.swift */,
+				AAF100003AAF10003AAF1003A /* SessionConfiguration.swift */,
+				AAF100004AAF10004AAF1004A /* SessionTimelineProvider.swift */,
+				AAF100005AAF10005AAF1005A /* VoiceLauncherWidget.swift */,
+				AAF100006AAF10006AAF1006A /* SessionCardWidget.swift */,
+				AAF100007AAF10007AAF1007A /* Info.plist */,
+			);
+			path = AgorWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		HHF100001HHF10001HHF1001H /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 44C3A8634FD58FB2CEAD00A3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EEF100001EEF10001EEF1001E;
+			remoteInfo = AgorWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		HHF100002HHF10002HHF1002H /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EEF100001EEF10001EEF1001E /* AgorWidgets */;
+			targetProxy = HHF100001HHF10001HHF1001H /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXNativeTarget section */
 		A65FB750632211D9897001D3 /* AgorApp */ = {
@@ -413,10 +486,12 @@
 				7D9B62499B3435F4D1E32F8C /* Inject Git Hash */,
 				58AC23D8EB021958DDCB6502 /* Sources */,
 				B7586B77701F01BC5B4E16A3 /* Frameworks */,
+				DDF100004DDF10004DDF1004D /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				HHF100002HHF10002HHF1002H /* PBXTargetDependency */,
 			);
 			name = AgorApp;
 			packageProductDependencies = (
@@ -430,6 +505,22 @@
 			productReference = 9D7E4A344E99EB593C21C406 /* AgorApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		EEF100001EEF10001EEF1001E /* AgorWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = GGF100001GGF10001GGF1001G /* Build configuration list for PBXNativeTarget "AgorWidgets" */;
+			buildPhases = (
+				DDF100001DDF10001DDF1001D /* Sources */,
+				DDF100002DDF10002DDF1002D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AgorWidgets;
+			productName = AgorWidgets;
+			productReference = AAF100008AAF10008AAF1008A /* AgorWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -440,6 +531,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					A65FB750632211D9897001D3 = {
+						ProvisioningStyle = Automatic;
+					};
+					EEF100001EEF10001EEF1001E = {
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -466,6 +560,7 @@
 			projectRoot = "";
 			targets = (
 				A65FB750632211D9897001D3 /* AgorApp */,
+				EEF100001EEF10001EEF1001E /* AgorWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -574,6 +669,20 @@
 				7EB4A23510C8425C844CB195 /* VADConfig.swift in Sources */,
 				8250904F41044E1838760EC0 /* Worktree.swift in Sources */,
 				246D9FCC47F6980198DEE416 /* WorktreeRow.swift in Sources */,
+				BBF100008BBF10008BBF1008B /* WidgetDataWriter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDF100001DDF10001DDF1001D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBF100001BBF10001BBF1001B /* AgorWidgets.swift in Sources */,
+				BBF100002BBF10002BBF1002B /* SharedWidgetData.swift in Sources */,
+				BBF100003BBF10003BBF1003B /* SessionConfiguration.swift in Sources */,
+				BBF100004BBF10004BBF1004B /* SessionTimelineProvider.swift in Sources */,
+				BBF100005BBF10005BBF1005B /* VoiceLauncherWidget.swift in Sources */,
+				BBF100006BBF10006BBF1006B /* SessionCardWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -739,6 +848,48 @@
 			};
 			name = Debug;
 		};
+		FFF100001FFF10001FFF1001F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L94RKR8S54;
+				INFOPLIST_FILE = AgorWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.agor.AgorApp.widgets";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FFF100002FFF10002FFF1002F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L94RKR8S54;
+				INFOPLIST_FILE = AgorWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.agor.AgorApp.widgets";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -756,6 +907,15 @@
 			buildConfigurations = (
 				E73AD31A65A362E2E9159378 /* Debug */,
 				6086DC3656C131AE4FCFFA82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		GGF100001GGF10001GGF1001G /* Build configuration list for PBXNativeTarget "AgorWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FFF100001FFF10001FFF1001F /* Debug */,
+				FFF100002FFF10002FFF1002F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

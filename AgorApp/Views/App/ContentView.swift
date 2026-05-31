@@ -149,6 +149,9 @@ struct MainNavigationView: View {
         .onChange(of: navigationVM.favoriteSessionIds) { _, newValue in
             notificationManager.favoriteSessionIds = newValue
         }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
         .onChange(of: appViewModel.networkMonitor.isOnline) { _, isOnline in
             if isOnline {
                 AppLogger.shared.log("[App] Network restored — reconnecting", level: .info, category: "App")
@@ -232,6 +235,27 @@ struct MainNavigationView: View {
         }
     }
 
+    // MARK: - Deep Link Handling
+
+    /// Handles agor://session/{sessionId}/chat and agor://session/{sessionId}/voice
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "agor",
+              url.host == "session" else { return }
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard let sessionId = components.first else { return }
+        let action = components.count >= 2 ? components[1] : "chat"
+
+        selectedSessionId = sessionId
+
+        if action == "voice" {
+            // Give ChatView a moment to load the session before enabling voice mode
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                chatVM.voiceModeEnabled = true
+            }
+        }
+    }
+
     private var shouldShowVoiceFloatingButton: Bool {
         let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
         return chatVM.voiceModeEnabled &&
@@ -303,6 +327,9 @@ struct MainNavigationView: View {
                 // Check for missed transitions while backgrounded
                 let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
                 notificationManager.checkMissedTransitions(currentSessions: allSessions)
+
+                // Refresh widget data on foreground
+                await navigationVM.refreshWidgetData()
 
                 // Phase 3: Done
                 withAnimation { reconnectPhase = .done }

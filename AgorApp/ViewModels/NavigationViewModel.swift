@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 
 // MARK: - Board Node (with children)
 
@@ -256,6 +257,9 @@ final class NavigationViewModel {
             // Save to cache after successful load
             SidebarCache.save(boardNodes: boardNodes)
             AppLogger.shared.log("[Nav] cache: saved \(boardNodes.count) boards to disk", level: .debug, category: "Nav")
+
+            // Refresh widget data with latest favorites
+            await refreshWidgetData()
         } catch {
             self.error = error.localizedDescription
             AppLogger.shared.log("[Nav] loadBoards failed: \(error.localizedDescription)", level: .error, category: "Nav")
@@ -526,6 +530,52 @@ final class NavigationViewModel {
             }
         }
         return nil
+    }
+
+    // MARK: - Widget Data
+
+    /// Fetch last message for each favorited session and write to App Group UserDefaults.
+    /// Called after sidebar refresh and on app foreground.
+    func refreshWidgetData() async {
+        let favorites = Array(favoriteSessions.prefix(10))
+        guard !favorites.isEmpty else {
+            WidgetDataWriter.write(sessions: [], serverURL: client.baseURL)
+            return
+        }
+
+        var widgetSessions: [WidgetSessionData] = []
+        await withTaskGroup(of: WidgetSessionData?.self) { group in
+            for session in favorites {
+                group.addTask {
+                    var lastMsg = ""
+                    var lastRole = "assistant"
+                    if let response: PaginatedResponse<Message> = try? await self.client.getPaginated(
+                        "/messages",
+                        query: [
+                            "session_id": session.sessionId,
+                            "$limit": "1",
+                            "$sort[created_at]": "-1",
+                        ]
+                    ), let msg = response.data.first {
+                        lastMsg = String(msg.contentPreview.prefix(300))
+                        lastRole = msg.role.rawValue
+                    }
+                    return WidgetSessionData(
+                        sessionId: session.sessionId,
+                        sessionTitle: session.displayTitle,
+                        lastMessage: lastMsg,
+                        lastMessageRole: lastRole,
+                        lastUpdated: session.lastUpdated,
+                        status: session.status.rawValue
+                    )
+                }
+            }
+            for await result in group {
+                if let data = result { widgetSessions.append(data) }
+            }
+        }
+        widgetSessions.sort { $0.lastUpdated > $1.lastUpdated }
+        WidgetDataWriter.write(sessions: widgetSessions, serverURL: client.baseURL)
     }
 
     /// Expand the board and worktree that contain this session so it is visible in the sidebar tree.
