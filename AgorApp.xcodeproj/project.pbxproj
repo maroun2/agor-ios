@@ -98,6 +98,7 @@
 		BBF100006BBF10006BBF1006B /* SessionCardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100006AAF10006AAF1006A /* SessionCardWidget.swift */; };
 		BBF100007BBF10007BBF1007B /* AgorWidgets.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = AAF100008AAF10008AAF1008A /* AgorWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BBF100008BBF10008BBF1008B /* WidgetDataWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF100009AAF10009AAF1009A /* WidgetDataWriter.swift */; };
+		CC0000001CC00001CC000001 /* AVSpeechSynthesisVoice+Best.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000002CC00002CC000002 /* AVSpeechSynthesisVoice+Best.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -189,6 +190,7 @@
 		AAF100007AAF10007AAF1007A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AAF100008AAF10008AAF1008A /* AgorWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgorWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AAF100009AAF10009AAF1009A /* WidgetDataWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataWriter.swift; sourceTree = "<group>"; };
+		CC0000002CC00002CC000002 /* AVSpeechSynthesisVoice+Best.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVSpeechSynthesisVoice+Best.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -361,6 +363,7 @@
 		A9CEF772690B20E27E946E20 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				CC0000002CC00002CC000002 /* AVSpeechSynthesisVoice+Best.swift */,
 				BF72FBB9974FDE5788C1260A /* DateFormatting.swift */,
 				A465E54C8509B5395EAD81A4 /* FilePathDetector.swift */,
 				F8A9B0C1D2E3F4A5B6C7D8E9 /* GIFImage.swift */,
@@ -670,6 +673,7 @@
 				8250904F41044E1838760EC0 /* Worktree.swift in Sources */,
 				246D9FCC47F6980198DEE416 /* WorktreeRow.swift in Sources */,
 				BBF100008BBF10008BBF1008B /* WidgetDataWriter.swift in Sources */,
+				CC0000001CC00001CC000001 /* AVSpeechSynthesisVoice+Best.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
