@@ -31,16 +31,11 @@ final class TextToSpeechService: NSObject, @preconcurrency AVSpeechSynthesizerDe
     var onSpeechFinished: (() -> Void)?
 
     override init() {
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
-        if let premium = voices.first(where: { $0.quality == .premium }) {
-            AppLogger.shared.log("[Voice] 🎙️ Using premium voice: \(premium.name) (\(premium.language))", level: .info, category: "Voice")
-            bestVoice = premium
-        } else if let enhanced = voices.first(where: { $0.quality == .enhanced }) {
-            AppLogger.shared.log("[Voice] 🎙️ Using enhanced voice: \(enhanced.name) (\(enhanced.language))", level: .info, category: "Voice")
-            bestVoice = enhanced
+        bestVoice = AVSpeechSynthesisVoice.bestAvailable()
+        if let voice = bestVoice {
+            AppLogger.shared.log("[Voice] 🎙️ Using voice: \(voice.name) [\(voice.identifier)] quality=\(voice.quality.rawValue)", level: .info, category: "Voice")
         } else {
-            AppLogger.shared.log("[Voice] 🎙️ No premium/enhanced voice found — using compact default", level: .warning, category: "Voice")
-            bestVoice = AVSpeechSynthesisVoice(language: "en-US")
+            AppLogger.shared.log("[Voice] 🎙️ No voice available — system default", level: .warning, category: "Voice")
         }
         super.init()
         synthesizer.delegate = self
