@@ -565,7 +565,7 @@ final class NavigationViewModel {
                         sessionTitle: session.displayTitle,
                         lastMessage: lastMsg,
                         lastMessageRole: lastRole,
-                        lastUpdated: session.lastUpdated,
+                        lastUpdated: session.lastUpdated.asDate ?? Date(),
                         status: session.status.rawValue
                     )
                 }

@@ -53,6 +53,7 @@
 		7EB4A23510C8425C844CB195 /* VADConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */; };
 		8250904F41044E1838760EC0 /* Worktree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C30C2EB6D32E85765466C8 /* Worktree.swift */; };
 		8406677C652F31E01D77D3DF /* BackgroundSessionPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DD571A578E09FE13A6841C /* BackgroundSessionPoller.swift */; };
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8A9B0C1D2E3 /* NetworkMonitor.swift */; };
 		8704AE2A12444ABE18BF24D6 /* FilePathDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A465E54C8509B5395EAD81A4 /* FilePathDetector.swift */; };
 		89BB2BC26F7E87B1551860C6 /* Board.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DC5206FFC124F2944812E0 /* Board.swift */; };
 		932C9C5B55131B0EB36E9E97 /* FileBrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC10AC715ACF4311B06E94 /* FileBrowserViewModel.swift */; };
@@ -112,6 +113,7 @@
 		1C5CB666E46F734293855109 /* SessionLinkDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLinkDetector.swift; sourceTree = "<group>"; };
 		1CC2F70DC90FB2755105AA94 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
 		24DD571A578E09FE13A6841C /* BackgroundSessionPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSessionPoller.swift; sourceTree = "<group>"; };
+		F2A3B4C5D6E7F8A9B0C1D2E3 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		27DC5206FFC124F2944812E0 /* Board.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Board.swift; sourceTree = "<group>"; };
 		286507692D78FE3CEACA07C7 /* MCPServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServerListView.swift; sourceTree = "<group>"; };
 		2CC8B05DE0914FEE9C9DA75F /* VADConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VADConfig.swift; sourceTree = "<group>"; };
@@ -412,6 +414,7 @@
 				1806D663BB48FCE9FCEF8AE0 /* AuthService.swift */,
 				24DD571A578E09FE13A6841C /* BackgroundSessionPoller.swift */,
 				A2105103F7F30CD64FE8CA2F /* ContinuousVoiceService.swift */,
+				F2A3B4C5D6E7F8A9B0C1D2E3 /* NetworkMonitor.swift */,
 				8027B33B9D570D05B020E7E1 /* NotificationManager.swift */,
 				98474D53C4659417E9565C4D /* ServerProfileManager.swift */,
 				BF9252EBCE2EDCEDA004F97E /* SidebarCache.swift */,
@@ -602,6 +605,7 @@
 				1CE37DCD20495BD391F51718 /* AppViewModel.swift in Sources */,
 				FA6E45ED2D21F8925DE2A880 /* AuthService.swift in Sources */,
 				8406677C652F31E01D77D3DF /* BackgroundSessionPoller.swift in Sources */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* NetworkMonitor.swift in Sources */,
 				89BB2BC26F7E87B1551860C6 /* Board.swift in Sources */,
 				721D00CB4C4DC42A91178927 /* BoardRow.swift in Sources */,
 				4A1B2C3D4E5F6A7B8C9D0E1F /* AudioLevelBar.swift in Sources */,
