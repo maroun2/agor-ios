@@ -333,14 +333,19 @@ final class NavigationViewModel {
     func loadWorktrees(for boardNode: BoardNode, sessionsByWorktreeId: [String: [Session]]? = nil) async {
         boardNode.isLoading = true
         do {
-            let response: PaginatedResponse<Worktree> = try await client.getPaginated(
-                "/branches",
-                query: [
-                    "board_id": boardNode.board.boardId,
-                    "$limit": "100",
-                    "archived": "false",
-                ]
-            )
+            // v21 uses /branches, v19 uses /worktrees — try both
+            let query = [
+                "board_id": boardNode.board.boardId,
+                "$limit": "100",
+                "archived": "false",
+            ]
+            let response: PaginatedResponse<Worktree>
+            do {
+                response = try await client.getPaginated("/branches", query: query)
+            } catch {
+                // Fallback for v19 servers that still use /worktrees
+                response = try await client.getPaginated("/worktrees", query: query)
+            }
             // Incremental merge: reuse existing WorktreeNode objects to preserve sessions/expansion state
             let existingByWtId = Dictionary(uniqueKeysWithValues: boardNode.worktrees.map { ($0.worktree.worktreeId, $0) })
             var mergedWorktrees: [WorktreeNode] = []
