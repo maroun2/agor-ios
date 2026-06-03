@@ -5,33 +5,38 @@
 
 set -e
 
-DEVICE_ID="00008101-001E38812660001E"
+DEVICE_ID="00008120-0006024C3E50A01E"
 PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
 
-# Auto-detect newest valid provisioning profile (newest file first)
-PROFILE=""
+TEAM_ID="L94RKR8S54"
+
+# Find newest non-expired profile whose application-identifier matches exactly.
+# Usage: find_profile <full-app-id>  -> echoes profile path, or returns 1
 NOW=$(date +%s)
-while IFS= read -r p; do
-  [ -f "$p" ] || continue
-  PEXPIRY=$(security cms -D -i "$p" 2>/dev/null | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "")
-  [ -z "$PEXPIRY" ] && continue
-  PEXPIRY_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$PEXPIRY" +%s 2>/dev/null || echo "0")
-  if [ "$PEXPIRY_EPOCH" -gt "$NOW" ]; then
-    PROFILE="$p"
-    EXPIRY="$PEXPIRY"
-    break
-  fi
-done < <(ls -t "$PROFILES_DIR"/*.mobileprovision 2>/dev/null)
+find_profile() {
+  local want="$1" dec appid exp expepoch
+  while IFS= read -r p; do
+    [ -f "$p" ] || continue
+    dec=$(security cms -D -i "$p" 2>/dev/null)
+    appid=$(echo "$dec" | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || echo "")
+    [ "$appid" = "$want" ] || continue
+    exp=$(echo "$dec" | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "")
+    [ -z "$exp" ] && continue
+    expepoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null || echo "0")
+    if [ "$expepoch" -gt "$NOW" ]; then echo "$p"; return 0; fi
+  done < <(ls -t "$PROFILES_DIR"/*.mobileprovision 2>/dev/null)
+  return 1
+}
 
-if [ -z "$PROFILE" ]; then
-  echo "ERROR: No valid provisioning profile found. Open Xcode and build once with Cmd+R to renew it."
-  exit 1
-fi
+APP_PROFILE=$(find_profile "$TEAM_ID.com.agor.AgorApp") || {
+  echo "ERROR: No valid profile for com.agor.AgorApp. Open Xcode and build once with Cmd+R to renew it."; exit 1; }
+WIDGET_PROFILE=$(find_profile "$TEAM_ID.com.agor.AgorApp.widgets") || {
+  echo "ERROR: No valid profile for com.agor.AgorApp.widgets. Open Xcode and build once with Cmd+R to renew it."; exit 1; }
 
-echo "Profile: $(basename "$PROFILE")"
-echo "Expires: $EXPIRY"
+echo "App profile:    $(basename "$APP_PROFILE")"
+echo "Widget profile: $(basename "$WIDGET_PROFILE")"
 
 # Regenerate project if project.yml is newer than .xcodeproj
 if [ "project.yml" -nt "AgorApp.xcodeproj/project.pbxproj" ]; then
@@ -69,18 +74,24 @@ else
   exit 1
 fi
 
-# Extract entitlements
+SIGN_ID="Apple Development: maron2@centrum.cz (95327R65BM)"
 echo "Signing..."
-security cms -D -i "$PROFILE" 2>/dev/null \
-  | plutil -extract Entitlements xml1 -o "$ENTITLEMENTS" -
 
-# Embed profile + sign
-cp "$PROFILE" "$APP/embedded.mobileprovision"
-codesign --force \
-  --sign "Apple Development: maron2@centrum.cz (95327R65BM)" \
-  --entitlements "$ENTITLEMENTS" \
-  --timestamp=none \
-  "$APP"
+# Sign embedded widget extension first (codesign must go inside-out)
+APPEX="$APP/PlugIns/AgorWidgets.appex"
+if [ -d "$APPEX" ]; then
+  WIDGET_ENT="/tmp/agor-widget-entitlements.plist"
+  security cms -D -i "$WIDGET_PROFILE" 2>/dev/null \
+    | plutil -extract Entitlements xml1 -o "$WIDGET_ENT" -
+  cp "$WIDGET_PROFILE" "$APPEX/embedded.mobileprovision"
+  codesign --force --sign "$SIGN_ID" --entitlements "$WIDGET_ENT" --timestamp=none "$APPEX"
+fi
+
+# Sign main app
+security cms -D -i "$APP_PROFILE" 2>/dev/null \
+  | plutil -extract Entitlements xml1 -o "$ENTITLEMENTS" -
+cp "$APP_PROFILE" "$APP/embedded.mobileprovision"
+codesign --force --sign "$SIGN_ID" --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"
 echo "Signed."
 
 # Install
