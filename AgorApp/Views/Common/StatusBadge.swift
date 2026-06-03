@@ -20,6 +20,7 @@ struct StatusBadge: View {
         case .timedOut: "clock.badge.exclamationmark"
         case .completed: "checkmark.circle.fill"
         case .failed: "xmark.circle.fill"
+        case .unknown: "questionmark.circle"
         }
     }
 
@@ -32,6 +33,7 @@ struct StatusBadge: View {
         case .timedOut: .gray
         case .completed: .green
         case .failed: .red
+        case .unknown: .gray
         }
     }
 }

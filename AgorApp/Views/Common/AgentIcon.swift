@@ -14,21 +14,23 @@ struct AgentIcon: View {
 
     private var iconName: String {
         switch agenticTool {
-        case .claudeCode: "star.fill"
+        case .claudeCode, .claudeCodeCli: "star.fill"
         case .codex: "cube"
         case .gemini: "diamond"
         case .opencode: "chevron.left.forwardslash.chevron.right"
         case .copilot: "person.2.fill"
+        case .unknown: "questionmark.circle"
         }
     }
 
     private var iconColor: Color {
         switch agenticTool {
-        case .claudeCode: .orange
+        case .claudeCode, .claudeCodeCli: .orange
         case .codex: .green
         case .gemini: .blue
         case .opencode: .purple
         case .copilot: .indigo
+        case .unknown: .gray
         }
     }
 }
