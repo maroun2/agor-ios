@@ -696,7 +696,7 @@ final class ChatViewModel {
 
                 // Create a new session on the same worktree via Socket.IO
                 var createData: [String: Any] = [
-                    "worktree_id": worktreeId,
+                    "branch_id": worktreeId,
                     "agentic_tool": agenticTool.rawValue,
                     "status": "idle"
                 ]

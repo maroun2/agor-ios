@@ -25,6 +25,9 @@ final class BackgroundSessionPoller {
         do {
             try BGTaskScheduler.shared.submit(request)
             AppLogger.shared.log("[BGPoller] scheduled next poll in ~5min", level: .debug, category: "Background")
+        } catch let error as BGTaskScheduler.Error where error.code == .unavailable {
+            // Expected on Simulator or when background refresh is disabled by user
+            AppLogger.shared.log("[BGPoller] background refresh unavailable (Simulator or disabled by user)", level: .debug, category: "Background")
         } catch {
             AppLogger.shared.log("[BGPoller] failed to schedule: \(error.localizedDescription)", level: .error, category: "Background")
         }

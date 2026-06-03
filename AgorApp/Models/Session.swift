@@ -215,8 +215,8 @@ struct Session: Codable, Identifiable {
         case lastUpdated = "last_updated"
         case createdBy = "created_by"
         case unixUsername = "unix_username"
-        case worktreeId = "worktree_id"
-        case worktreeBoardId = "worktree_board_id"
+        case worktreeId = "branch_id"
+        case worktreeBoardId = "branch_board_id"
         case url
         case gitState = "git_state"
         case genealogy
@@ -227,7 +227,7 @@ struct Session: Codable, Identifiable {
         case modelConfig = "model_config"
         case currentContextUsage = "current_context_usage"
         case contextWindowLimit = "context_window_limit"
-        case scheduledFromWorktree = "scheduled_from_worktree"
+        case scheduledFromWorktree = "scheduled_from_branch"
         case readyForPrompt = "ready_for_prompt"
         case archived
         case archivedReason = "archived_reason"

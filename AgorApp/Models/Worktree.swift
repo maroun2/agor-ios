@@ -32,7 +32,7 @@ struct Worktree: Codable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case worktreeId = "worktree_id"
+        case worktreeId = "branch_id"
         case repoId = "repo_id"
         case name, ref
         case refType = "ref_type"

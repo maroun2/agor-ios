@@ -334,7 +334,7 @@ final class NavigationViewModel {
         boardNode.isLoading = true
         do {
             let response: PaginatedResponse<Worktree> = try await client.getPaginated(
-                "/worktrees",
+                "/branches",
                 query: [
                     "board_id": boardNode.board.boardId,
                     "$limit": "100",

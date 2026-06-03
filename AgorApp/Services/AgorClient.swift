@@ -282,7 +282,7 @@ final class AgorClient {
 
     func uploadFile(sessionId: String, fileData: Data, fileName: String, mimeType: String) async throws -> UploadResponse {
         guard !baseURL.isEmpty else { throw AgorAPIError.invalidURL }
-        guard let url = URL(string: "\(baseURL)/sessions/\(sessionId)/upload?destination=worktree") else {
+        guard let url = URL(string: "\(baseURL)/sessions/\(sessionId)/upload?destination=branch") else {
             throw AgorAPIError.invalidURL
         }
 

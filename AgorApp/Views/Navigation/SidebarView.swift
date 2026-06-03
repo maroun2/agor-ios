@@ -489,7 +489,7 @@ private struct CleanAndResetButton: View {
         // 2. Create a new session on the same worktree via Socket.IO
         do {
             var body: [String: Any] = [
-                "worktree_id": session.worktreeId,
+                "branch_id": session.worktreeId,
                 "agentic_tool": session.agenticTool.rawValue,
                 "status": "idle"
             ]
@@ -618,7 +618,7 @@ private struct WorktreeSection: View {
         AppLogger.shared.log("[Sidebar] createSession worktreeId=\(String(worktreeId.prefix(8))) tool=\(tool.rawValue) name=\(name ?? "<nil>")", level: .info, category: "Nav")
         do {
             var body: [String: Any] = [
-                "worktree_id": worktreeId,
+                "branch_id": worktreeId,
                 "agentic_tool": tool.rawValue,
                 "status": "idle"
             ]
