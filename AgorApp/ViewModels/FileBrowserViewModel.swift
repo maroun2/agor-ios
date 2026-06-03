@@ -64,7 +64,7 @@ final class FileBrowserViewModel {
             // Use Socket.IO like the web UI — auth is resolved at socket connection level
             files = try await socketService.serviceFind(
                 service: "file",
-                query: ["worktree_id": worktreeId]
+                query: ["branch_id": worktreeId]
             )
             let dirCount = currentDirectories.count
             let fileCount = currentFiles.count
@@ -105,7 +105,7 @@ final class FileBrowserViewModel {
         let detail: FileDetail = try await socketService.serviceGet(
             service: "file",
             id: filePath,
-            query: ["worktree_id": worktreeId]
+            query: ["branch_id": worktreeId]
         )
         guard let content = detail.content else {
             throw NSError(domain: "FileBrowser", code: 0, userInfo: [NSLocalizedDescriptionKey: "No content"])
@@ -127,7 +127,7 @@ final class FileBrowserViewModel {
             fileDetail = try await socketService.serviceGet(
                 service: "file",
                 id: filePath,
-                query: ["worktree_id": worktreeId]
+                query: ["branch_id": worktreeId]
             )
             let byteCount = fileDetail?.content?.utf8.count ?? 0
             AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
