@@ -37,6 +37,7 @@ struct MainNavigationView: View {
     @State private var wasBackgrounded = false
     @State private var reconnectPhase: ReconnectPhase = .idle
     @State private var notificationManager = NotificationManager.shared
+    @State private var tokenRefreshTask: Task<Void, Never>?
 
     init(appViewModel: AppViewModel) {
         self.appViewModel = appViewModel
@@ -171,9 +172,27 @@ struct MainNavigationView: View {
                 appViewModel.authService.logout()
             }
 
+            // Socket-level auth failure (FeathersJS 401) — try silent re-auth before giving up
+            socketService.onAuthFailure = {
+                Task {
+                    AppLogger.shared.log("[App] Socket auth failed — attempting silent re-auth", level: .info, category: "App")
+                    if await appViewModel.authService.silentReauth() {
+                        AppLogger.shared.log("[App] Silent re-auth succeeded — reconnecting socket", level: .info, category: "App")
+                        socketService.reconnect()
+                    } else {
+                        AppLogger.shared.log("[App] Socket auth recovery failed — logging out", level: .error, category: "App")
+                        socketService.disconnect()
+                        navigationVM.stopPolling()
+                        navigationVM.clearCache()
+                        appViewModel.authService.logout()
+                    }
+                }
+            }
+
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
+            startTokenRefreshTimer()
 
             AppLogger.shared.log("[App] startup: loading boards", level: .debug, category: "App")
             await navigationVM.loadBoards()
@@ -263,6 +282,7 @@ struct MainNavigationView: View {
             wasBackgrounded = true
             notificationManager.isBackgrounded = true
             socketService.stopHealthCheck()
+            stopTokenRefreshTimer()
             chatVM.stopPolling()
             navigationVM.stopPolling()
 
@@ -298,6 +318,11 @@ struct MainNavigationView: View {
 
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
+                // Phase 0: Proactive token refresh before reconnecting
+                // Token may have expired while backgrounded — refresh it first so the
+                // socket reconnect uses a fresh token in extraHeaders.
+                await appViewModel.client.refreshTokenIfNeeded(bufferSeconds: 120)
+
                 // Phase 1: Reconnecting
                 if socketService.connectionState != .connected {
                     AppLogger.shared.log("[App] reconnect: phase 1 — reconnecting socket", level: .debug, category: "App")
@@ -310,6 +335,7 @@ struct MainNavigationView: View {
                 AppLogger.shared.log("[App] reconnect: phase 2 — refreshing data", level: .debug, category: "App")
                 withAnimation { reconnectPhase = .updating }
                 socketService.startHealthCheck(client: appViewModel.client)
+                startTokenRefreshTimer()
                 await navigationVM.refresh()
                 navigationVM.startPolling()
                 chatVM.refreshCurrentSession()
@@ -333,6 +359,30 @@ struct MainNavigationView: View {
         }
     }
 
+    // MARK: - Proactive Token Refresh
+
+    /// Refresh access token every 12 minutes (access token TTL is 15 min).
+    /// This prevents 401 errors from ever reaching the user.
+    private func startTokenRefreshTimer() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(12 * 60))
+                guard !Task.isCancelled else { break }
+                let refreshed = await appViewModel.client.refreshTokenIfNeeded(bufferSeconds: 180)
+                if refreshed {
+                    AppLogger.shared.log("[App] proactive token refresh: OK", level: .debug, category: "App")
+                } else {
+                    AppLogger.shared.log("[App] proactive token refresh: failed — will retry next cycle", level: .warning, category: "App")
+                }
+            }
+        }
+    }
+
+    private func stopTokenRefreshTimer() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+    }
 }
 
 // MARK: - Reconnect Banner
