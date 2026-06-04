@@ -287,7 +287,8 @@ final class SocketService {
                             AppLogger.shared.log("[Socket] token refreshed — reconnecting", level: .info, category: "Socket")
                             self.reconnect()
                         } else {
-                            AppLogger.shared.log("[Socket] token refresh failed — no reconnect", level: .error, category: "Socket")
+                            AppLogger.shared.log("[Socket] token refresh failed — firing onAuthFailure for silent re-auth", level: .warning, category: "Socket")
+                            self.onAuthFailure?()
                         }
                     }
                 }
