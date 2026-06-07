@@ -187,7 +187,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var queuedMessagesDrawer: some View {
-        if !viewModel.queuedMessages.isEmpty {
+        if !viewModel.queuedTasks.isEmpty {
             VStack(spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -197,7 +197,7 @@ struct ChatView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "text.badge.plus")
                             .foregroundStyle(.orange)
-                        Text("Queued Messages (\(viewModel.queuedMessages.count))")
+                        Text("Queued Messages (\(viewModel.queuedTasks.count))")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.primary)
                         Spacer()
@@ -214,8 +214,8 @@ struct ChatView: View {
 
                 if isQueueExpanded {
                     VStack(spacing: 8) {
-                        ForEach(Array(viewModel.queuedMessages.enumerated()), id: \.element.messageId) { index, message in
-                            queuedMessageRow(message, fallbackIndex: index + 1)
+                        ForEach(Array(viewModel.queuedTasks.enumerated()), id: \.element.taskId) { index, task in
+                            queuedTaskRow(task, fallbackIndex: index + 1)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -279,19 +279,19 @@ struct ChatView: View {
         }
     }
 
-    private func queuedMessageRow(_ message: Message, fallbackIndex: Int) -> some View {
+    private func queuedTaskRow(_ task: AgorTask, fallbackIndex: Int) -> some View {
         HStack(spacing: 10) {
-            Text("\(message.queuePosition ?? fallbackIndex).")
+            Text("\(task.queuePosition ?? fallbackIndex).")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Text(message.contentPreview.isEmpty ? (messageText(message) ?? "Queued message") : message.contentPreview)
+            Text(task.promptPreview.isEmpty ? "Queued message" : task.promptPreview)
                 .font(.callout)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
-                viewModel.removeQueuedMessage(message)
+                viewModel.removeQueuedTask(task)
             } label: {
                 Image(systemName: "trash")
                     .font(.caption.weight(.semibold))
@@ -383,23 +383,6 @@ struct ChatView: View {
         let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
         if let session = allSessions.first(where: { $0.sessionId.hasPrefix(hash) || $0.sessionId == hash }) {
             onOpenSession?(session.sessionId)
-        }
-    }
-
-    private func messageText(_ message: Message) -> String? {
-        switch message.content {
-        case .text(let text):
-            return text
-        case .blocks(let blocks):
-            let text = blocks.compactMap { block -> String? in
-                if case .text(let content) = block {
-                    return content.text
-                }
-                return nil
-            }.joined(separator: " ")
-            return text.isEmpty ? nil : text
-        default:
-            return nil
         }
     }
 }
