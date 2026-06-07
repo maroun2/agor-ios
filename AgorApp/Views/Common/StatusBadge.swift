@@ -52,6 +52,7 @@ struct TaskStatusBadge: View {
 
     private var statusIcon: String {
         switch status {
+        case .queued: "clock"
         case .created: "circle.dashed"
         case .running: "arrow.trianglehead.2.clockwise.circle"
         case .stopping: "stop.circle"
@@ -66,6 +67,7 @@ struct TaskStatusBadge: View {
 
     private var statusColor: Color {
         switch status {
+        case .queued: .orange
         case .created: .gray
         case .running: .blue
         case .stopping: .blue.opacity(0.6)

@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Task Status
 
 enum TaskStatus: String, Codable {
+    case queued
     case created
     case running
     case stopping
@@ -15,6 +16,7 @@ enum TaskStatus: String, Codable {
 
     var displayLabel: String {
         switch self {
+        case .queued: "Queued"
         case .created: "Created"
         case .running: "Running"
         case .stopping: "Stopping"
@@ -83,6 +85,7 @@ struct AgorTask: Codable, Identifiable {
     let fullPrompt: String
     var description: String?
     var status: TaskStatus
+    var queuePosition: Int?
     var firstMessageIndex: Int?
     var lastMessageIndex: Int?
     var toolUseCount: Int?
@@ -120,6 +123,7 @@ struct AgorTask: Codable, Identifiable {
         case fullPrompt = "full_prompt"
         case description
         case status
+        case queuePosition = "queue_position"
         case firstMessageIndex = "first_message_index"
         case lastMessageIndex = "last_message_index"
         case toolUseCount = "tool_use_count"
