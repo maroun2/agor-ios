@@ -238,25 +238,24 @@ final class AgorClient {
         defer { isRefreshing = false }
 
         struct RefreshRequest: Codable {
-            let strategy: String
             let refreshToken: String
         }
 
-        struct AuthResponse: Codable {
+        struct RefreshResponse: Codable {
             let accessToken: String
             let refreshToken: String?
             let user: User?
         }
 
-        let body = RefreshRequest(strategy: "jwt", refreshToken: refresh)
-        var request = try buildRequest(path: "/authentication", method: "POST")
+        let body = RefreshRequest(refreshToken: refresh)
+        var request = try buildRequest(path: "/authentication/refresh", method: "POST")
         request.httpBody = try encoder.encode(body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // Don't send the expired access token for refresh
         request.setValue(nil, forHTTPHeaderField: "Authorization")
 
         let data = try await executeRaw(request, attemptRefresh: false)
-        let authResponse = try decoder.decode(AuthResponse.self, from: data)
+        let authResponse = try decoder.decode(RefreshResponse.self, from: data)
 
         accessToken = authResponse.accessToken
         if let newRefresh = authResponse.refreshToken {
@@ -264,6 +263,15 @@ final class AgorClient {
             KeychainHelper.save(newRefresh, for: .refreshToken)
         }
         KeychainHelper.save(authResponse.accessToken, for: .accessToken)
+
+        // Also persist to per-profile storage so restoreSession() finds fresh tokens
+        let pm = ServerProfileManager.shared
+        if let profileId = pm.activeProfileId {
+            pm.saveToken(authResponse.accessToken, key: .accessToken, profileId: profileId)
+            if let newRefresh = authResponse.refreshToken {
+                pm.saveToken(newRefresh, key: .refreshToken, profileId: profileId)
+            }
+        }
     }
 
     // MARK: - File Upload (multipart/form-data)
@@ -323,6 +331,32 @@ final class AgorClient {
         } catch {
             return false
         }
+    }
+
+    /// Proactively refresh token if it expires within `bufferSeconds`.
+    /// Returns true if token was refreshed or still valid, false on failure.
+    func refreshTokenIfNeeded(bufferSeconds: TimeInterval = 120) async -> Bool {
+        guard let token = accessToken else { return false }
+        if let exp = decodeJwtExp(token), exp.timeIntervalSinceNow < bufferSeconds {
+            AppLogger.shared.log("[Auth] token expires in \(Int(exp.timeIntervalSinceNow))s — proactive refresh", level: .info, category: "Auth")
+            return await tryRefreshToken()
+        }
+        return true // token still valid
+    }
+
+    /// Decode JWT exp claim without external dependencies.
+    private func decodeJwtExp(_ jwt: String) -> Date? {
+        let parts = jwt.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var base64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        // Pad to multiple of 4
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else { return nil }
+        return Date(timeIntervalSince1970: exp)
     }
 
     // MARK: - Health Check (silent — no logging since it polls frequently)
