@@ -5,6 +5,7 @@ import SwiftUI
 final class AppViewModel {
     let client: AgorClient
     let authService: AuthService
+    let networkMonitor = NetworkMonitor()
 
     var connectionError: String?
 
@@ -52,11 +53,19 @@ final class AppViewModel {
             socketService.connect()
             await authService.fetchCurrentUser()
         } else {
-            // No token for this server — need to log in
+            // No cached token — attempt silent re-auth with stored credentials for this profile
             client.accessToken = nil
             client.refreshToken = nil
-            authService.isAuthenticated = false
-            authService.currentUser = nil
+            AppLogger.shared.log("[App] No token for \(profile.name) — attempting silent re-auth", level: .info, category: "App")
+            let success = await authService.silentReauth()
+            if success {
+                authService.isAuthenticated = true
+                socketService.connect()
+                await authService.fetchCurrentUser()
+            } else {
+                authService.isAuthenticated = false
+                authService.currentUser = nil
+            }
         }
     }
 

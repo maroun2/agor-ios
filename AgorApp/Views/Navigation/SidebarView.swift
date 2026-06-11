@@ -60,6 +60,35 @@ struct SidebarView: View {
             }
 
             if searchText.isEmpty {
+                // Running Section
+                if !viewModel.runningSessions.isEmpty {
+                    Section {
+                        ForEach(viewModel.runningSessions) { session in
+                            let ctx = viewModel.findContext(for: session)
+                            NavigationLink(value: session.sessionId) {
+                                ImportantSessionRow(
+                                    session: session,
+                                    isFavorite: viewModel.favoriteSessionIds.contains(session.sessionId),
+                                    boardName: ctx?.boardName,
+                                    worktreeName: ctx?.worktreeName,
+                                    boardIcon: ctx?.boardIcon
+                                )
+                            }
+                            .contextMenu {
+                                FavoriteButton(sessionId: session.sessionId, viewModel: viewModel)
+                                BrowseFilesButton(worktreeId: session.worktreeId, target: $fileBrowserTarget)
+                                Divider()
+                                CleanAndResetButton(session: session, viewModel: viewModel, socketService: socketService, selectedSessionId: $selectedSessionId)
+                                ArchiveButton(sessionId: session.sessionId, viewModel: viewModel)
+                            }
+                        }
+                    } header: {
+                        Label("Running", systemImage: "ellipsis.circle")
+                            .foregroundStyle(.primary)
+                    }
+                }
+
+                // Favorites Section
                 if !viewModel.favoriteSessions.isEmpty {
                     Section {
                         ForEach(viewModel.favoriteSessions) { session in
@@ -109,10 +138,10 @@ struct SidebarView: View {
                     }
                 }
 
-                // Important Section — running, ready for prompt, favorites, 3 most recent
-                if !viewModel.importantSessions.isEmpty {
+                // Finished Section — readyForPrompt, not in Running or Favorites
+                if !viewModel.finishedSessions.isEmpty {
                     Section {
-                        ForEach(viewModel.importantSessions) { session in
+                        ForEach(viewModel.finishedSessions) { session in
                             let ctx = viewModel.findContext(for: session)
                             NavigationLink(value: session.sessionId) {
                                 ImportantSessionRow(
@@ -132,7 +161,7 @@ struct SidebarView: View {
                             }
                         }
                     } header: {
-                        Label("Important", systemImage: "sparkles")
+                        Label("Finished", systemImage: "checkmark.circle")
                             .foregroundStyle(.primary)
                     }
                 }
@@ -273,7 +302,9 @@ struct SidebarView: View {
         let query = searchText.lowercased()
         let all = viewModel.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
             + viewModel.attentionSessions
-            + viewModel.importantSessions
+            + viewModel.runningSessions
+            + viewModel.favoriteSessions
+            + viewModel.finishedSessions
         var seen = Set<String>()
         return all.filter { session in
             guard seen.insert(session.sessionId).inserted else { return false }
@@ -458,7 +489,7 @@ private struct CleanAndResetButton: View {
         // 2. Create a new session on the same worktree via Socket.IO
         do {
             var body: [String: Any] = [
-                "worktree_id": session.worktreeId,
+                "branch_id": session.worktreeId,
                 "agentic_tool": session.agenticTool.rawValue,
                 "status": "idle"
             ]
@@ -587,7 +618,7 @@ private struct WorktreeSection: View {
         AppLogger.shared.log("[Sidebar] createSession worktreeId=\(String(worktreeId.prefix(8))) tool=\(tool.rawValue) name=\(name ?? "<nil>")", level: .info, category: "Nav")
         do {
             var body: [String: Any] = [
-                "worktree_id": worktreeId,
+                "branch_id": worktreeId,
                 "agentic_tool": tool.rawValue,
                 "status": "idle"
             ]

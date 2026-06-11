@@ -37,6 +37,7 @@ struct MainNavigationView: View {
     @State private var wasBackgrounded = false
     @State private var reconnectPhase: ReconnectPhase = .idle
     @State private var notificationManager = NotificationManager.shared
+    @State private var tokenRefreshTask: Task<Void, Never>?
 
     init(appViewModel: AppViewModel) {
         self.appViewModel = appViewModel
@@ -57,8 +58,7 @@ struct MainNavigationView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(
                     viewModel: navigationVM,
                     selectedSessionId: $selectedSessionId,
@@ -100,24 +100,22 @@ struct MainNavigationView: View {
                 }
             }
 
-            if shouldShowVoiceFloatingButton, let voiceSessionId = chatVM.voiceSessionId {
-                VoiceFloatingButton(voiceState: chatVM.voiceService?.state ?? .disabled) {
-                    selectedSessionId = voiceSessionId
-                }
-                .padding(.trailing, 16)
-                .padding(.top, 60)
-                .zIndex(1000)
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
+        .voiceFloatingOverlay(chatVM: chatVM, onNavigate: { selectedSessionId = $0 })
         .toastOverlay(manager: toastManager) { sessionId in
             selectedSessionId = sessionId
         }
         .overlay(alignment: .top) {
-            if reconnectPhase != .idle {
-                ReconnectBanner(phase: reconnectPhase)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            VStack(spacing: 0) {
+                if !appViewModel.networkMonitor.isOnline {
+                    OfflineBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                if reconnectPhase != .idle {
+                    ReconnectBanner(phase: reconnectPhase)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: appViewModel.networkMonitor.isOnline)
         }
         .onChange(of: selectedSessionId) { _, newValue in
             if let sessionId = newValue, sessionId != chatVM.currentSessionId {
@@ -142,18 +140,48 @@ struct MainNavigationView: View {
         .onChange(of: navigationVM.favoriteSessionIds) { _, newValue in
             notificationManager.favoriteSessionIds = newValue
         }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+        .onChange(of: appViewModel.networkMonitor.isOnline) { _, isOnline in
+            if isOnline {
+                AppLogger.shared.log("[App] Network restored — reconnecting", level: .info, category: "App")
+                socketService.connect()
+                navigationVM.startPolling()
+                Task { await navigationVM.refresh() }
+            } else {
+                AppLogger.shared.log("[App] Network lost — pausing requests", level: .warning, category: "App")
+                socketService.disconnect()
+                navigationVM.stopPolling()
+            }
+        }
         .task {
-            // Silent re-auth when JWT refresh fails — user never sees a logout prompt
+            // Wire silent re-auth: AgorClient calls this on 401 before giving up
+            appViewModel.client.onSilentReAuth = {
+                guard await appViewModel.authService.silentReauth() else {
+                    throw AgorAPIError.tokenRefreshFailed
+                }
+                Task { @MainActor in socketService.reconnect() }
+            }
+            // Called only after silentReAuth also failed — force logout
             appViewModel.client.onSessionExpired = {
-                AppLogger.shared.log("[App] Session expired — attempting silent re-auth", level: .info, category: "App")
+                AppLogger.shared.log("[App] All auth recovery failed — logging out", level: .error, category: "App")
+                socketService.disconnect()
+                navigationVM.stopPolling()
+                navigationVM.clearCache()
+                appViewModel.authService.logout()
+            }
+
+            // Socket-level auth failure (FeathersJS 401) — try silent re-auth before giving up
+            socketService.onAuthFailure = {
                 Task {
-                    let success = await appViewModel.authService.silentReauth()
-                    if success {
+                    AppLogger.shared.log("[App] Socket auth failed — attempting silent re-auth", level: .info, category: "App")
+                    if await appViewModel.authService.silentReauth() {
                         AppLogger.shared.log("[App] Silent re-auth succeeded — reconnecting socket", level: .info, category: "App")
                         socketService.reconnect()
                         await appViewModel.authService.fetchCurrentUser()
                     } else {
-                        AppLogger.shared.log("[App] Silent re-auth failed — forcing logout", level: .error, category: "App")
+                        AppLogger.shared.log("[App] Socket auth recovery failed — logging out", level: .error, category: "App")
                         socketService.disconnect()
                         navigationVM.stopPolling()
                         navigationVM.clearCache()
@@ -165,6 +193,7 @@ struct MainNavigationView: View {
             AppLogger.shared.log("[App] startup: connecting socket", level: .debug, category: "App")
             socketService.connect()
             socketService.startHealthCheck(client: appViewModel.client)
+            startTokenRefreshTimer()
 
             AppLogger.shared.log("[App] startup: loading boards", level: .debug, category: "App")
             await navigationVM.loadBoards()
@@ -216,6 +245,27 @@ struct MainNavigationView: View {
         }
     }
 
+    // MARK: - Deep Link Handling
+
+    /// Handles agor://session/{sessionId}/chat and agor://session/{sessionId}/voice
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "agor",
+              url.host == "session" else { return }
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard let sessionId = components.first else { return }
+        let action = components.count >= 2 ? components[1] : "chat"
+
+        selectedSessionId = sessionId
+
+        if action == "voice" {
+            // Give ChatView a moment to load the session before enabling voice mode
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                chatVM.voiceModeEnabled = true
+            }
+        }
+    }
+
     private var shouldShowVoiceFloatingButton: Bool {
         let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
         return chatVM.voiceModeEnabled &&
@@ -233,6 +283,7 @@ struct MainNavigationView: View {
             wasBackgrounded = true
             notificationManager.isBackgrounded = true
             socketService.stopHealthCheck()
+            stopTokenRefreshTimer()
             chatVM.stopPolling()
             navigationVM.stopPolling()
 
@@ -268,6 +319,11 @@ struct MainNavigationView: View {
 
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {
+                // Phase 0: Proactive token refresh before reconnecting
+                // Token may have expired while backgrounded — refresh it first so the
+                // socket reconnect uses a fresh token in extraHeaders.
+                await appViewModel.client.refreshTokenIfNeeded(bufferSeconds: 120)
+
                 // Phase 1: Reconnecting
                 if socketService.connectionState != .connected {
                     AppLogger.shared.log("[App] reconnect: phase 1 — reconnecting socket", level: .debug, category: "App")
@@ -280,6 +336,7 @@ struct MainNavigationView: View {
                 AppLogger.shared.log("[App] reconnect: phase 2 — refreshing data", level: .debug, category: "App")
                 withAnimation { reconnectPhase = .updating }
                 socketService.startHealthCheck(client: appViewModel.client)
+                startTokenRefreshTimer()
                 await navigationVM.refresh()
                 navigationVM.startPolling()
                 chatVM.refreshCurrentSession()
@@ -287,6 +344,9 @@ struct MainNavigationView: View {
                 // Check for missed transitions while backgrounded
                 let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap { $0.sessions } }
                 notificationManager.checkMissedTransitions(currentSessions: allSessions)
+
+                // Refresh widget data on foreground
+                await navigationVM.refreshWidgetData()
 
                 // Phase 3: Done
                 withAnimation { reconnectPhase = .done }
@@ -300,6 +360,30 @@ struct MainNavigationView: View {
         }
     }
 
+    // MARK: - Proactive Token Refresh
+
+    /// Refresh access token every 12 minutes (access token TTL is 15 min).
+    /// This prevents 401 errors from ever reaching the user.
+    private func startTokenRefreshTimer() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(12 * 60))
+                guard !Task.isCancelled else { break }
+                let refreshed = await appViewModel.client.refreshTokenIfNeeded(bufferSeconds: 180)
+                if refreshed {
+                    AppLogger.shared.log("[App] proactive token refresh: OK", level: .debug, category: "App")
+                } else {
+                    AppLogger.shared.log("[App] proactive token refresh: failed — will retry next cycle", level: .warning, category: "App")
+                }
+            }
+        }
+    }
+
+    private func stopTokenRefreshTimer() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+    }
 }
 
 // MARK: - Reconnect Banner
@@ -333,5 +417,22 @@ private struct ReconnectBanner: View {
         case .updating: "Updating..."
         case .done: "Updated"
         }
+    }
+}
+
+// MARK: - Offline Banner
+
+private struct OfflineBanner: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wifi.slash")
+                .imageScale(.small)
+            Text("No network connection")
+                .font(.caption.weight(.medium))
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
     }
 }

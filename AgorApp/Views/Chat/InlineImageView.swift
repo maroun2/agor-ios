@@ -47,7 +47,7 @@ struct InlineImageView: View {
             let detail: FileDetail = try await socketService.serviceGet(
                 service: "file",
                 id: path,
-                query: ["worktree_id": worktreeId]
+                query: ["branch_id": worktreeId]
             )
 
             guard let content = detail.content else { failed = true; return }
