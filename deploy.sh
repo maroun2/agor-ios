@@ -3,9 +3,15 @@
 # No Xcode GUI or account session required.
 # Run once after a fresh `xcodegen generate` if project.yml changes.
 
-set -e
+set -eo pipefail
 
-DEVICE_ID="00008120-0006024C3E50A01E"
+# Always run from repo root so relative paths work regardless of caller's cwd
+cd "$(dirname "$0")"
+
+# Prefer first available paired device; fall back to known iPhone UDID
+DEVICE_ID=$(xcrun devicectl list devices 2>/dev/null \
+  | awk -F'   +' '/available \(paired\)/ {print $3; exit}')
+DEVICE_ID="${DEVICE_ID:-00008120-0006024C3E50A01E}"
 PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
@@ -57,7 +63,7 @@ EOF
 # Build (no signing)
 BUILD_LOG=$(mktemp /tmp/agor-build-XXXXXX)
 echo "Building... (log: $BUILD_LOG)"
-xcodebuild \
+if xcodebuild \
   -project AgorApp.xcodeproj \
   -scheme AgorApp \
   -configuration Release \
@@ -65,9 +71,8 @@ xcodebuild \
   -derivedDataPath .build/DerivedData \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
-  build 2>&1 | tee "$BUILD_LOG"
-
-if grep -q "BUILD SUCCEEDED" "$BUILD_LOG"; then
+  build 2>&1 | tee "$BUILD_LOG" \
+  && grep -q "BUILD SUCCEEDED" "$BUILD_LOG"; then
   echo "Build succeeded (git: $GIT_HASH)."
 else
   echo "ERROR: Build failed. Not deploying."
