@@ -266,13 +266,6 @@ struct MainNavigationView: View {
         }
     }
 
-    private var shouldShowVoiceFloatingButton: Bool {
-        let visibleSessionId = selectedSessionId ?? chatVM.currentSessionId
-        return chatVM.voiceModeEnabled &&
-            chatVM.voiceSessionId != nil &&
-            visibleSessionId != chatVM.voiceSessionId
-    }
-
     // MARK: - Background Recovery
 
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
