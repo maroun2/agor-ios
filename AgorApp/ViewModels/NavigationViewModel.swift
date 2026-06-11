@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 
 // MARK: - Board Node (with children)
 
@@ -80,6 +81,29 @@ final class NavigationViewModel {
         boardNodes
             .flatMap { $0.worktrees.flatMap(\.sessions) }
             .filter { favoriteSessionIds.contains($0.sessionId) && !$0.isScheduled }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    // Running sessions: status == .running, not attention, not scheduled
+    var runningSessions: [Session] {
+        let attentionIds = Set(attentionSessions.map(\.sessionId))
+        return boardNodes
+            .flatMap { $0.worktrees.flatMap(\.sessions) }
+            .filter { $0.status == .running && !$0.isScheduled && !attentionIds.contains($0.sessionId) }
+            .sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    // Finished sessions: readyForPrompt == true, not scheduled, not already in Running or Favorites
+    var finishedSessions: [Session] {
+        let runningIds = Set(runningSessions.map(\.sessionId))
+        return boardNodes
+            .flatMap { $0.worktrees.flatMap(\.sessions) }
+            .filter {
+                $0.readyForPrompt == true &&
+                !$0.isScheduled &&
+                !runningIds.contains($0.sessionId) &&
+                !favoriteSessionIds.contains($0.sessionId)
+            }
             .sorted { $0.lastUpdated > $1.lastUpdated }
     }
 
@@ -233,6 +257,9 @@ final class NavigationViewModel {
             // Save to cache after successful load
             SidebarCache.save(boardNodes: boardNodes)
             AppLogger.shared.log("[Nav] cache: saved \(boardNodes.count) boards to disk", level: .debug, category: "Nav")
+
+            // Refresh widget data with latest favorites
+            await refreshWidgetData()
         } catch {
             self.error = error.localizedDescription
             AppLogger.shared.log("[Nav] loadBoards failed: \(error.localizedDescription)", level: .error, category: "Nav")
@@ -306,14 +333,19 @@ final class NavigationViewModel {
     func loadWorktrees(for boardNode: BoardNode, sessionsByWorktreeId: [String: [Session]]? = nil) async {
         boardNode.isLoading = true
         do {
-            let response: PaginatedResponse<Worktree> = try await client.getPaginated(
-                "/worktrees",
-                query: [
-                    "board_id": boardNode.board.boardId,
-                    "$limit": "100",
-                    "archived": "false",
-                ]
-            )
+            // v21 uses /branches, v19 uses /worktrees — try both
+            let query = [
+                "board_id": boardNode.board.boardId,
+                "$limit": "100",
+                "archived": "false",
+            ]
+            let response: PaginatedResponse<Worktree>
+            do {
+                response = try await client.getPaginated("/branches", query: query)
+            } catch {
+                // Fallback for v19 servers that still use /worktrees
+                response = try await client.getPaginated("/worktrees", query: query)
+            }
             // Incremental merge: reuse existing WorktreeNode objects to preserve sessions/expansion state
             let existingByWtId = Dictionary(uniqueKeysWithValues: boardNode.worktrees.map { ($0.worktree.worktreeId, $0) })
             var mergedWorktrees: [WorktreeNode] = []
@@ -503,6 +535,52 @@ final class NavigationViewModel {
             }
         }
         return nil
+    }
+
+    // MARK: - Widget Data
+
+    /// Fetch last message for each favorited session and write to App Group UserDefaults.
+    /// Called after sidebar refresh and on app foreground.
+    func refreshWidgetData() async {
+        let favorites = Array(favoriteSessions.prefix(10))
+        guard !favorites.isEmpty else {
+            WidgetDataWriter.write(sessions: [], serverURL: client.baseURL)
+            return
+        }
+
+        var widgetSessions: [WidgetSessionData] = []
+        await withTaskGroup(of: WidgetSessionData?.self) { group in
+            for session in favorites {
+                group.addTask {
+                    var lastMsg = ""
+                    var lastRole = "assistant"
+                    if let response: PaginatedResponse<Message> = try? await self.client.getPaginated(
+                        "/messages",
+                        query: [
+                            "session_id": session.sessionId,
+                            "$limit": "1",
+                            "$sort[created_at]": "-1",
+                        ]
+                    ), let msg = response.data.first {
+                        lastMsg = String(msg.contentPreview.prefix(300))
+                        lastRole = msg.role.rawValue
+                    }
+                    return WidgetSessionData(
+                        sessionId: session.sessionId,
+                        sessionTitle: session.displayTitle,
+                        lastMessage: lastMsg,
+                        lastMessageRole: lastRole,
+                        lastUpdated: session.lastUpdated.asDate ?? Date(),
+                        status: session.status.rawValue
+                    )
+                }
+            }
+            for await result in group {
+                if let data = result { widgetSessions.append(data) }
+            }
+        }
+        widgetSessions.sort { $0.lastUpdated > $1.lastUpdated }
+        WidgetDataWriter.write(sessions: widgetSessions, serverURL: client.baseURL)
     }
 
     /// Expand the board and worktree that contain this session so it is visible in the sidebar tree.

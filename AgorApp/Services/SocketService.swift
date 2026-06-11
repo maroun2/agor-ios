@@ -20,6 +20,8 @@ final class SocketService {
     private var sessionPatchedHandlers: [(Session) -> Void] = []
     private var taskCreatedHandlers: [(AgorTask) -> Void] = []
     private var taskPatchedHandlers: [(AgorTask) -> Void] = []
+    private var taskQueuedHandlers: [(AgorTask) -> Void] = []
+    private var taskRemovedHandlers: [(AgorTask) -> Void] = []
     private var messageCreatedHandlers: [(Message) -> Void] = []
     private var messagePatchedHandlers: [(Message) -> Void] = []
     private var messageRemovedHandlers: [(Message) -> Void] = []
@@ -59,6 +61,14 @@ final class SocketService {
 
     func onTaskPatched(_ handler: @escaping (AgorTask) -> Void) {
         taskPatchedHandlers.append(handler)
+    }
+
+    func onTaskQueued(_ handler: @escaping (AgorTask) -> Void) {
+        taskQueuedHandlers.append(handler)
+    }
+
+    func onTaskRemoved(_ handler: @escaping (AgorTask) -> Void) {
+        taskRemovedHandlers.append(handler)
     }
 
     func onMessageCreated(_ handler: @escaping (Message) -> Void) {
@@ -287,7 +297,8 @@ final class SocketService {
                             AppLogger.shared.log("[Socket] token refreshed — reconnecting", level: .info, category: "Socket")
                             self.reconnect()
                         } else {
-                            AppLogger.shared.log("[Socket] token refresh failed — no reconnect", level: .error, category: "Socket")
+                            AppLogger.shared.log("[Socket] token refresh failed — firing onAuthFailure for silent re-auth", level: .warning, category: "Socket")
+                            self.onAuthFailure?()
                         }
                     }
                 }
@@ -321,6 +332,20 @@ final class SocketService {
             self?.handleDecodable(data) { (task: AgorTask) in
                 AppLogger.shared.log("[Socket] ← event \"tasks patched\" taskId=\(task.id) status=\(task.status)", level: .debug, category: "Socket")
                 self?.taskPatchedHandlers.forEach { $0(task) }
+            }
+        }
+
+        socket.on("tasks queued") { [weak self] data, _ in
+            self?.handleDecodable(data) { (task: AgorTask) in
+                AppLogger.shared.log("[Socket] ← event \"tasks queued\" taskId=\(task.id) pos=\(task.queuePosition ?? -1)", level: .debug, category: "Socket")
+                self?.taskQueuedHandlers.forEach { $0(task) }
+            }
+        }
+
+        socket.on("tasks removed") { [weak self] data, _ in
+            self?.handleDecodable(data) { (task: AgorTask) in
+                AppLogger.shared.log("[Socket] ← event \"tasks removed\" taskId=\(task.id)", level: .debug, category: "Socket")
+                self?.taskRemovedHandlers.forEach { $0(task) }
             }
         }
 
