@@ -8,10 +8,18 @@ set -eo pipefail
 # Always run from repo root so relative paths work regardless of caller's cwd
 cd "$(dirname "$0")"
 
-# Prefer first available paired device; fall back to known iPhone UDID
+# Prefer first available paired device (USB or WiFi tunnel); fall back to known iPhone UDID.
+# Over WiFi the device shows "available (paired)" only while the CoreDevice tunnel is up —
+# if it's not, wake the iPhone (unlock screen) and make sure it's on the same WiFi as this Mac.
 DEVICE_ID=$(xcrun devicectl list devices 2>/dev/null \
   | awk -F'   +' '/available \(paired\)/ {print $3; exit}')
-DEVICE_ID="${DEVICE_ID:-00008120-0006024C3E50A01E}"
+if [ -z "$DEVICE_ID" ]; then
+  echo "WARNING: No device currently 'available (paired)' — WiFi tunnel may be asleep."
+  echo "         Wake/unlock the iPhone and check it's on the same WiFi, then retry."
+  echo "         Falling back to known device UDID and trying anyway..."
+  DEVICE_ID="00008120-0006024C3E50A01E"
+fi
+echo "Device: $DEVICE_ID"
 PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 APP=".build/DerivedData/Build/Products/Release-iphoneos/AgorApp.app"
 ENTITLEMENTS="/tmp/agor-entitlements.plist"
