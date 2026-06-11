@@ -335,6 +335,7 @@ final class AgorClient {
 
     /// Proactively refresh token if it expires within `bufferSeconds`.
     /// Returns true if token was refreshed or still valid, false on failure.
+    @discardableResult
     func refreshTokenIfNeeded(bufferSeconds: TimeInterval = 120) async -> Bool {
         guard let token = accessToken else { return false }
         if let exp = decodeJwtExp(token), exp.timeIntervalSinceNow < bufferSeconds {
