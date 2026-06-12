@@ -18,6 +18,14 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "1.1",
+          "date": "2026-06-12",
+          "localizedDescription": "Agor iOS v1.1 (9269588)",
+          "downloadURL": "https://github.com/maroun2/agor-ios/releases/download/v1.1-ios/Agor-1.1.ipa",
+          "size": 9276131,
+          "minOSVersion": "18.0"
+        },
+        {
           "version": "1.0",
           "date": "2026-05-18",
           "localizedDescription": "Agor iOS v1.0 (65316e9)",
