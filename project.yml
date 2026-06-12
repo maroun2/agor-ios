@@ -5,6 +5,10 @@ options:
     iOS: "18.0"
   xcodeVersion: "16.0"
 
+settings:
+  MARKETING_VERSION: "1.1"
+  CURRENT_PROJECT_VERSION: "1"
+
 packages:
   textual:
     url: https://github.com/gonzalezreal/textual.git
@@ -37,8 +41,8 @@ targets:
         CFBundleName: AgorApp
         CFBundleDisplayName: Agor
         CFBundleIdentifier: com.agor.AgorApp
-        CFBundleVersion: "1"
-        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
         UILaunchStoryboardName: ""
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -49,6 +53,11 @@ targets:
         UIBackgroundModes:
           - audio
           - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.agor.AgorApp.session-poll
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - agor
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp
       SWIFT_VERSION: "5.0"
@@ -76,3 +85,21 @@ targets:
         product: WhisperKit
       - package: FluidAudio
         product: FluidAudio
+      - target: AgorWidgets
+
+  AgorWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AgorWidgets
+        excludes:
+          - Info.plist
+    settings:
+      INFOPLIST_FILE: AgorWidgets/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp.widgets
+      DEVELOPMENT_TEAM: L94RKR8S54
+      CODE_SIGN_STYLE: Automatic
+      SKIP_INSTALL: YES
+      SWIFT_VERSION: "5.0"
+      TARGETED_DEVICE_FAMILY: "1,2"
