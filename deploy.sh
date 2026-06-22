@@ -8,13 +8,14 @@ set -eo pipefail
 # Always run from repo root so relative paths work regardless of caller's cwd
 cd "$(dirname "$0")"
 
-# Prefer first available paired device (USB or WiFi tunnel); fall back to known iPhone UDID.
-# Over WiFi the device shows "available (paired)" only while the CoreDevice tunnel is up —
-# if it's not, wake the iPhone (unlock screen) and make sure it's on the same WiFi as this Mac.
+# Prefer first reachable paired device (USB or WiFi tunnel); fall back to known iPhone UDID.
+# Over WiFi the device is reachable only while the CoreDevice tunnel is up — devicectl
+# reports it as "connected" or "available (paired)". If neither, wake the iPhone (unlock
+# screen) and make sure it's on the same WiFi as this Mac.
 DEVICE_ID=$(xcrun devicectl list devices 2>/dev/null \
-  | awk -F'   +' '/available \(paired\)/ {print $3; exit}')
+  | awk -F'   +' '/(connected|available \(paired\))/ {print $3; exit}')
 if [ -z "$DEVICE_ID" ]; then
-  echo "WARNING: No device currently 'available (paired)' — WiFi tunnel may be asleep."
+  echo "WARNING: No reachable paired device — WiFi tunnel may be asleep."
   echo "         Wake/unlock the iPhone and check it's on the same WiFi, then retry."
   echo "         Falling back to known device UDID and trying anyway..."
   DEVICE_ID="00008120-0006024C3E50A01E"
