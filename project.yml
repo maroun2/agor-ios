@@ -61,7 +61,7 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.agor.AgorApp
       SWIFT_VERSION: "5.0"
-      DEVELOPMENT_TEAM: "95327R65BM"
+      DEVELOPMENT_TEAM: L94RKR8S54
       CODE_SIGN_STYLE: Automatic
     preBuildScripts:
       - name: Inject Git Hash
