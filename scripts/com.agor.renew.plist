@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Template for the daily provisioning-renewal launchd agent.
+
+  Install:
+    cp scripts/com.agor.renew.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.agor.renew.plist
+
+  Reload after editing:
+    launchctl unload ~/Library/LaunchAgents/com.agor.renew.plist
+    launchctl load   ~/Library/LaunchAgents/com.agor.renew.plist
+
+  IMPORTANT one-time setup (see scripts/renew-and-deploy.sh header):
+    - Full Disk Access for /bin/bash so the agent can read this repo on the
+      external /Volumes/Seagate drive (System Settings > Privacy & Security >
+      Full Disk Access). Without it the agent fails with "Operation not permitted".
+    - iOS platform installed:  xcodebuild -downloadPlatform iOS
+    - Apple ID signed in to Xcode (Settings > Accounts).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.agor.renew</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Volumes/Seagate/projects/agor-ios/scripts/renew-and-deploy.sh</string>
+    </array>
+
+    <!-- Run every 3 hours. Most runs are sub-second no-ops; the script only rebuilds
+         when the profile is within 3 days of expiring AND the iPhone is reachable. -->
+    <key>StartInterval</key>
+    <integer>10800</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/rmi/Library/Logs/agor-renew.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/rmi/Library/Logs/agor-renew.err.log</string>
+</dict>
+</plist>
