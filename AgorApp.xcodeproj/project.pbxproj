@@ -525,7 +525,7 @@
 						ProvisioningStyle = Automatic;
 					};
 					A65FB750632211D9897001D3 = {
-						DevelopmentTeam = 95327R65BM;
+						DevelopmentTeam = L94RKR8S54;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -697,7 +697,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 95327R65BM;
+				DEVELOPMENT_TEAM = L94RKR8S54;
 				INFOPLIST_FILE = AgorApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -775,7 +775,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 95327R65BM;
+				DEVELOPMENT_TEAM = L94RKR8S54;
 				INFOPLIST_FILE = AgorApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
