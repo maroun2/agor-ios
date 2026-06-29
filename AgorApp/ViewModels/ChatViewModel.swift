@@ -157,6 +157,9 @@ final class ChatViewModel {
 
     // Polling timer (tasks + session state only, NOT messages)
     private var pollingTimer: Timer?
+    /// Last server task total seen by loadTasks (includes queued). Lets pollForUpdates detect
+    /// real changes instead of reloading every cycle when queued items inflate the count.
+    private var lastKnownTaskTotal = 0
 
     // Convenience: all messages across loaded tasks (for voice, permissions, etc.)
     var allMessages: [Message] {
@@ -255,6 +258,7 @@ final class ChatViewModel {
         loadedTaskIds = []
         virtualMessages = []
         tasks = []
+        lastKnownTaskTotal = 0
         displayItems = []
         activeStreams = [:]
         voiceStreamBuffer = ""
@@ -385,14 +389,22 @@ final class ChatViewModel {
                 // that onTaskCreated already added to the local list.
                 let serverIds = Set(realTasks.map(\.taskId))
                 let unconfirmed = tasks.filter { !serverIds.contains($0.taskId) && $0.status != .queued }
+                let previousTaskIds = Set(tasks.map(\.taskId))
                 let merged = (realTasks + unconfirmed).sorted { $0.createdAt < $1.createdAt }
                 tasks = merged
+                lastKnownTaskTotal = response.total
                 AppLogger.shared.log("[Chat] loadTasks: \(realTasks.count) real (+ \(response.data.count - realTasks.count) queued) from server + \(unconfirmed.count) unconfirmed local", level: .debug, category: "Chat")
-                // Collapse all real tasks except the last one; preserve any virtual task collapse state.
-                let lastId = merged.last?.taskId
-                let newCollapsed = Set(merged.compactMap { $0.taskId != lastId ? $0.taskId : nil })
-                let virtualCollapsed = collapsedTaskIds.filter { $0.hasPrefix("virtual-") }
-                collapsedTaskIds = newCollapsed.union(virtualCollapsed)
+                // Only (re)collapse when a genuinely new task appears (a new turn) or on the
+                // initial load. Re-collapsing on every load snapped the user's expanded tasks
+                // shut on each poll/status update — visible as flicker, especially while queued
+                // items keep the poll firing. Preserve manual collapse state otherwise.
+                let hasNewTask = !Set(merged.map(\.taskId)).subtracting(previousTaskIds).isEmpty
+                if previousTaskIds.isEmpty || hasNewTask {
+                    let lastId = merged.last?.taskId
+                    let newCollapsed = Set(merged.compactMap { $0.taskId != lastId ? $0.taskId : nil })
+                    let virtualCollapsed = collapsedTaskIds.filter { $0.hasPrefix("virtual-") }
+                    collapsedTaskIds = newCollapsed.union(virtualCollapsed)
+                }
                 rebuildDisplayItems()
             }
         } catch {
@@ -752,7 +764,10 @@ final class ChatViewModel {
                 query: ["session_id": sessionId, "$limit": "1"]
             )
             guard sessionId == currentSessionId else { return }
-            if taskCount.total > tasks.count {
+            // Reload only when the server's task total actually changed. Comparing against
+            // tasks.count would fire every poll once queued items (excluded from tasks)
+            // inflate the server total — re-running loadTasks and flickering the list.
+            if taskCount.total != lastKnownTaskTotal {
                 await loadTasks(sessionId)
                 // Auto-load messages for the new last task
                 if let lastTaskId = tasks.last?.taskId, !collapsedTaskIds.contains(lastTaskId) {
