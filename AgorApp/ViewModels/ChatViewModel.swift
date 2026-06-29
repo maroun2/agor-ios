@@ -375,14 +375,19 @@ final class ChatViewModel {
                 ]
             )
             if currentSessionId == sessionId {
+                // Queued tasks belong in the queue drawer above the input, NOT the chat
+                // history. The socket handlers route `.queued` away already, but the HTTP
+                // task list returns them too — filter them out here (and drop any that were
+                // added by an earlier load) so they never render as conversation tasks.
+                let realTasks = response.data.filter { $0.status != .queued }
                 // Merge: keep locally-added tasks (from socket events) not yet confirmed by server.
                 // This prevents a race where loadTasks runs before the server has persisted a task
                 // that onTaskCreated already added to the local list.
-                let serverIds = Set(response.data.map(\.taskId))
-                let unconfirmed = tasks.filter { !serverIds.contains($0.taskId) }
-                let merged = (response.data + unconfirmed).sorted { $0.createdAt < $1.createdAt }
+                let serverIds = Set(realTasks.map(\.taskId))
+                let unconfirmed = tasks.filter { !serverIds.contains($0.taskId) && $0.status != .queued }
+                let merged = (realTasks + unconfirmed).sorted { $0.createdAt < $1.createdAt }
                 tasks = merged
-                AppLogger.shared.log("[Chat] loadTasks: \(response.data.count) from server + \(unconfirmed.count) unconfirmed local", level: .debug, category: "Chat")
+                AppLogger.shared.log("[Chat] loadTasks: \(realTasks.count) real (+ \(response.data.count - realTasks.count) queued) from server + \(unconfirmed.count) unconfirmed local", level: .debug, category: "Chat")
                 // Collapse all real tasks except the last one; preserve any virtual task collapse state.
                 let lastId = merged.last?.taskId
                 let newCollapsed = Set(merged.compactMap { $0.taskId != lastId ? $0.taskId : nil })
