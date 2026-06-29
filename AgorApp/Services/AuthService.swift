@@ -154,7 +154,7 @@ final class AuthService {
         currentUser = nil
         isAuthenticated = false
         KeychainHelper.deleteAll()
-        WidgetCredentialStore.clear()
+        WidgetSessionStore.clear()
         AppLogger.shared.log("[Auth] keychain: all tokens cleared", level: .info, category: "Auth")
     }
 
