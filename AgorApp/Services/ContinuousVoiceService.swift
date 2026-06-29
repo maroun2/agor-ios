@@ -31,6 +31,9 @@ final class ContinuousVoiceService {
     private let tts: TextToSpeechService
     private var audioRecorder: AVAudioRecorder?
     private var currentRecordingURL: URL?
+    /// Agent speech buffered because the user is mid-recording in queued voice mode.
+    /// Spoken once the recording is sent, so TTS never interrupts an active recording.
+    private var deferredSpeech: [String] = []
     // Callbacks
     var onTranscription: ((String) -> Void)?
     var onTTSFinished: (() -> Void)?
@@ -257,7 +260,9 @@ final class ContinuousVoiceService {
     // MARK: - Speech Handlers
 
     private func handleSpeechStart() {
-        guard state == .listening || (allowRecordingDuringTTS && state == .speaking) else {
+        // Only start recording from listening. Never during TTS (.speaking) — otherwise the
+        // agent's own TTS audio gets picked up by the VAD and starts a phantom recording.
+        guard state == .listening else {
             AppLogger.shared.log("[Voice] ⚠️ Speech start ignored - not in listening state (current: \(state))", level: .warning, category: "Voice")
             return
         }
@@ -436,6 +441,8 @@ final class ContinuousVoiceService {
                 isPaused = true
                 state = .paused
                 AppLogger.shared.log("[Voice] ⏸️ STATE: sending → paused (waiting for agent)", level: .info, category: "Voice")
+                // Recording is sent — now safe to speak any response buffered during it.
+                flushDeferredSpeech()
             } else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription only contains special tokens, ignoring", level: .warning, category: "Voice")
                 returnToListeningOrPaused()
@@ -455,6 +462,12 @@ final class ContinuousVoiceService {
     /// If agent started running (isPaused was set by deferred pause), go to .paused.
     /// Otherwise resume listening with pre-roll.
     private func returnToListeningOrPaused() {
+        // If the agent's response was buffered while recording, speak it now (its TTS
+        // finishing will resume listening) instead of going straight back to listening.
+        if !deferredSpeech.isEmpty {
+            flushDeferredSpeech()
+            return
+        }
         if isPaused {
             vad.stopListening()
             state = .paused
@@ -471,19 +484,66 @@ final class ContinuousVoiceService {
     // MARK: - TTS
 
     func speakStatus(_ status: String) {
+        // Status phrases ("Working", "Stopped") are transient — drop them while the user
+        // is recording rather than queuing stale status.
+        if shouldDeferSpeech() {
+            AppLogger.shared.log("[Voice] ⏸️ Status TTS suppressed during recording", level: .debug, category: "Voice")
+            return
+        }
+        prepareForTTS()
         tts.speakStatus(status)
     }
 
     func speakStreamChunk(_ chunk: String) {
+        if shouldDeferSpeech() { deferredSpeech.append(chunk); return }
+        prepareForTTS()
         tts.speakStreamChunk(chunk)
     }
 
     func speakMessage(_ message: String) {
+        if shouldDeferSpeech() { deferredSpeech.append(message); return }
+        prepareForTTS()
         tts.speakMessage(message)
     }
 
     func speakFinalMessage(_ message: String) {
+        if shouldDeferSpeech() { deferredSpeech.append(message); return }
+        prepareForTTS()
         tts.speakFinalMessage(message)
+    }
+
+    // MARK: - TTS / recording coordination (queued voice mode)
+
+    /// In queued voice mode the mic stays live while the agent works. Never speak over an
+    /// in-progress recording (or its transcription/send) — buffer it instead.
+    private func shouldDeferSpeech() -> Bool {
+        allowRecordingDuringTTS && (state == .recording || state == .transcribing || state == .sending)
+    }
+
+    /// Stop the mic before our own TTS plays so the VAD can't capture it as user speech
+    /// and start a phantom recording. Queued voice mode only; normal mode already stops
+    /// the VAD before TTS (it's .paused).
+    private func prepareForTTS() {
+        guard allowRecordingDuringTTS, state == .listening || state == .preparing else { return }
+        vad.stopListening()
+        audioRecorder?.stop()
+        audioRecorder = nil
+        if let url = currentRecordingURL {
+            try? FileManager.default.removeItem(at: url)
+            currentRecordingURL = nil
+        }
+        state = .speaking
+        AppLogger.shared.log("[Voice] 🔇 Stopped listening before TTS (queued mode)", level: .info, category: "Voice")
+    }
+
+    /// Speak any agent response buffered while the user was recording.
+    private func flushDeferredSpeech() {
+        guard !deferredSpeech.isEmpty else { return }
+        let text = deferredSpeech.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        deferredSpeech.removeAll()
+        guard !text.isEmpty else { return }
+        AppLogger.shared.log("[Voice] 🔊 Speaking deferred response after recording (\(text.count) chars)", level: .info, category: "Voice")
+        tts.speakMessage(text)
     }
 
     // MARK: - Configuration
