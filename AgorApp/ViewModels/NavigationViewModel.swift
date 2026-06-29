@@ -566,6 +566,10 @@ final class NavigationViewModel {
     /// Fetch last message for each favorited session and write to App Group UserDefaults.
     /// Called after sidebar refresh and on app foreground.
     func refreshWidgetData() async {
+        // Mirror credentials to the shared keychain so the widget can fetch sessions
+        // (App Groups are unavailable under free-provisioning signing).
+        WidgetCredentialStore.save(token: client.accessToken, serverURL: client.baseURL)
+
         let favorites = Array(favoriteSessions.prefix(10))
         guard !favorites.isEmpty else {
             WidgetDataWriter.write(sessions: [], serverURL: client.baseURL)
