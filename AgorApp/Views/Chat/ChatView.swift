@@ -199,7 +199,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var queuedMessagesDrawer: some View {
-        if !viewModel.queuedTasks.isEmpty {
+        if !viewModel.queuedOutboundPrompts.isEmpty {
             VStack(spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -209,7 +209,7 @@ struct ChatView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "text.badge.plus")
                             .foregroundStyle(.orange)
-                        Text("Queued Messages (\(viewModel.queuedTasks.count))")
+                        Text("Queued Messages (\(viewModel.queuedOutboundPrompts.count))")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.primary)
                         Spacer()
@@ -226,8 +226,8 @@ struct ChatView: View {
 
                 if isQueueExpanded {
                     VStack(spacing: 8) {
-                        ForEach(Array(viewModel.queuedTasks.enumerated()), id: \.element.taskId) { index, task in
-                            queuedTaskRow(task, fallbackIndex: index + 1)
+                        ForEach(Array(viewModel.queuedOutboundPrompts.enumerated()), id: \.element.id) { index, prompt in
+                            queuedPromptRow(prompt, fallbackIndex: index + 1)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -291,19 +291,19 @@ struct ChatView: View {
         }
     }
 
-    private func queuedTaskRow(_ task: AgorTask, fallbackIndex: Int) -> some View {
+    private func queuedPromptRow(_ prompt: OutboundPrompt, fallbackIndex: Int) -> some View {
         HStack(spacing: 10) {
-            Text("\(task.queuePosition ?? fallbackIndex).")
+            Text("\(prompt.queuePosition ?? fallbackIndex).")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Text(task.promptPreview.isEmpty ? "Queued message" : task.promptPreview)
+            Text(prompt.text.isEmpty ? "Queued message" : prompt.text)
                 .font(.callout)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
-                viewModel.removeQueuedTask(task)
+                viewModel.cancelQueuedOutboundPrompt(prompt.id)
             } label: {
                 Image(systemName: "trash")
                     .font(.caption.weight(.semibold))

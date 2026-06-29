@@ -55,6 +55,9 @@ struct OutboundPrompt: Identifiable, Codable, Equatable {
     let source: OutboundPromptSource
     var status: OutboundPromptStatus
     var queuePosition: Int?
+    /// Server message_id of the queued message (returned by POST /prompt when queued),
+    /// used to cancel the queued item server-side.
+    var queuedMessageId: String?
 }
 
 // MARK: - Chat ViewModel
@@ -472,11 +475,14 @@ final class ChatViewModel {
         let text = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let sessionId = currentSessionId else { return }
         AppLogger.shared.log("[Chat] sendPrompt to \(sessionId) (\(text.count) chars)", level: .debug, category: "Chat")
+        // When the session is busy the daemon queues this prompt — start it in the
+        // queue drawer (queuedLocal) rather than flashing it into the chat history.
+        let willQueue = isSessionQueueable
         let outboundId = appendOutboundPrompt(
             text: text,
             sessionId: sessionId,
             source: sessionId == voiceSessionId ? .voice : .typed,
-            status: .sending
+            status: willQueue ? .queuedLocal : .sending
         )
         pendingSendText = text
         if sessionId == voiceSessionId {
@@ -496,6 +502,11 @@ final class ChatViewModel {
         let queued: Bool?
         let status: String?
         let queue_position: Int?
+        let message: QueuedMessageRef?
+
+        struct QueuedMessageRef: Codable {
+            let message_id: String?
+        }
     }
 
     private func sendPrompt(to sessionId: String, text: String, outboundId: String, showSendingState: Bool) {
@@ -519,10 +530,7 @@ final class ChatViewModel {
                    parsed.queued == true || parsed.status == "queued" {
                     let pos = parsed.queue_position ?? 0
                     AppLogger.shared.log("[Chat] sendPrompt: queued at position \(pos)", level: .info, category: "Chat")
-                    updateOutboundPrompt(outboundId, status: .queuedRemote, queuePosition: pos > 0 ? pos : nil)
-                    if sessionId == currentSessionId {
-                        await loadQueuedTasks(sessionId)
-                    }
+                    updateOutboundPrompt(outboundId, status: .queuedRemote, queuePosition: pos > 0 ? pos : nil, queuedMessageId: parsed.message?.message_id)
                 } else {
                     updateOutboundPrompt(outboundId, status: .pendingAck)
                 }
@@ -929,8 +937,10 @@ final class ChatViewModel {
             }
         }
 
+        // Queued prompts live only in the queue drawer above the input, never in the
+        // chat history (otherwise they duplicate/pollute the running task's messages).
         items.append(contentsOf: outboundPrompts
-            .filter { $0.sessionId == currentSessionId && $0.status != .queuedRemote }
+            .filter { $0.sessionId == currentSessionId && $0.status != .queuedRemote && $0.status != .queuedLocal }
             .map { .outboundPrompt($0) })
 
         // Orphan streams without a task_id still render at the bottom so they are never lost.
@@ -1715,7 +1725,8 @@ final class ChatViewModel {
             createdAt: Date(),
             source: source,
             status: status,
-            queuePosition: nil
+            queuePosition: nil,
+            queuedMessageId: nil
         )
         var prompts = outboundPromptsBySession[sessionId] ?? []
         prompts.append(prompt)
@@ -1731,13 +1742,15 @@ final class ChatViewModel {
     private func updateOutboundPrompt(
         _ outboundId: String,
         status: OutboundPromptStatus,
-        queuePosition: Int? = nil
+        queuePosition: Int? = nil,
+        queuedMessageId: String? = nil
     ) {
         for (sessionId, prompts) in outboundPromptsBySession {
             guard let index = prompts.firstIndex(where: { $0.id == outboundId }) else { continue }
             var updated = prompts
             updated[index].status = status
             updated[index].queuePosition = queuePosition
+            if let queuedMessageId { updated[index].queuedMessageId = queuedMessageId }
             outboundPromptsBySession[sessionId] = updated
             syncOutboundPrompts(sessionId: sessionId)
             return
@@ -1858,6 +1871,31 @@ final class ChatViewModel {
         prompts[index].queuePosition = nil
         outboundPromptsBySession[message.sessionId] = prompts
         syncOutboundPrompts(sessionId: message.sessionId)
+    }
+
+    /// Locally-tracked queued prompts for the current session, shown in the queue drawer
+    /// above the input. The daemon stores queued items as messages (not tasks), so this
+    /// is driven by our outbound prompts rather than a server task list.
+    var queuedOutboundPrompts: [OutboundPrompt] {
+        outboundPrompts
+            .filter { $0.sessionId == currentSessionId && ($0.status == .queuedRemote || $0.status == .queuedLocal) }
+            .sorted { ($0.queuePosition ?? Int.max, $0.createdAt) < ($1.queuePosition ?? Int.max, $1.createdAt) }
+    }
+
+    /// Cancel a queued prompt: remove it from the drawer and delete the server-side
+    /// queued message if we know its id.
+    func cancelQueuedOutboundPrompt(_ outboundId: String) {
+        guard let prompt = outboundPrompt(for: outboundId) else { return }
+        let serverId = prompt.queuedMessageId
+        removeOutboundPrompt(outboundId)
+        guard let serverId else { return }
+        Task {
+            do {
+                _ = try await client.delete("/messages/\(serverId)")
+            } catch {
+                AppLogger.shared.log("[Chat] cancelQueuedOutboundPrompt ERROR: \(error.localizedDescription)", level: .error, category: "Chat")
+            }
+        }
     }
 
     func removeQueuedTask(_ task: AgorTask) {
