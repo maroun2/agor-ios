@@ -40,10 +40,21 @@ struct ChatView: View {
                 }
             }
             .onAppear {
+                viewModel.displayedChatSessionId = sessionId
                 if fileBrowserVM == nil, let wid = viewModel.currentSession?.worktreeId {
                     let vm = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
                     fileBrowserVM = vm
                     Task { await vm.loadFiles() }
+                }
+            }
+            .onChange(of: sessionId) { _, newId in
+                viewModel.displayedChatSessionId = newId
+            }
+            .onDisappear {
+                // Chat detail left the screen (navigated back to the list) — clear so the
+                // floating "Back to Voice" button appears for the active voice session.
+                if viewModel.displayedChatSessionId == sessionId {
+                    viewModel.displayedChatSessionId = nil
                 }
             }
             .onChange(of: viewModel.connectionState) { _, state in

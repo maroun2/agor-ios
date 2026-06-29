@@ -168,6 +168,10 @@ final class ChatViewModel {
     var voiceService: ContinuousVoiceService?
     private var lastSpokenMessageId: String?
     var voiceSessionId: String?
+    /// The session whose ChatView is actually on screen right now (set by ChatView's
+    /// appear/disappear lifecycle). nil when no chat detail is visible (e.g. sidebar/list).
+    /// Drives the floating button — currentSessionId stays stale after navigating back.
+    var displayedChatSessionId: String?
     private var voiceSession: Session?
     private var voiceLastAssistantMessage: Message?
     private var voicePendingPromptText: String?
@@ -1631,7 +1635,7 @@ final class ChatViewModel {
     }
 
     var shouldShowVoiceFloatingButton: Bool {
-        voiceModeEnabled && voiceSessionId != nil && currentSessionId != voiceSessionId
+        voiceModeEnabled && voiceSessionId != nil && displayedChatSessionId != voiceSessionId
     }
 
     private func draftText(for sessionId: String) -> String {
