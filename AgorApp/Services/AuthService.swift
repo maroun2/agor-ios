@@ -202,11 +202,13 @@ final class AuthService {
 
     func silentReauth() async -> Bool {
         let pm = ServerProfileManager.shared
-        guard let profileId = pm.activeProfileId,
-              let email = pm.loadToken(key: .userEmail, profileId: profileId),
-              let password = pm.loadToken(key: .password, profileId: profileId),
-              !email.isEmpty, !password.isEmpty
-        else {
+        guard let profileId = pm.activeProfileId else {
+            AppLogger.shared.log("[Auth] silentReauth: no active profile", level: .warning, category: "Auth")
+            return false
+        }
+        let email = pm.loadToken(key: .userEmail, profileId: profileId) ?? pm.activeProfile?.email
+        let password = pm.loadToken(key: .password, profileId: profileId) ?? pm.sharedPassword(forEmail: email)
+        guard let email, let password, !email.isEmpty, !password.isEmpty else {
             AppLogger.shared.log("[Auth] silentReauth: no stored credentials", level: .warning, category: "Auth")
             return false
         }
@@ -231,6 +233,8 @@ final class AuthService {
             if let refresh = response.refreshToken {
                 pm.saveToken(refresh, key: .refreshToken, profileId: profileId)
             }
+            pm.saveToken(password, key: .password, profileId: profileId)
+            pm.saveToken(email, key: .userEmail, profileId: profileId)
             KeychainHelper.save(response.accessToken, for: .accessToken)
             AppLogger.shared.log("[Auth] silentReauth: succeeded", level: .info, category: "Auth")
             return true

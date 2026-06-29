@@ -146,6 +146,8 @@ final class NavigationViewModel {
     private var pollingTimer: Timer?
     /// Guards against concurrent loadBoards() calls (e.g. startup task + health-check reconnect).
     private var isLoadingBoards = false
+    private var boardsFailureStreak = 0
+    private var boardsBackoffUntil: Date?
 
     // MARK: - Persistence
 
@@ -195,6 +197,10 @@ final class NavigationViewModel {
     // MARK: - Load Data
 
     func loadBoards() async {
+        if let until = boardsBackoffUntil, Date() < until {
+            AppLogger.shared.log("[Nav] loadBoards: in backoff window (\(Int(until.timeIntervalSinceNow))s left) — skipping", level: .debug, category: "Nav")
+            return
+        }
         guard !isLoadingBoards else {
             AppLogger.shared.log("[Nav] loadBoards: already in flight — skipping duplicate call", level: .debug, category: "Nav")
             return
@@ -258,11 +264,27 @@ final class NavigationViewModel {
             SidebarCache.save(boardNodes: boardNodes)
             AppLogger.shared.log("[Nav] cache: saved \(boardNodes.count) boards to disk", level: .debug, category: "Nav")
 
+            // Write all sessions for widget session picker
+            let pickerSessions = boardNodes
+                .flatMap { $0.worktrees.flatMap(\.sessions) }
+                .filter { !$0.isScheduled }
+                .sorted { $0.lastUpdated > $1.lastUpdated }
+                .prefix(50)
+                .map { WidgetPickerSession(sessionId: $0.sessionId, sessionTitle: $0.displayTitle) }
+            WidgetDataWriter.writePickerSessions(Array(pickerSessions))
+
             // Refresh widget data with latest favorites
             await refreshWidgetData()
+
+            boardsFailureStreak = 0
+            boardsBackoffUntil = nil
         } catch {
             self.error = error.localizedDescription
             AppLogger.shared.log("[Nav] loadBoards failed: \(error.localizedDescription)", level: .error, category: "Nav")
+            boardsFailureStreak += 1
+            let delay = min(pow(2.0, Double(boardsFailureStreak)), 30)
+            boardsBackoffUntil = Date().addingTimeInterval(delay)
+            AppLogger.shared.log("[Nav] loadBoards: failure #\(boardsFailureStreak) — backing off \(Int(delay))s", level: .warning, category: "Nav")
         }
         isLoading = false
     }
@@ -411,6 +433,8 @@ final class NavigationViewModel {
     func clearCache() {
         SidebarCache.clear()
         boardNodes = []
+        boardsFailureStreak = 0
+        boardsBackoffUntil = nil
         UserDefaults.standard.removeObject(forKey: Self.collapsedBoardsKey)
         UserDefaults.standard.removeObject(forKey: Self.collapsedWorktreesKey)
         AppLogger.shared.log("[Nav] cache cleared", level: .info, category: "Nav")

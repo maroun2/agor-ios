@@ -50,11 +50,23 @@ final class AppLogger {
         entries.removeAll()
     }
 
+    static func scrub(_ s: String) -> String {
+        var out = s
+        out = out.replacingOccurrences(of: #""password"\s*:\s*"[^"]*""#, with: "\"password\":\"***\"", options: .regularExpression)
+        out = out.replacingOccurrences(of: #""(accessToken|refreshToken|token)"\s*:\s*"[^"]*""#, with: "\"$1\":\"***\"", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"Bearer\s+[A-Za-z0-9\-_\.]+"#, with: "Bearer ***", options: .regularExpression)
+        // JWT-shaped strings (header.payload.signature)
+        out = out.replacingOccurrences(of: #"\b[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b"#, with: "***JWT***", options: .regularExpression)
+        // emails
+        out = out.replacingOccurrences(of: #"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"#, with: "***@***", options: .regularExpression)
+        return out
+    }
+
     func export() -> String {
         let formatter = ISO8601DateFormatter()
         return entries.map { entry in
             let ts = formatter.string(from: entry.timestamp)
-            return "[\(ts)] [\(entry.level.rawValue.uppercased())] [\(entry.category)] \(entry.message)"
+            return "[\(ts)] [\(entry.level.rawValue.uppercased())] [\(entry.category)] \(Self.scrub(entry.message))"
         }.joined(separator: "\n")
     }
 }

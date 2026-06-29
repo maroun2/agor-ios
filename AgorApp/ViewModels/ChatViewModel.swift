@@ -329,6 +329,7 @@ final class ChatViewModel {
             }
             if currentSessionId == sessionId {
                 currentSession = session
+                self.error = nil
             }
         } catch {
             self.error = "Failed to load session"
@@ -409,6 +410,7 @@ final class ChatViewModel {
             guard currentSessionId == sessionId else { return }
             messagesByTask[taskId] = response.data.sorted { $0.index < $1.index }
             loadedTaskIds.insert(taskId)
+            self.error = nil
             AppLogger.shared.log("[Chat] loadTaskMessages: \(response.data.count) msgs for task \(taskId.prefix(8))", level: .debug, category: "Chat")
             reconcileOutboundPrompts(for: sessionId)
             rebuildDisplayItems()
@@ -448,6 +450,7 @@ final class ChatViewModel {
             )
             guard currentSessionId == sessionId else { return }
             virtualMessages = response.data.sorted { $0.index < $1.index }
+            self.error = nil
             AppLogger.shared.log("[Chat] loadVirtualMessages: \(response.data.count) msgs loaded", level: .debug, category: "Chat")
             initVirtualTaskCollapse()
             reconcileOutboundPrompts(for: sessionId)
@@ -923,7 +926,7 @@ final class ChatViewModel {
         }
 
         items.append(contentsOf: outboundPrompts
-            .filter { $0.sessionId == currentSessionId }
+            .filter { $0.sessionId == currentSessionId && $0.status != .queuedRemote }
             .map { .outboundPrompt($0) })
 
         // Orphan streams without a task_id still render at the bottom so they are never lost.
@@ -1291,6 +1294,9 @@ final class ChatViewModel {
                 await MainActor.run {
                     if let status = self.voiceSession?.status, status != .idle {
                         self.handleVoiceStatusChange(from: nil, to: status)
+                    } else if let last = self.voiceLastAssistantMessage, last.messageId != self.lastSpokenMessageId {
+                        AppLogger.shared.log("[Voice] catch-up: agent already finished — speaking last assistant message", level: .info, category: "Voice")
+                        self.speakFinalMessage()
                     }
                     self.updateVoiceListening()
                 }

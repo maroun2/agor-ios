@@ -1,5 +1,12 @@
 import Foundation
 
+// Mirrors WidgetPickerSession in WidgetDataWriter (app target) — must stay in sync.
+struct WidgetPickerSession: Codable, Identifiable {
+    var id: String { sessionId }
+    let sessionId: String
+    let sessionTitle: String
+}
+
 // Shared data model between main app and widget extension.
 // Main app writes via WidgetDataWriter; widget reads here.
 struct WidgetSessionData: Codable, Identifiable {
@@ -16,6 +23,7 @@ enum WidgetDataStore {
     static let appGroupID = "group.com.agor.AgorApp"
     static let sessionsKey = "widget.sessions"
     static let serverURLKey = "widget.serverURL"
+    static let pickerSessionsKey = "widget.pickerSessions"
 
     static var sharedDefaults: UserDefaults? {
         UserDefaults(suiteName: appGroupID)
@@ -31,5 +39,11 @@ enum WidgetDataStore {
 
     static func readServerURL() -> String? {
         sharedDefaults?.string(forKey: serverURLKey)
+    }
+
+    static func readPickerSessions() -> [WidgetPickerSession] {
+        guard let defaults = sharedDefaults,
+              let data = defaults.data(forKey: pickerSessionsKey) else { return [] }
+        return (try? JSONDecoder().decode([WidgetPickerSession].self, from: data)) ?? []
     }
 }

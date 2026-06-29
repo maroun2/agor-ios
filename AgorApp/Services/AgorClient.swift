@@ -43,6 +43,8 @@ final class AgorClient {
     private let session: URLSession
     private let decoder = JSONDecoder.agor
     private let encoder = JSONEncoder.agor
+    private let refreshLock = NSLock()
+    private var inFlightRefresh: Task<Bool, Never>?
 
     init() {
         let config = URLSessionConfiguration.default
@@ -130,7 +132,11 @@ final class AgorClient {
         }
 
         if let body = request.httpBody, let bodyString = String(data: body, encoding: .utf8) {
-            let truncated = bodyString.count > 500 ? String(bodyString.prefix(500)) + "..." : bodyString
+            let redacted = bodyString.replacingOccurrences(
+                of: #""password"\s*:\s*"[^"]*""#,
+                with: "\"password\":\"***\"",
+                options: .regularExpression)
+            let truncated = redacted.count > 500 ? String(redacted.prefix(500)) + "..." : redacted
             AppLogger.shared.log("[HTTP] → \(method) \(pathAndQuery) body=\(truncated)", level: .debug, category: "HTTP")
         } else {
             AppLogger.shared.log("[HTTP] → \(method) \(pathAndQuery)", level: .debug, category: "HTTP")
@@ -184,10 +190,8 @@ final class AgorClient {
 
             // Step 1: JWT refresh if we have a refresh token
             if refreshToken != nil {
-                do {
-                    try await refreshAccessToken()
-                    tokenRefreshed = true
-                } catch {
+                tokenRefreshed = await coalescedRefresh()
+                if !tokenRefreshed {
                     refreshToken = nil
                     AppLogger.shared.log("[HTTP] JWT refresh failed — falling back to silent re-auth", level: .warning, category: "Auth")
                 }
@@ -231,8 +235,27 @@ final class AgorClient {
 
     // MARK: - Token Refresh
 
+    /// Coalesce concurrent refreshes into a single network call. Returns true on success.
+    private func coalescedRefresh() async -> Bool {
+        refreshLock.lock()
+        if let existing = inFlightRefresh {
+            refreshLock.unlock()
+            return await existing.value
+        }
+        let task = Task<Bool, Never> { [weak self] in
+            guard let self else { return false }
+            do { try await self.refreshAccessToken(); return true }
+            catch { return false }
+        }
+        inFlightRefresh = task
+        refreshLock.unlock()
+        let result = await task.value
+        refreshLock.lock(); inFlightRefresh = nil; refreshLock.unlock()
+        return result
+    }
+
     private func refreshAccessToken() async throws {
-        guard !isRefreshing, let refresh = refreshToken else { throw AgorAPIError.tokenRefreshFailed }
+        guard let refresh = refreshToken else { throw AgorAPIError.tokenRefreshFailed }
         AppLogger.shared.log("Refreshing access token", category: "Auth")
         isRefreshing = true
         defer { isRefreshing = false }
@@ -325,12 +348,7 @@ final class AgorClient {
     // MARK: - Token Refresh (public — used by SocketService to refresh after socket auth failure)
 
     func tryRefreshToken() async -> Bool {
-        do {
-            try await refreshAccessToken()
-            return true
-        } catch {
-            return false
-        }
+        await coalescedRefresh()
     }
 
     /// Proactively refresh token if it expires within `bufferSeconds`.

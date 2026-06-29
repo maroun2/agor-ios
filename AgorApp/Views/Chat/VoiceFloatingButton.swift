@@ -91,10 +91,16 @@ struct VoiceOverlayModifier: ViewModifier {
             .onChange(of: chatVM.voiceSessionId) { _, id in
                 if id != nil { ensureWindow() } else { tearDown() }
             }
+            .onChange(of: chatVM.currentSessionId) { _, _ in
+                if chatVM.voiceModeEnabled && chatVM.voiceSessionId != nil { ensureWindow() }
+            }
             .onAppear {
                 if chatVM.voiceModeEnabled && chatVM.voiceSessionId != nil { ensureWindow() }
             }
-            .onDisappear { tearDown() }
+            .onDisappear {
+                // Only tear down if voice is truly disabled — benign navigation must not kill the window
+                if !chatVM.voiceModeEnabled || chatVM.voiceSessionId == nil { tearDown() }
+            }
     }
 
     private func ensureWindow() {

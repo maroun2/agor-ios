@@ -19,16 +19,20 @@ struct SessionEntity: AppEntity {
 // MARK: - Entity Query
 
 struct SessionEntityQuery: EntityQuery {
+    private func pickerEntities() -> [SessionEntity] {
+        let picker = WidgetDataStore.readPickerSessions()
+        if !picker.isEmpty {
+            return picker.map { SessionEntity(id: $0.sessionId, title: $0.sessionTitle) }
+        }
+        return WidgetDataStore.readSessions().map { SessionEntity(id: $0.sessionId, title: $0.sessionTitle) }
+    }
+
     func entities(for identifiers: [String]) async throws -> [SessionEntity] {
-        WidgetDataStore.readSessions()
-            .filter { identifiers.contains($0.sessionId) }
-            .map { SessionEntity(id: $0.sessionId, title: $0.sessionTitle) }
+        pickerEntities().filter { identifiers.contains($0.id) }
     }
 
     func suggestedEntities() async throws -> [SessionEntity] {
-        WidgetDataStore.readSessions().map {
-            SessionEntity(id: $0.sessionId, title: $0.sessionTitle)
-        }
+        pickerEntities()
     }
 }
 

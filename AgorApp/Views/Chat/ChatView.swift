@@ -52,6 +52,7 @@ struct ChatView: View {
                     Task { await vm.loadFiles() }
                 }
                 if state == .connected {
+                    viewModel.error = nil
                     viewModel.refreshCurrentSession()
                 }
             }

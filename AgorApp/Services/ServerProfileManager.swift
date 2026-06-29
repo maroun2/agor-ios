@@ -130,4 +130,16 @@ final class ServerProfileManager {
             KeychainHelper.deleteRaw(keychainKey(for: profileId, key: key))
         }
     }
+
+    /// Find a stored password for the given email across all profiles (shared credentials
+    /// for the same account, so switching servers doesn't force a re-login).
+    func sharedPassword(forEmail email: String?) -> String? {
+        guard let email, !email.isEmpty else { return nil }
+        for profile in profiles {
+            let profileEmail = loadToken(key: .userEmail, profileId: profile.id) ?? profile.email
+            guard profileEmail == email else { continue }
+            if let pw = loadToken(key: .password, profileId: profile.id), !pw.isEmpty { return pw }
+        }
+        return nil
+    }
 }

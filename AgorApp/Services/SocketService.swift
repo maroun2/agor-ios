@@ -44,6 +44,7 @@ final class SocketService {
     private let client: AgorClient
     private let decoder = JSONDecoder.agor
     private var healthCheckTimer: Timer?
+    private var isRecoveringAuth = false
 
     init(client: AgorClient) {
         self.client = client
@@ -146,6 +147,37 @@ final class SocketService {
     func reconnect() {
         disconnect()
         connect()
+    }
+
+    /// Re-authenticate the live socket with the current (possibly refreshed) token.
+    /// FeathersJS re-verifies the connection's stored token on every service call, so
+    /// after an HTTP token refresh the socket MUST re-emit auth or service calls keep
+    /// failing with "jwt expired".
+    func reauthenticate() {
+        guard let socket, socket.status == .connected else {
+            AppLogger.shared.log("[Socket] reauthenticate: not connected — reconnecting", level: .debug, category: "Socket")
+            reconnect()
+            return
+        }
+        AppLogger.shared.log("[Socket] reauthenticate: re-emitting FeathersJS auth with current token", level: .info, category: "Socket")
+        authenticateWithFeathers()
+    }
+
+    private func recoverFromAuthExpiry() {
+        Task { @MainActor [weak self] in
+            guard let self, !self.isRecoveringAuth else { return }
+            self.isRecoveringAuth = true
+            AppLogger.shared.log("[Socket] auth expired — refreshing token and re-authenticating", level: .info, category: "Socket")
+            let ok = await self.client.refreshTokenIfNeeded(bufferSeconds: 60)
+            if ok {
+                self.reauthenticate()
+            } else {
+                AppLogger.shared.log("[Socket] auth recovery: refresh failed — firing onAuthFailure", level: .warning, category: "Socket")
+                self.onAuthFailure?()
+            }
+            try? await Task.sleep(for: .seconds(5)) // cooldown to avoid refresh storms
+            self.isRecoveringAuth = false
+        }
     }
 
     // MARK: - FeathersJS Authentication
@@ -305,12 +337,17 @@ final class SocketService {
             }
         }
 
-        socket.on(clientEvent: .error) { data, _ in
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            guard let self else { return }
             let errStr = data.compactMap { d -> String? in
                 if let dict = d as? [String: Any] { return "\(dict)" }
                 return d as? String
             }.joined(separator: ", ")
             AppLogger.shared.log("[Socket] error: \(errStr)", level: .error, category: "Socket")
+            let lower = errStr.lowercased()
+            if lower.contains("jwt expired") || lower.contains("expired") || lower.contains("not authenticated") || lower.contains("invalid token") {
+                self.recoverFromAuthExpiry()
+            }
         }
 
         // FeathersJS CRUD events: "<service> <action>"

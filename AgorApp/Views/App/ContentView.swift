@@ -323,6 +323,10 @@ struct MainNavigationView: View {
                     withAnimation { reconnectPhase = .reconnecting }
                     socketService.reconnect()
                     try? await Task.sleep(for: .milliseconds(500))
+                } else {
+                    // Transport survived but its auth token may be stale after the proactive
+                    // refresh above — re-emit FeathersJS auth so socket service calls don't 401.
+                    socketService.reauthenticate()
                 }
 
                 // Phase 2: Updating data
@@ -355,8 +359,7 @@ struct MainNavigationView: View {
 
     // MARK: - Proactive Token Refresh
 
-    /// Refresh access token every 12 minutes (access token TTL is 15 min).
-    /// This prevents 401 errors from ever reaching the user.
+    /// Refresh proactively on foreground / periodically; re-authenticate the socket so it never runs on a stale token.
     private func startTokenRefreshTimer() {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = Task {
@@ -366,6 +369,9 @@ struct MainNavigationView: View {
                 let refreshed = await appViewModel.client.refreshTokenIfNeeded(bufferSeconds: 180)
                 if refreshed {
                     AppLogger.shared.log("[App] proactive token refresh: OK", level: .debug, category: "App")
+                    if socketService.connectionState == .connected {
+                        socketService.reauthenticate()
+                    }
                 } else {
                     AppLogger.shared.log("[App] proactive token refresh: failed — will retry next cycle", level: .warning, category: "App")
                 }
