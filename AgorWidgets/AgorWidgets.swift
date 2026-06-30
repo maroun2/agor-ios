@@ -5,6 +5,6 @@ import SwiftUI
 struct AgorWidgetBundle: WidgetBundle {
     var body: some Widget {
         VoiceLauncherWidget()
-        SessionCardWidget()
+        SessionMonitorWidget()
     }
 }

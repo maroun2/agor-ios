@@ -151,6 +151,12 @@ struct ChatView: View {
                     Button { showMCPServers = true } label: {
                         Label("MCP Servers", systemImage: "server.rack")
                     }
+                    Button {
+                        UIPasteboard.general.string = session.sessionId
+                        HapticFeedback.light()
+                    } label: {
+                        Label("Copy Session ID (for widget)", systemImage: "doc.on.doc")
+                    }
                     Divider()
                     Button(role: .destructive) { viewModel.archiveCurrentSession() } label: {
                         Label("Archive", systemImage: "archivebox")
