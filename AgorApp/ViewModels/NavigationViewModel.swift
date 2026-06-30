@@ -271,8 +271,9 @@ final class NavigationViewModel {
                 .sorted { $0.lastUpdated > $1.lastUpdated }
                 .prefix(50)
                 .map { WidgetPickerSession(sessionId: $0.sessionId, sessionTitle: $0.displayTitle) }
-            WidgetDataWriter.writePickerSessions(Array(pickerSessions))      // App Group (no-op without paid signing)
-            WidgetSessionStore.save(Array(pickerSessions))                   // shared keychain (the channel that works)
+            // Widget session picker source. Requires an App Group (paid account) to actually
+            // reach the widget; no-op under free-provisioning signing.
+            WidgetDataWriter.writePickerSessions(Array(pickerSessions))
 
             // Refresh widget data with latest favorites
             await refreshWidgetData()

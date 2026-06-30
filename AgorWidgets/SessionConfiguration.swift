@@ -19,13 +19,11 @@ struct SessionEntity: AppEntity {
 // MARK: - Entity Query
 
 struct SessionEntityQuery: EntityQuery {
-    /// Read the session list the app mirrored into the shared keychain. Falls back to the
-    /// App Group store (empty under free-provisioning signing).
+    /// Read the session list the app writes to the shared App Group.
+    /// NOTE: App Groups require a paid Apple Developer account; under free-provisioning
+    /// signing this returns empty (the app and widget can't share storage), so the picker
+    /// stays empty until an App Group capability is added. See ONBOARDING/notes.
     private func pickerEntities() -> [SessionEntity] {
-        let stored = WidgetSessionLoader.loadSessions()
-        if !stored.isEmpty {
-            return stored.map { SessionEntity(id: $0.sessionId, title: $0.sessionTitle) }
-        }
         let picker = WidgetDataStore.readPickerSessions()
         if !picker.isEmpty {
             return picker.map { SessionEntity(id: $0.sessionId, title: $0.sessionTitle) }
