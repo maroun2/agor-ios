@@ -24,7 +24,40 @@ enum WidgetAPI {
     struct MessageRow: Decodable {
         let role: String?
         let content_preview: String?
+        let content: MessageContent?
         let created_at: String?
+
+        /// Full readable text — prefer the complete content, fall back to the preview.
+        var fullText: String {
+            let t = content?.text ?? ""
+            return t.isEmpty ? (content_preview ?? "") : t
+        }
+    }
+
+    /// Message content can be a plain string or an array of typed blocks.
+    enum MessageContent: Decodable {
+        case text(String)
+        case blocks([Block])
+        case other
+
+        struct Block: Decodable { let type: String?; let text: String? }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let s = try? c.decode(String.self) { self = .text(s) }
+            else if let arr = try? c.decode([Block].self) { self = .blocks(arr) }
+            else { self = .other }
+        }
+
+        var text: String {
+            switch self {
+            case .text(let s): return s
+            case .blocks(let blocks):
+                return blocks.compactMap { ($0.type == nil || $0.type == "text") ? $0.text : nil }
+                    .joined(separator: "\n")
+            case .other: return ""
+            }
+        }
     }
 
     private struct AuthResponse: Decodable { let accessToken: String }
