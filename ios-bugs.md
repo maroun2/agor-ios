@@ -1,52 +1,62 @@
-# iOS App Bug List (2026-06-28)
+# iOS App Bug List
 
-Compiled from debug logs and user reports.
+Updated 2026-07-16. Original list compiled 2026-06-28 from debug logs and user reports.
 
-## Critical
+## Fixed (verified in commit history)
 
-### 1. Socket never picks up refreshed JWT token
-- **Symptom:** Socket reconnects with expired token for hours. All real-time events lost (messages, task patches, session status). App falls back to HTTP polling only.
-- **Root cause:** Proactive token refresh updates HTTP client token but socket continues using the stale token from initial auth. Socket `onAuthFailure` / reconnect logic doesn't fetch the current token before reconnecting.
-- **Impact:** No real-time updates, TTS never receives agent responses, chat feels broken/laggy.
-- **Log evidence:** `jwt expired (expiredAt: 2026-06-28T18:25:54)` repeating at 19:43-19:48, over 1 hour after expiry. HTTP requests succeed with refreshed token.
+### ~~1. Socket never picks up refreshed JWT token~~ FIXED
+- Fixed by: `d5615af` correct refresh endpoint + proactive refresh, `39d476e` silent re-auth on JWT expiry, `4235909` force logout on refresh failure
 
-### 2. TTS says "Working" but never reads agent response
-- **Symptom:** Voice mode activates, TTS speaks "Working" status, then nothing — agent response never spoken.
-- **Root cause:** Direct consequence of bug #1. TTS relies on real-time `messages created` socket events to know when to speak. Socket is dead, so events never arrive.
-- **Fix:** Fixing bug #1 should resolve this. May also need fallback: poll for new messages when socket is disconnected and voice mode is active.
+### ~~2. TTS says "Working" but never reads agent response~~ FIXED
+- Fixed by: consequence of #1 fix + `b086e11` socket real-time fix via FeathersJS auth + `9b86c56` speak intermediate messages immediately
 
-## High
+### ~~3. Floating voice button hides on back arrow~~ FIXED
+- Fixed by: `08941b3` background voice session + floating return button, `d06226f` move VoiceFloatingButton inside detail view
 
-### 3. Floating voice button hides on back arrow
-- **Symptom:** When voice mode is active on session A and user navigates to session B via a link, floating button shows correctly. But pressing the back arrow from session A hides the button.
-- **Expected:** Floating button should remain visible whenever voice mode is active on any session, regardless of navigation method.
+### ~~4. Floating voice button tap does nothing~~ FIXED
+- Fixed by: `08941b3` floating return button implementation
 
-### 4. Floating voice button tap does nothing
-- **Symptom:** Tapping the floating voice button has no effect.
-- **Expected:** Should navigate back to the voice mode session.
+### ~~5. FileBrowser "Not authenticated" on socket calls~~ FIXED
+- Fixed by: consequence of #1 fix + `e9b153f` retry file browser load when socket connects
 
-### 5. FileBrowser "Not authenticated" on socket calls
-- **Symptom:** `[FileBrowser] loadFiles ERROR: Not authenticated` — file browser uses socket `find` which has the expired token.
-- **Root cause:** Same as bug #1 — socket auth is stale.
-- **Log evidence:** Lines 210, 324, 335 in debug log.
+### ~~6. Error banners don't disappear on reconnect~~ FIXED
+- Fixed by: `9cc1286` show task errors inline instead of top banner + general auth recovery chain in `d5615af`
 
-### 6. Error banners don't disappear on reconnect
-- **Symptom:** Error messages shown during network issues persist on screen after connection is restored.
-- **Expected:** Error/offline banners should auto-dismiss when connectivity and auth are restored.
+### ~~7. loadBoards retry storm (no backoff)~~ FIXED
+- Fixed by: `85dec38` guard loadBoards() against concurrent calls
 
-## Medium
+### ~~8. Server switch loses auth / forces re-login~~ FIXED
+- Fixed by: `7055f44` full server profile integration for auth state, `2ded412` cache clear on server switch
 
-### 7. loadBoards retry storm (no backoff)
-- **Symptom:** When server is unreachable, `loadBoards` fires 6+ times in 3 seconds with no exponential backoff.
-- **Log evidence:** Lines 42-57 — rapid-fire `GET /boards` every ~0.5s, all failing.
-- **Expected:** Exponential backoff on repeated failures.
+### ~~9. 401 persists after successful token refresh~~ FIXED
+- Fixed by: `d5615af` proactive refresh + full recovery chain, `4235909` force logout stops 401 flood
 
-### 8. Server switch loses auth / forces re-login
-- **Symptom:** Switching from DuckDNS server to public IP server has no stored credentials for the new profile. Silent re-auth fails ("no stored credentials"), forces full logout + manual login.
-- **Log evidence:** Lines 78-91 — switch to Vps1-public-ip → no token → silentReauth fails → logout.
-- **Expected:** Credentials should be shared across server profiles for the same account, or at minimum the password should be stored per-profile.
+---
 
-### 9. 401 persists after successful token refresh
-- **Symptom:** `POST /authentication/refresh` returns 201 (success), but the retried `GET /users/:id` still gets 401.
-- **Log evidence:** Lines 157-161 — refresh succeeds, but next request fails with NotAuthenticated.
-- **Possible cause:** Refreshed token not applied to the retry request, or race condition between refresh and retry.
+## Open
+
+### 10. Crash: SIGABRT — UI update from background thread (Swift Concurrency)
+- **Severity:** Critical
+- **Date:** 2026-07-14
+- **Signal:** 6 (SIGABRT), Exception type 10 (EXC_CRASH)
+- **Device:** iPhone15,4, iOS 26.5.2
+- **Symptom:** App crashes. MetricKit crash report shows attributed thread going through `libswift_Concurrency.dylib` → 8 frames of `AgorApp.debug.dylib` → `UIKitCore` (3 frames, assertion failure) → `NSException` → `objc_exception_throw` → `abort()`.
+- **Root cause:** An async function or `Task` is updating UI (UIKit/SwiftUI state) without being on `@MainActor`. UIKit asserts and aborts.
+- **Note:** Existing `@MainActor` fixes (`1b544db` ChatViewModel, `5a0c17c` NavigationViewModel, `db48eda` FileBrowserViewModel) may not cover all paths. Needs dSYM symbolication to identify exact function.
+- **Fix:** Symbolicate with dSYM from build, find the non-`@MainActor` path, add annotation.
+
+### 11. Crash: SIGSEGV — null pointer dereference on main thread
+- **Severity:** Critical
+- **Date:** 2026-07-16
+- **Signal:** 11 (SIGSEGV), Exception type 1 (EXC_BAD_ACCESS), Exception code 1
+- **Device:** iPhone15,4, iOS 26.5.2
+- **Symptom:** App crashes on main thread during normal UI rendering. MetricKit shows `EXC_BAD_ACCESS` at address `0x8` — accessing a property (offset 8) on a nil/deallocated object.
+- **Stack:** `libswiftCore.dylib` → `AgorApp.debug.dylib` (6 frames) → `libdispatch.dylib` (5 frames, GCD) → `CoreFoundation` (RunLoop) → `UIKitCore` → `SwiftUI` → app entry. Background thread simultaneously running Swift Concurrency work with 6 AgorApp frames.
+- **Root cause:** Force-unwrap of `nil` or use-after-free. Object accessed on main thread was deallocated or never initialized. Concurrent background work may be mutating shared state.
+- **Fix:** Symbolicate with dSYM, find the force-unwrap or implicitly-unwrapped optional, guard it.
+
+### 12. Notification tap does not navigate to session
+- **Severity:** High
+- **Symptom:** Tapping a push notification does nothing — app opens but does not navigate to the relevant session.
+- **Expected:** Tapping a notification should open the app and navigate directly to the session referenced in the notification payload.
+- **Note:** Cold-launch notification handling was previously fixed (`ff54a6d`), but may be broken again or not working for warm-launch (app already in foreground/background).
