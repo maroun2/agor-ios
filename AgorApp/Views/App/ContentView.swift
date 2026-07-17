@@ -133,9 +133,27 @@ struct MainNavigationView: View {
         }
         .onChange(of: notificationManager.pendingNavigationSessionId, initial: true) { _, sessionId in
             if let sessionId {
+                AppLogger.shared.log("[Notification] onChange consumed pending navigation → \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
                 selectedSessionId = sessionId
                 notificationManager.pendingNavigationSessionId = nil
             }
+        }
+        .onAppear {
+            // Deterministic notification-tap navigation: delegate calls this directly,
+            // no dependency on SwiftUI observation of pendingNavigationSessionId.
+            notificationManager.onNavigateToSession = { sessionId in
+                AppLogger.shared.log("[Notification] callback navigation → \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
+                selectedSessionId = sessionId
+            }
+            // Cold launch: tap may have arrived before this view mounted
+            if let pending = notificationManager.pendingNavigationSessionId {
+                AppLogger.shared.log("[Notification] onAppear consumed pending navigation → \(String(pending.prefix(8)))", level: .info, category: "Notification")
+                notificationManager.pendingNavigationSessionId = nil
+                selectedSessionId = pending
+            }
+        }
+        .onDisappear {
+            notificationManager.onNavigateToSession = nil
         }
         .onChange(of: navigationVM.favoriteSessionIds) { _, newValue in
             notificationManager.favoriteSessionIds = newValue

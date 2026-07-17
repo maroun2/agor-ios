@@ -18,6 +18,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     // Published when user taps a notification
     var pendingNavigationSessionId: String?
 
+    /// Direct navigation callback — set by MainNavigationView. More reliable than
+    /// observation of pendingNavigationSessionId (which stays as cold-launch fallback
+    /// for taps that arrive before the view registers this callback).
+    var onNavigateToSession: ((String) -> Void)?
+
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
@@ -152,9 +157,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        if let sessionId = userInfo["sessionId"] as? String {
-            AppLogger.shared.log("[Notification] tapped notification for session \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
-            await MainActor.run {
+        guard let sessionId = userInfo["sessionId"] as? String else {
+            AppLogger.shared.log("[Notification] tapped notification without sessionId — userInfo keys: \(userInfo.keys.map { "\($0)" }.joined(separator: ","))", level: .warning, category: "Notification")
+            return
+        }
+        AppLogger.shared.log("[Notification] tapped notification for session \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
+        await MainActor.run {
+            if let navigate = onNavigateToSession {
+                AppLogger.shared.log("[Notification] navigating via callback", level: .info, category: "Notification")
+                pendingNavigationSessionId = nil
+                navigate(sessionId)
+            } else {
+                AppLogger.shared.log("[Notification] no callback yet — storing pending navigation", level: .info, category: "Notification")
                 pendingNavigationSessionId = sessionId
             }
         }
