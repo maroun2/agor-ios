@@ -39,7 +39,7 @@ find_profile() {
     [ "$appid" = "$want" ] || continue
     exp=$(echo "$dec" | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "")
     [ -z "$exp" ] && continue
-    expepoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null || echo "0")
+    expepoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null || echo "0")
     if [ "$expepoch" -gt "$NOW" ]; then echo "$p"; return 0; fi
   done < <(ls -t "$PROFILES_DIR"/*.mobileprovision 2>/dev/null)
   return 1

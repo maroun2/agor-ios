@@ -50,7 +50,7 @@ while IFS= read -r p; do
   [ "$appid" = "$TEAM_ID.$APP_BUNDLE_ID" ] || continue
   exp=$(echo "$dec" | plutil -extract ExpirationDate raw -o - - 2>/dev/null || echo "")
   [ -z "$exp" ] && continue
-  ep=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null || echo 0)
+  ep=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null || echo 0)
   [ "$ep" -gt "$newest_exp" ] && newest_exp=$ep
 done < <(ls -t "$PROFILES_DIR"/*.mobileprovision 2>/dev/null)
 
