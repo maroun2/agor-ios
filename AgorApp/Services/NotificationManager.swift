@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 
 @Observable
@@ -162,14 +163,24 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             return
         }
         AppLogger.shared.log("[Notification] tapped notification for session \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
-        await MainActor.run {
-            if let navigate = onNavigateToSession {
+        // Do NOT mutate app/UI state synchronously here: while this response handler
+        // runs, UIKit takes a state-restoration snapshot, and a SwiftUI update inside
+        // that transaction trips an NSAssertion in
+        // -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:] → SIGABRT.
+        // Defer past the response transaction, then wait for the app to become active.
+        Task { @MainActor [weak self] in
+            for _ in 0..<20 where UIApplication.shared.applicationState != .active {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+            guard let self else { return }
+            if let navigate = self.onNavigateToSession {
                 AppLogger.shared.log("[Notification] navigating via callback", level: .info, category: "Notification")
-                pendingNavigationSessionId = nil
+                self.pendingNavigationSessionId = nil
                 navigate(sessionId)
             } else {
                 AppLogger.shared.log("[Notification] no callback yet — storing pending navigation", level: .info, category: "Notification")
-                pendingNavigationSessionId = sessionId
+                self.pendingNavigationSessionId = sessionId
             }
         }
     }
