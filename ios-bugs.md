@@ -36,6 +36,7 @@ Updated 2026-07-16. Original list compiled 2026-06-28 from debug logs and user r
 ## Open
 
 ### 10. Crash: SIGABRT — UI update from background thread (Swift Concurrency)
+- **Fix attempt 2026-07-17:** Likely same root cause as #12 (see below) — crash log `AgorApp-2026-07-17-103130.ips` shows SIGABRT from UIKit state-restoration assertion triggered by mutating SwiftUI state inside the notification `didReceive` handler. Fixed in `84ef1db`. Verify no recurrence.
 - **Severity:** Critical
 - **Date:** 2026-07-14
 - **Signal:** 6 (SIGABRT), Exception type 10 (EXC_CRASH)
@@ -56,6 +57,7 @@ Updated 2026-07-16. Original list compiled 2026-06-28 from debug logs and user r
 - **Fix:** Symbolicate with dSYM, find the force-unwrap or implicitly-unwrapped optional, guard it.
 
 ### 12. Notification tap does not navigate to session
+- **Fix 2026-07-17 (pending verification):** Tap actually crashed the app (SIGABRT, same as #10): setting `pendingNavigationSessionId` synchronously inside `didReceive` ran a SwiftUI update during UIKit's state-restoration snapshot → NSAssertion → abort → app relaunched clean, looking like "nothing happened". Fixed in `3d3dc58` (direct navigation callback) + `84ef1db` (defer navigation until app is active, outside the response transaction).
 - **Severity:** High
 - **Symptom:** Tapping a push notification does nothing — app opens but does not navigate to the relevant session.
 - **Expected:** Tapping a notification should open the app and navigate directly to the session referenced in the notification payload.
