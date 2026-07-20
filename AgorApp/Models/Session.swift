@@ -224,7 +224,15 @@ struct Session: Codable, Identifiable {
     }
 
     var isPromptable: Bool {
-        status == .idle || readyForPrompt == true
+        // Terminal states accept a fresh prompt directly (daemon runs it immediately
+        // rather than queueing). Only genuinely busy states block direct prompting.
+        switch status {
+        case .running, .stopping, .awaitingPermission, .awaitingInput:
+            return readyForPrompt == true
+        default:
+            // idle, completed, failed, timed_out, unknown
+            return true
+        }
     }
 
     var canAcceptInput: Bool {
