@@ -58,6 +58,7 @@ Updated 2026-07-16. Original list compiled 2026-06-28 from debug logs and user r
 
 ### 12. Notification tap does not navigate to session
 - **Fix 2026-07-17 (pending verification):** Tap actually crashed the app (SIGABRT, same as #10): setting `pendingNavigationSessionId` synchronously inside `didReceive` ran a SwiftUI update during UIKit's state-restoration snapshot → NSAssertion → abort → app relaunched clean, looking like "nothing happened". Fixed in `3d3dc58` (direct navigation callback) + `84ef1db` (defer navigation until app is active, outside the response transaction).
+- **Fix 2026-07-20 (`85521e2`):** `84ef1db` was insufficient — crash logs Jul 17–19 show the real cause: the *async* `userNotificationCenter(_:didReceive:)` variant resumes on a background executor, so the compiler-generated thunk invoked UIKit's completion handler off the main thread; UIKit's response completion runs a state-restoration snapshot that asserts → SIGABRT. Replaced async delegate variants with completion-handler forms, completing on the main queue.
 - **Severity:** High
 - **Symptom:** Tapping a push notification does nothing — app opens but does not navigate to the relevant session.
 - **Expected:** Tapping a notification should open the app and navigate directly to the session referenced in the notification payload.
