@@ -146,28 +146,43 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: - UNUserNotificationCenterDelegate
 
+    // IMPORTANT: use the completion-handler variants, NOT the async ones.
+    // The async variants resume on a Swift-concurrency background executor, and the
+    // compiler-generated @objc thunk then invokes UIKit's completion handler from that
+    // background thread. UIKit's notification-response completion performs a
+    // state-restoration snapshot (-[UIApplication _updateSnapshotAndStateRestoration…])
+    // which asserts off the main thread → SIGABRT (crash logs 2026-07-17…19).
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        DispatchQueue.main.async {
+            completionHandler([.banner, .sound])
+        }
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let userInfo = response.notification.request.content.userInfo
-        guard let sessionId = userInfo["sessionId"] as? String else {
+        if let sessionId = userInfo["sessionId"] as? String {
+            AppLogger.shared.log("[Notification] tapped notification for session \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
+            scheduleNavigation(to: sessionId)
+        } else {
             AppLogger.shared.log("[Notification] tapped notification without sessionId — userInfo keys: \(userInfo.keys.map { "\($0)" }.joined(separator: ","))", level: .warning, category: "Notification")
-            return
         }
-        AppLogger.shared.log("[Notification] tapped notification for session \(String(sessionId.prefix(8)))", level: .info, category: "Notification")
-        // Do NOT mutate app/UI state synchronously here: while this response handler
-        // runs, UIKit takes a state-restoration snapshot, and a SwiftUI update inside
-        // that transaction trips an NSAssertion in
-        // -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:] → SIGABRT.
-        // Defer past the response transaction, then wait for the app to become active.
+        DispatchQueue.main.async {
+            completionHandler()
+        }
+    }
+
+    /// Deliver navigation outside the notification-response transaction, once the app
+    /// is active — mutating SwiftUI state during UIKit's response handling triggers a
+    /// state-restoration snapshot assertion.
+    private func scheduleNavigation(to sessionId: String) {
         Task { @MainActor [weak self] in
             for _ in 0..<20 where UIApplication.shared.applicationState != .active {
                 try? await Task.sleep(for: .milliseconds(100))
