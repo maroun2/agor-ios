@@ -491,10 +491,11 @@ final class ChatViewModel {
     func sendPrompt() {
         let text = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let sessionId = currentSessionId else { return }
-        // When the session is busy the daemon queues this prompt (it queues whenever the
-        // session status is NOT idle) — start it in the queue drawer (queuedLocal) rather
-        // than flashing it into the chat history.
-        let willQueue = (currentSession?.status ?? .idle) != .idle
+        // When the session is busy the daemon queues this prompt — start it in the
+        // queue drawer (queuedLocal) rather than flashing it into the chat history.
+        // Terminal states (completed/failed/timed_out) run prompts immediately.
+        let busyStatuses: Set<SessionStatus> = [.running, .stopping, .awaitingPermission, .awaitingInput]
+        let willQueue = busyStatuses.contains(currentSession?.status ?? .idle)
         AppLogger.shared.log("[Chat] sendPrompt to \(sessionId) (\(text.count) chars) status=\(currentSession?.status.rawValue ?? "nil") willQueue=\(willQueue)", level: .debug, category: "Chat")
         let outboundId = appendOutboundPrompt(
             text: text,
