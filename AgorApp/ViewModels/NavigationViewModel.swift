@@ -94,6 +94,7 @@ final class NavigationViewModel {
     }
 
     // Finished sessions: readyForPrompt == true, not scheduled, not already in Running or Favorites
+    // Capped to the 10 most recently updated.
     var finishedSessions: [Session] {
         let runningIds = Set(runningSessions.map(\.sessionId))
         return boardNodes
@@ -105,6 +106,8 @@ final class NavigationViewModel {
                 !favoriteSessionIds.contains($0.sessionId)
             }
             .sorted { $0.lastUpdated > $1.lastUpdated }
+            .prefix(10)
+            .map { $0 }
     }
 
     // Important sessions: ready-for-prompt + running + 3 most recent
