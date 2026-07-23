@@ -97,17 +97,15 @@ final class NavigationViewModel {
     // Capped to the 10 most recently updated.
     var finishedSessions: [Session] {
         let runningIds = Set(runningSessions.map(\.sessionId))
-        return boardNodes
-            .flatMap { $0.worktrees.flatMap(\.sessions) }
-            .filter {
-                $0.readyForPrompt == true &&
-                !$0.isScheduled &&
-                !runningIds.contains($0.sessionId) &&
-                !favoriteSessionIds.contains($0.sessionId)
-            }
-            .sorted { $0.lastUpdated > $1.lastUpdated }
-            .prefix(10)
-            .map { $0 }
+        let allSessions: [Session] = boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
+        let filtered = allSessions.filter { session in
+            session.readyForPrompt == true &&
+            !session.isScheduled &&
+            !runningIds.contains(session.sessionId) &&
+            !favoriteSessionIds.contains(session.sessionId)
+        }
+        let sorted = filtered.sorted { $0.lastUpdated > $1.lastUpdated }
+        return Array(sorted.prefix(10))
     }
 
     // Important sessions: ready-for-prompt + running + 3 most recent
