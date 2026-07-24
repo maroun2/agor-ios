@@ -18,6 +18,7 @@ struct SidebarView: View {
     @State private var showSettings = false
     @State private var fileBrowserTarget: FileBrowserTarget?
     @State private var searchText = ""
+    @State private var selectedBoardId: String?
 
     var body: some View {
         List(selection: $selectedSessionId) {
@@ -48,6 +49,32 @@ struct SidebarView: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
                 .selectionDisabled()
+            }
+
+            // Board icon bar — filters the boards listing to a single board
+            if !viewModel.boardNodes.isEmpty {
+                Section {
+                    BoardTabBar(
+                        boards: viewModel.boardNodes,
+                        selectedBoardId: selectedBoardId,
+                        onSelect: { boardNode in
+                            if selectedBoardId == boardNode.board.boardId {
+                                selectedBoardId = nil
+                            } else {
+                                selectedBoardId = boardNode.board.boardId
+                                if !boardNode.isExpanded {
+                                    boardNode.isExpanded = true
+                                    viewModel.setBoardExpanded(boardNode.board.boardId, expanded: true)
+                                    Task { await viewModel.loadWorktrees(for: boardNode) }
+                                }
+                            }
+                        }
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                    .selectionDisabled()
+                }
             }
 
             // Search bar
@@ -166,8 +193,9 @@ struct SidebarView: View {
                     }
                 }
 
-                // Boards — Button header instead of DisclosureGroup so taps never leak to List selection
-                ForEach(viewModel.boardNodes) { boardNode in
+                // Boards — Button header instead of DisclosureGroup so taps never leak to List selection.
+                // When a board icon is selected, show only that board.
+                ForEach(viewModel.boardNodes.filter { selectedBoardId == nil || $0.board.boardId == selectedBoardId }) { boardNode in
                     Section {
                         Button {
                             let expanding = !boardNode.isExpanded
@@ -723,6 +751,51 @@ private struct SessionSearchBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - Board Tab Bar
+
+private struct BoardTabBar: View {
+    let boards: [BoardNode]
+    let selectedBoardId: String?
+    let onSelect: (BoardNode) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(boards) { node in
+                    let isSelected = node.board.boardId == selectedBoardId
+                    Button {
+                        onSelect(node)
+                    } label: {
+                        Text(node.board.displayIcon)
+                            .font(.system(size: 18))
+                            .frame(width: 34, height: 34)
+                            .background(
+                                isSelected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 8)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                            )
+                            .overlay(alignment: .topTrailing) {
+                                if node.attentionCount > 0 {
+                                    Circle()
+                                        .fill(.orange)
+                                        .frame(width: 8, height: 8)
+                                        .offset(x: 3, y: -3)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(node.board.name)
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
+        }
     }
 }
 
