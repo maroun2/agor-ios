@@ -63,3 +63,32 @@ Updated 2026-07-16. Original list compiled 2026-06-28 from debug logs and user r
 - **Symptom:** Tapping a push notification does nothing — app opens but does not navigate to the relevant session.
 - **Expected:** Tapping a notification should open the app and navigate directly to the session referenced in the notification payload.
 - **Note:** Cold-launch notification handling was previously fixed (`ff54a6d`), but may be broken again or not working for warm-launch (app already in foreground/background).
+
+### 13. Voice mode auto-disables after sending prompt
+- **Severity:** Critical
+- **Date:** 2026-07-30
+- **Symptom:** User enables voice mode, speaks, prompt is sent successfully, then voice mode silently turns itself off ("Continuous voice mode stopped" / "Voice mode disabled") ~6-13 seconds after send — with no user action. User must manually re-enable voice mode for each utterance.
+- **Log evidence:** Three cycles in debug log:
+  - 11:45:15 send → 11:45:28 auto-disabled (13s)
+  - 11:46:29 send → 11:46:35 auto-disabled (6s)
+  - No error or user action logged before disable — it just stops
+- **Expected:** Voice mode must stay active continuously. After sending, state should go to `paused` (waiting for agent), then back to `listening` when agent finishes. Voice mode should NEVER auto-disable.
+- **Root cause:** Unknown — no log explains why it stops. Likely a state machine bug: something in the send/pause/agent-running path calls `stopContinuousVoiceMode()` or sets `isVoiceModeEnabled = false`.
+- **How to fix:**
+  1. Search for all calls to `stopContinuousVoiceMode()` and all writes to `isVoiceModeEnabled = false` in VoiceService / ChatViewModel
+  2. Each call site must be guarded — only disable voice mode on explicit user action (button tap), NEVER as a side effect of sending, session status change, or navigation
+  3. Add a log line with a stack trace or caller tag right before every `stopContinuousVoiceMode()` call so next debug log shows exactly what triggers it
+  4. The `paused` → `listening` transition on agent completion must NOT go through a disable/re-enable cycle
+
+### 14. VAD silence timeout cuts user mid-speech (3s too short)
+- **Severity:** High
+- **Date:** 2026-07-30
+- **Symptom:** User is actively speaking but VAD triggers "Speech END" after 3 seconds of perceived silence. User reports being cut off while still talking loudly.
+- **Log evidence:** VAD threshold is 0.70, silence duration is 3.0s. Speech START fires at prob=0.37-0.44 (below threshold — M-of-N catches it), but any brief pause > 3s during natural speech triggers end-of-speech.
+- **Expected:** Voice mode should NEVER have a hard timeout that cuts speech. User should be able to speak for as long as they want with natural pauses.
+- **How to fix:**
+  1. Remove or significantly increase the silence timeout — at minimum 8-10 seconds, or better: no timeout at all while VAD probability is above a low floor (e.g. 0.15)
+  2. Add a "still speaking" heuristic: if VAD prob oscillates (dips briefly then returns), don't start the silence timer
+  3. The silence timer should only trigger end-of-speech when VAD probability has been consistently near zero for the full duration — not just below the speech threshold
+  4. Consider adding a manual "done speaking" button as the primary end-of-speech signal instead of relying on silence detection
+  5. The `silenceDur` config should be user-adjustable in voice settings (already has a settings UI from `395deff`)
