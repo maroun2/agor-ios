@@ -18,6 +18,27 @@ struct VADConfig: Codable, Equatable {
     /// speechEnd during brief pauses; this prevents premature cutoff.
     var silenceDuration: TimeInterval = 3.0
 
+    /// Raw probability floor treated as "still speaking" during the silence debounce.
+    /// Degraded mics (Bluetooth HFP in a car) produce probabilities well below the
+    /// speech threshold while the user is talking — any chunk above this floor
+    /// restarts the silence timer, so only sustained near-zero silence ends speech.
+    var stillSpeakingFloor: Float = 0.35
+
+    // MARK: - Codable (tolerate configs persisted before new fields existed)
+
+    enum CodingKeys: String, CodingKey {
+        case threshold, silenceDuration, stillSpeakingFloor
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threshold = try c.decodeIfPresent(Float.self, forKey: .threshold) ?? 0.7
+        silenceDuration = try c.decodeIfPresent(TimeInterval.self, forKey: .silenceDuration) ?? 3.0
+        stillSpeakingFloor = try c.decodeIfPresent(Float.self, forKey: .stillSpeakingFloor) ?? 0.35
+    }
+
     // MARK: - Derived helpers
 
     /// Maps a 0.0–1.0 sensitivity to a FluidAudio threshold.

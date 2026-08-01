@@ -1349,7 +1349,43 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: - Background voice session polling
+    // While the phone is locked with voice mode active, the socket can silently die
+    // and `session patched` events stop — voice mode then sits in .paused forever.
+    // The silent-audio keep-alive keeps the process (and main RunLoop) alive, so a
+    // plain timer works: poll the voice session over HTTP and feed it through the
+    // same patched-session path so listening resumes even without the socket.
+
+    @ObservationIgnored private var voiceBackgroundPollTimer: Timer?
+
+    func startVoiceBackgroundPolling() {
+        guard voiceModeEnabled, voiceBackgroundPollTimer == nil else { return }
+        voiceBackgroundPollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refreshVoiceSessionStatus()
+            }
+        }
+        AppLogger.shared.log("[Voice] Background session polling started (30s)", level: .info, category: "Voice")
+    }
+
+    func stopVoiceBackgroundPolling() {
+        guard voiceBackgroundPollTimer != nil else { return }
+        voiceBackgroundPollTimer?.invalidate()
+        voiceBackgroundPollTimer = nil
+        AppLogger.shared.log("[Voice] Background session polling stopped", level: .info, category: "Voice")
+    }
+
+    private func refreshVoiceSessionStatus() async {
+        guard voiceModeEnabled, let sessionId = voiceSessionId else { return }
+        guard let session: Session = try? await client.get("/sessions/\(sessionId)") else {
+            AppLogger.shared.log("[Voice] Background poll failed for \(sessionId.prefix(8))", level: .warning, category: "Voice")
+            return
+        }
+        handleVoiceSessionPatched(session)
+    }
+
     func disableVoiceMode() {
+        stopVoiceBackgroundPolling()
         UIApplication.shared.isIdleTimerDisabled = false
         voiceService?.stopListening()
         voiceService = nil

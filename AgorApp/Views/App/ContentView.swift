@@ -293,17 +293,21 @@ struct MainNavigationView: View {
         case .background:
             wasBackgrounded = true
             notificationManager.isBackgrounded = true
-            socketService.stopHealthCheck()
             stopTokenRefreshTimer()
             chatVM.stopPolling()
             navigationVM.stopPolling()
 
             // If voice mode is active, play silent audio to keep the process alive.
-            // The audio background mode prevents iOS from suspending us, so the
-            // socket stays connected and voice mode continues working.
+            // The audio background mode prevents iOS from suspending us. The socket
+            // can still silently die after a few minutes locked, so keep the health
+            // check running (it detects the drop and reconnects) plus a 30s HTTP poll
+            // of the voice session as a fallback for missed patched events.
             if chatVM.voiceModeEnabled {
                 chatVM.voiceService?.startBackgroundKeepAlive()
-                AppLogger.shared.log("[App] lifecycle: voice active — silent audio keep-alive started", level: .info, category: "App")
+                chatVM.startVoiceBackgroundPolling()
+                AppLogger.shared.log("[App] lifecycle: voice active — keep-alive + health check + session poll running", level: .info, category: "App")
+            } else {
+                socketService.stopHealthCheck()
             }
 
             // Request ~30s extended execution for one HTTP poll before suspension.
@@ -325,8 +329,9 @@ struct MainNavigationView: View {
             wasBackgrounded = false
             notificationManager.isBackgrounded = false
 
-            // Stop silent audio keep-alive (no longer needed in foreground)
+            // Stop silent audio keep-alive + background poll (no longer needed in foreground)
             chatVM.voiceService?.stopBackgroundKeepAlive()
+            chatVM.stopVoiceBackgroundPolling()
 
             AppLogger.shared.log("[App] lifecycle: \(oldLabel) → active (reconnecting)", level: .info, category: "App")
             Task {

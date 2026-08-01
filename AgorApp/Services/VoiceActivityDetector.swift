@@ -257,6 +257,17 @@ final class VoiceActivityDetector {
                     let smoothed = self.smoothedProbability
                     await MainActor.run {
                         self.currentAudioLevel = smoothed
+                        // Still-speaking guard: on degraded mics (Bluetooth HFP) speech
+                        // probability can sit below the end-of-speech hysteresis while the
+                        // user is clearly talking. Any chunk above the floor restarts the
+                        // silence debounce so only sustained near-silence ends the recording.
+                        if self.silenceTimer != nil, raw >= self.config.stillSpeakingFloor {
+                            AppLogger.shared.log(
+                                "[VAD] 🔁 Silence timer restarted — still speaking (raw=\(String(format: "%.2f", raw)))",
+                                level: .debug, category: "Voice"
+                            )
+                            self.startSilenceTimer()
+                        }
                     }
 
                     // Handle speech events
