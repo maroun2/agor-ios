@@ -51,9 +51,9 @@ final class ContinuousVoiceService {
     }
 
     convenience init() {
-        let transcriptionService = TranscriptionService()
-        let ttsService = TextToSpeechService()
-        self.init(transcriptionService: transcriptionService, ttsService: ttsService)
+        // Shared Whisper instance — may already be preloaded at app launch,
+        // making voice mode start instant instead of waiting for model load.
+        self.init(transcriptionService: TranscriptionService.shared, ttsService: TextToSpeechService())
     }
 
     // MARK: - Setup

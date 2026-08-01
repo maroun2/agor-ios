@@ -143,8 +143,8 @@ struct SidebarView: View {
                     }
                 }
 
-                // Needs Attention Section
-                if !viewModel.attentionSessions.isEmpty {
+                // Needs Attention Section — hidden while a board filter is active
+                if selectedBoardId == nil, !viewModel.attentionSessions.isEmpty {
                     Section {
                         ForEach(viewModel.attentionSessions) { session in
                             let ctx = viewModel.findContext(for: session)
@@ -165,8 +165,9 @@ struct SidebarView: View {
                     }
                 }
 
-                // Finished Section — readyForPrompt, not in Running or Favorites
-                if !viewModel.finishedSessions.isEmpty {
+                // Finished Section — readyForPrompt, not in Running or Favorites;
+                // hidden while a board filter is active
+                if selectedBoardId == nil, !viewModel.finishedSessions.isEmpty {
                     Section {
                         ForEach(viewModel.finishedSessions) { session in
                             let ctx = viewModel.findContext(for: session)

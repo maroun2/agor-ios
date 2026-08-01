@@ -3,6 +3,27 @@ import WhisperKit
 
 @Observable
 final class TranscriptionService {
+    /// One Whisper model in memory for the whole app — voice mode and hold-to-talk
+    /// dictation share it, and it can be preloaded at launch.
+    static let shared = TranscriptionService()
+
+    /// Set once the user has used any voice feature; gates the launch-time preload
+    /// so users who never touch voice pay no memory/CPU cost.
+    static let voiceUsedKey = "agor.voiceFeatureUsed"
+
+    /// Preload the Whisper model in the background if the user has used voice before.
+    static func preloadIfUsedBefore() {
+        guard UserDefaults.standard.bool(forKey: voiceUsedKey) else { return }
+        Task.detached(priority: .utility) {
+            AppLogger.shared.log("[Voice] Preloading Whisper model at launch (voice used before)", level: .info, category: "Voice")
+            try? await shared.initialize()
+        }
+    }
+
+    static func markVoiceUsed() {
+        UserDefaults.standard.set(true, forKey: voiceUsedKey)
+    }
+
     enum State {
         case notInitialized
         case downloading(progress: Double)
@@ -22,7 +43,25 @@ final class TranscriptionService {
 
     // MARK: - Initialization
 
+    @ObservationIgnored private var initTask: Task<Void, Error>?
+
     func initialize() async throws {
+        // Dedup concurrent callers (launch preload racing voice-mode enable):
+        // everyone awaits the same underlying load.
+        if let initTask {
+            return try await initTask.value
+        }
+        let task = Task { try await performInitialize() }
+        initTask = task
+        do {
+            try await task.value
+        } catch {
+            initTask = nil  // allow retry after failure
+            throw error
+        }
+    }
+
+    private func performInitialize() async throws {
         guard case .notInitialized = state else { return }
 
         state = .downloading(progress: 0.0)

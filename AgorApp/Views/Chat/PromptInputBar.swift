@@ -112,17 +112,8 @@ struct PromptInputBar: View {
                         .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
 
                     if !viewModel.voiceModeEnabled {
-                        // Voice mode toggle
-                        Button {
-                            HapticFeedback.light()
-                            viewModel.voiceModeEnabled = true
-                        } label: {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.blue)
-                                .frame(width: 36, height: 36)
-                        }
-                        .disabled(viewModel.currentSessionId == nil)
+                        // Mic: tap = continuous voice mode, hold = dictate into the text field
+                        micButton
                     }
 
                     // Send button
@@ -161,6 +152,42 @@ struct PromptInputBar: View {
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
         .onChange(of: selectedPhoto) { _, newValue in
             handlePhotoSelection(newValue)
+        }
+    }
+
+    /// Tap: enable continuous voice mode. Press-and-hold: record while held,
+    /// transcribe on release, insert into the prompt field.
+    /// Built on raw gestures (not Button) because Button swallows long presses.
+    private var micButton: some View {
+        Group {
+            if viewModel.isTranscribingDictation {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 36, height: 36)
+            } else {
+                Image(systemName: viewModel.isDictating ? "mic.badge.plus" : "mic.fill")
+                    .font(.system(size: viewModel.isDictating ? 24 : 20))
+                    .foregroundStyle(viewModel.isDictating ? .red : (viewModel.currentSessionId == nil ? Color.secondary : .blue))
+                    .frame(width: 36, height: 36)
+                    .scaleEffect(viewModel.isDictating ? 1.2 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: viewModel.isDictating)
+                    .onTapGesture {
+                        guard viewModel.currentSessionId != nil else { return }
+                        HapticFeedback.light()
+                        viewModel.voiceModeEnabled = true
+                    }
+                    .gesture(
+                        LongPressGesture(minimumDuration: 0.35)
+                            .onEnded { _ in
+                                guard viewModel.currentSessionId != nil else { return }
+                                viewModel.startDictation()
+                            }
+                            .sequenced(before: DragGesture(minimumDistance: 0))
+                            .onEnded { _ in
+                                viewModel.stopDictation()
+                            }
+                    )
+            }
         }
     }
 
