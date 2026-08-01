@@ -24,9 +24,23 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// for taps that arrive before the view registers this callback).
     var onNavigateToSession: ((String) -> Void)?
 
+    // Persisted so a background-task cold launch (BGAppRefresh relaunches the app
+    // with fresh memory) can still detect running→idle transitions. Without this
+    // the background poll only ever seeds a baseline and never notifies.
+    private static let statusesKey = "agor.previousSessionStatuses"
+
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
+        if let raw = UserDefaults.standard.dictionary(forKey: Self.statusesKey) as? [String: String] {
+            previousSessionStatuses = raw.compactMapValues { SessionStatus(rawValue: $0) }
+            AppLogger.shared.log("[Notification] restored \(previousSessionStatuses.count) persisted statuses", level: .debug, category: "Notification")
+        }
+    }
+
+    func persistStatuses() {
+        let raw = previousSessionStatuses.mapValues(\.rawValue)
+        UserDefaults.standard.set(raw, forKey: Self.statusesKey)
     }
 
     func requestPermission() async {
@@ -48,12 +62,14 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         AppLogger.shared.log("[Notification] seeded \(count) new statuses (total: \(previousSessionStatuses.count))", level: .debug, category: "Notification")
+        if count > 0 { persistStatuses() }
     }
 
     /// Called when a session patch event arrives via socket
     func handleSessionUpdate(_ session: Session) -> SessionStatusTransition? {
         let previousStatus = previousSessionStatuses[session.sessionId]
         previousSessionStatuses[session.sessionId] = session.status
+        persistStatuses()
 
         let shortId = String(session.sessionId.prefix(8))
 
@@ -139,6 +155,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             }
             previousSessionStatuses[session.sessionId] = session.status
         }
+        persistStatuses()
         if missed > 0 {
             AppLogger.shared.log("[Notification] fired \(missed) missed transition notifications", level: .info, category: "Notification")
         }

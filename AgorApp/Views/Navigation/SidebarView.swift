@@ -87,8 +87,8 @@ struct SidebarView: View {
             }
 
             if searchText.isEmpty {
-                // Running Section
-                if !viewModel.runningSessions.isEmpty {
+                // Running Section — hidden while a board filter is active
+                if selectedBoardId == nil, !viewModel.runningSessions.isEmpty {
                     Section {
                         ForEach(viewModel.runningSessions) { session in
                             let ctx = viewModel.findContext(for: session)
@@ -115,8 +115,8 @@ struct SidebarView: View {
                     }
                 }
 
-                // Favorites Section
-                if !viewModel.favoriteSessions.isEmpty {
+                // Favorites Section — hidden while a board filter is active
+                if selectedBoardId == nil, !viewModel.favoriteSessions.isEmpty {
                     Section {
                         ForEach(viewModel.favoriteSessions) { session in
                             let ctx = viewModel.findContext(for: session)
@@ -365,6 +365,7 @@ private struct ImportantSessionRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
+                    AgentIcon(agenticTool: session.agenticTool, size: 12)
                     StatusBadge(status: session.status)
 
                     if session.isPlanMode {
@@ -428,7 +429,10 @@ private struct AttentionSessionRow: View {
                     .font(.subheadline)
                     .lineLimit(1)
 
-                StatusBadge(status: session.status)
+                HStack(spacing: 6) {
+                    AgentIcon(agenticTool: session.agenticTool, size: 12)
+                    StatusBadge(status: session.status)
+                }
             }
 
             Spacer()

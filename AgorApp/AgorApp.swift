@@ -20,6 +20,10 @@ struct AgorApp: App {
                 .preferredColorScheme(nil)
                 .task {
                     await NotificationManager.shared.requestPermission()
+                    // Re-arm the refresh chain on every launch: if a previous BG task
+                    // never fired (or the app was force-quit), the pending request may
+                    // be gone — submitting here self-heals the schedule.
+                    BackgroundSessionPoller.shared.scheduleNextPoll()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
