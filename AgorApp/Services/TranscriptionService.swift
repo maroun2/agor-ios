@@ -45,24 +45,34 @@ final class TranscriptionService {
 
     @ObservationIgnored private var initTask: Task<Void, Error>?
 
+    /// Idempotent, retry-safe model load. Success is defined by `whisperKit != nil`,
+    /// never by `state` — a previous failed attempt (`.error`) must NOT make later
+    /// calls return "success" without a loaded model, or every transcription in the
+    /// session throws and voice recordings get silently dropped.
     func initialize() async throws {
-        // Dedup concurrent callers (launch preload racing voice-mode enable):
-        // everyone awaits the same underlying load.
-        if let initTask {
-            return try await initTask.value
+        // Await an in-flight load if one exists (launch preload racing voice enable)
+        if let task = initTask {
+            try? await task.value
+            if whisperKit != nil { return }
+            initTask = nil  // previous attempt failed — retry below
         }
+        if whisperKit != nil { return }
+
         let task = Task { try await performInitialize() }
         initTask = task
         do {
             try await task.value
         } catch {
-            initTask = nil  // allow retry after failure
+            initTask = nil  // allow retry on next call
             throw error
         }
     }
 
     private func performInitialize() async throws {
-        guard case .notInitialized = state else { return }
+        if whisperKit != nil {
+            state = .ready
+            return
+        }
 
         state = .downloading(progress: 0.0)
 

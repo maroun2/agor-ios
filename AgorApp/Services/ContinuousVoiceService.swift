@@ -413,6 +413,7 @@ final class ContinuousVoiceService {
 
             guard !text.isEmpty else {
                 AppLogger.shared.log("[Voice] ⚠️ Transcription empty, ignoring", level: .warning, category: "Voice")
+                tts.speakStatus("Didn't catch that")
                 returnToListeningOrPaused()
                 return
             }
@@ -454,6 +455,8 @@ final class ContinuousVoiceService {
             // Clean up temp file on error
             try? FileManager.default.removeItem(at: audioURL)
             currentRecordingURL = nil
+            // Never fail silently — the user just spoke and expects a send.
+            tts.speakStatus("Transcription failed")
             returnToListeningOrPaused()
         }
     }
