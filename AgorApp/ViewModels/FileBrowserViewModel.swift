@@ -111,11 +111,7 @@ final class FileBrowserViewModel {
     }
 
     func fetchFileData(_ filePath: String) async throws -> (Data, String) {
-        let detail: FileDetail = try await socketService.serviceGet(
-            service: "file",
-            id: filePath,
-            query: ["branch_id": worktreeId]
-        )
+        let detail = try await fetchDetail(filePath)
         guard let content = detail.content else {
             throw NSError(domain: "FileBrowser", code: 0, userInfo: [NSLocalizedDescriptionKey: "No content"])
         }
@@ -127,17 +123,44 @@ final class FileBrowserViewModel {
         }
     }
 
+    /// Fetch a file over authenticated HTTP REST (the Feathers file service is
+    /// also mounted on the REST transport). Socket.IO buffers the whole response
+    /// in one JSON packet, which is fragile for large/binary files — URLSession
+    /// streams the HTTP body instead. Falls back to the socket on HTTP failure.
+    private func fetchDetail(_ filePath: String) async throws -> FileDetail {
+        // Encode the path as ONE Feathers id segment: "/" must become %2F so the
+        // route matches; Express decodes the param back to the full path.
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encodedId = filePath.addingPercentEncoding(withAllowedCharacters: allowed) ?? filePath
+
+        do {
+            // Send both param spellings — older daemons use worktree_id, newer branch_id
+            let detail: FileDetail = try await socketService.httpClient.get(
+                "/file/\(encodedId)",
+                query: ["worktree_id": worktreeId, "branch_id": worktreeId]
+            )
+            return detail
+        } catch {
+            AppLogger.shared.log(
+                "[FileBrowser] HTTP file fetch failed (\(error.localizedDescription)) — falling back to socket",
+                level: .warning, category: "FileBrowser"
+            )
+            return try await socketService.serviceGet(
+                service: "file",
+                id: filePath,
+                query: ["branch_id": worktreeId]
+            )
+        }
+    }
+
     func loadFileDetail(_ filePath: String) async {
         AppLogger.shared.log("[FileBrowser] loadFileDetail path=\"\(filePath)\" worktreeId=\(worktreeId)", level: .debug, category: "FileBrowser")
         isLoadingFile = true
         fileDetail = nil
         do {
-            // Use Socket.IO like the web UI
-            fileDetail = try await socketService.serviceGet(
-                service: "file",
-                id: filePath,
-                query: ["branch_id": worktreeId]
-            )
+            // HTTP REST first (streams large/binary payloads), socket fallback inside
+            fileDetail = try await fetchDetail(filePath)
             let byteCount = fileDetail?.content?.utf8.count ?? 0
             AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
         } catch {

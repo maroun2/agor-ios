@@ -42,6 +42,9 @@ final class SocketService {
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let client: AgorClient
+    /// The authenticated HTTP client behind this socket — for callers that need
+    /// plain REST (e.g. large file downloads that shouldn't ride Socket.IO).
+    var httpClient: AgorClient { client }
     private let decoder = JSONDecoder.agor
     private var healthCheckTimer: Timer?
     private var isRecoveringAuth = false
