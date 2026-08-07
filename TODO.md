@@ -32,3 +32,8 @@
 - [x] **PDF preview** — Render PDFs inline in the file view instead of requiring an external app. Fixed: PDFKit PDFView (continuous vertical, auto-scale) for base64 .pdf content.
 - [x] **Hide Running and Favorites sections when filtering by board** — When a board filter is active, the Running and Favorites sections should be hidden so only the board's sessions are shown. Fixed: sections gated on selectedBoardId == nil.
 - [x] **Background session status refresh + notifications** — While the app is in the background, refresh session status every 5 minutes and post a notification on status changes. Fixed root cause: previousSessionStatuses was memory-only, so BGAppRefresh cold launches could never see running→idle transitions — now persisted to UserDefaults; refresh chain also re-armed on every launch. Note: iOS decides actual BGAppRefresh timing (5 min is the minimum request, not a guarantee).
+- [ ] Hold-to-speak voice input.
+- [ ] Model preloading.
+- [ ] Cache downloaded files by filename.
+- [ ] Add file-menu action beside “Open in App” to clear cache and redownload.
+- [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
