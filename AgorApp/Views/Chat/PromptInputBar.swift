@@ -14,7 +14,7 @@ struct PromptInputBar: View {
 
     /// How long the mic must be held before dictation starts, so a tap meant for
     /// voice mode never trips it.
-    private let holdToRecordDelay: Double = 1.5
+    private let holdToRecordDelay: Double = 1.0
 
     private var dictation: DictationService { DictationService.shared }
 

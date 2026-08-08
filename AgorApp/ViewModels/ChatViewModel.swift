@@ -1358,9 +1358,12 @@ final class ChatViewModel {
                 await MainActor.run {
                     if let status = self.voiceSession?.status, status != .idle {
                         self.handleVoiceStatusChange(from: nil, to: status)
-                    } else if let last = self.voiceLastAssistantMessage, last.messageId != self.lastSpokenMessageId {
-                        AppLogger.shared.log("[Voice] catch-up: agent already finished — speaking last assistant message", level: .info, category: "Voice")
-                        self.speakFinalMessage()
+                    } else if let last = self.voiceLastAssistantMessage {
+                        // Enabling voice mode must not read back what is already on
+                        // screen — only what the agent says from here on. Mark the
+                        // existing last message as spoken so no later status change
+                        // picks it up retroactively.
+                        self.lastSpokenMessageId = last.messageId
                     }
                     self.updateVoiceListening()
                 }
