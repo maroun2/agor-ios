@@ -24,10 +24,9 @@ struct AgorApp: App {
                     // never fired (or the app was force-quit), the pending request may
                     // be gone — submitting here self-heals the schedule.
                     BackgroundSessionPoller.shared.scheduleNextPoll()
-                    // Load Whisper in the background so voice mode / dictation start
-                    // instantly. Gated: only when voice was used before, so non-voice
-                    // users pay no memory cost.
-                    TranscriptionService.preloadIfUsedBefore()
+                    // Load Whisper in the background so voice mode starts instantly
+                    // instead of downloading/warming the model on first use.
+                    TranscriptionService.preload()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {

@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import SwiftUI
 
@@ -1296,99 +1295,10 @@ final class ChatViewModel {
         }
     }
 
-    // MARK: - Hold-to-talk dictation
-    // Press-and-hold the mic button: record while held, transcribe on release,
-    // insert the text into the prompt field. Independent of continuous voice mode.
-
-    var isDictating = false
-    var isTranscribingDictation = false
-    @ObservationIgnored private var dictationRecorder: AVAudioRecorder?
-    @ObservationIgnored private var dictationURL: URL?
-
-    func startDictation() {
-        guard !isDictating, voiceService == nil else { return }
-        TranscriptionService.markVoiceUsed()
-
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-            try session.setActive(true)
-        } catch {
-            AppLogger.shared.log("[Dictation] audio session failed: \(error.localizedDescription)", level: .error, category: "Voice")
-            return
-        }
-
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("dictation-\(UUID().uuidString).m4a")
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 16000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-        ]
-        do {
-            let recorder = try AVAudioRecorder(url: url, settings: settings)
-            recorder.record()
-            dictationRecorder = recorder
-            dictationURL = url
-            isDictating = true
-            HapticFeedback.light()
-            AppLogger.shared.log("[Dictation] 🔴 recording started", level: .info, category: "Voice")
-            // Kick off model load in parallel with recording so short holds
-            // don't wait for a cold model on release.
-            Task.detached(priority: .userInitiated) { try? await TranscriptionService.shared.initialize() }
-        } catch {
-            AppLogger.shared.log("[Dictation] recorder failed: \(error.localizedDescription)", level: .error, category: "Voice")
-        }
-    }
-
-    func stopDictation(cancelled: Bool = false) {
-        guard isDictating else { return }
-        isDictating = false
-        dictationRecorder?.stop()
-        dictationRecorder = nil
-        guard let url = dictationURL else { return }
-        dictationURL = nil
-
-        if cancelled {
-            try? FileManager.default.removeItem(at: url)
-            AppLogger.shared.log("[Dictation] cancelled", level: .info, category: "Voice")
-            return
-        }
-
-        isTranscribingDictation = true
-        Task { @MainActor in
-            defer {
-                isTranscribingDictation = false
-                try? FileManager.default.removeItem(at: url)
-            }
-            do {
-                let raw = try await TranscriptionService.shared.transcribe(audioURL: url)
-                let text = raw.replacingOccurrences(of: "\\[[A-Z_]+\\]", with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else {
-                    AppLogger.shared.log("[Dictation] empty transcription", level: .warning, category: "Voice")
-                    return
-                }
-                AppLogger.shared.log("[Dictation] ✅ \"\(text)\"", level: .info, category: "Voice")
-                if promptText.isEmpty {
-                    promptText = text
-                } else {
-                    promptText += (promptText.hasSuffix(" ") ? "" : " ") + text
-                }
-                HapticFeedback.light()
-            } catch {
-                AppLogger.shared.log("[Dictation] transcription failed: \(error.localizedDescription)", level: .error, category: "Voice")
-                self.error = "Dictation failed: \(error.localizedDescription)"
-            }
-        }
-    }
-
     // MARK: - Voice Mode
 
     func enableVoiceMode() {
         guard voiceService == nil else { return }
-        TranscriptionService.markVoiceUsed()
 
         voiceSessionId = currentSessionId
         voiceSession = currentSession

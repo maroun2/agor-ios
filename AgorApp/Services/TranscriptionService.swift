@@ -7,21 +7,13 @@ final class TranscriptionService {
     /// dictation share it, and it can be preloaded at launch.
     static let shared = TranscriptionService()
 
-    /// Set once the user has used any voice feature; gates the launch-time preload
-    /// so users who never touch voice pay no memory/CPU cost.
-    static let voiceUsedKey = "agor.voiceFeatureUsed"
-
-    /// Preload the Whisper model in the background if the user has used voice before.
-    static func preloadIfUsedBefore() {
-        guard UserDefaults.standard.bool(forKey: voiceUsedKey) else { return }
+    /// Preload the Whisper model in the background at launch so voice mode starts
+    /// instantly instead of downloading/warming on first use.
+    static func preload() {
         Task.detached(priority: .utility) {
-            AppLogger.shared.log("[Voice] Preloading Whisper model at launch (voice used before)", level: .info, category: "Voice")
+            AppLogger.shared.log("[Voice] Preloading Whisper model at launch", level: .info, category: "Voice")
             try? await shared.initialize()
         }
-    }
-
-    static func markVoiceUsed() {
-        UserDefaults.standard.set(true, forKey: voiceUsedKey)
     }
 
     enum State {
