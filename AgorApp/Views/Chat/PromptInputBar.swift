@@ -247,6 +247,10 @@ struct PromptInputBar: View {
                 case .disabled:
                     ProgressView()
                         .controlSize(.small)
+                    // With the models preloaded at launch this phase is a few
+                    // hundred ms of audio setup — saying "loading" or "compiling"
+                    // then is just wrong, so those texts are gated on the model
+                    // actually doing that work.
                     switch service.transcription.state {
                     case .downloading(let progress) where progress > 0:
                         Text(verbatim: "Downloading model… \(Int(progress * 100))%")
@@ -255,13 +259,13 @@ struct PromptInputBar: View {
                         Text("Compiling model (first run)…")
                             .foregroundStyle(.secondary)
                     default:
-                        Text("Loading voice model…")
+                        Text(service.transcription.isReady ? "Starting…" : "Loading voice model…")
                             .foregroundStyle(.secondary)
                     }
                 case .preparing:
                     ProgressView()
                         .controlSize(.small)
-                    Text("Preparing…")
+                    Text(service.transcription.isReady ? "Starting…" : "Preparing…")
                         .foregroundStyle(.secondary)
                 case .paused:
                     Image(systemName: "mic.fill")

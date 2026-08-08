@@ -26,6 +26,13 @@ final class TranscriptionService {
     }
 
     var state: State = .notInitialized
+
+    /// The model is loaded and warm — nothing is downloading or compiling, so UI
+    /// must not claim otherwise while voice mode starts up.
+    var isReady: Bool {
+        if case .ready = state { return true }
+        return false
+    }
     private var whisperKit: WhisperKit?
     private let modelName: String
 

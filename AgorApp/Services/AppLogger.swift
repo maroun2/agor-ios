@@ -1,7 +1,12 @@
 import Foundation
+import OSLog
 
 @Observable
 final class AppLogger {
+    /// Mirror of the in-memory buffer on the unified log, so a device attached to
+    /// a Mac can stream what the app is doing (`devicectl process launch --console`)
+    /// instead of the log being reachable only from inside the app.
+    private static let osLog = Logger(subsystem: "com.agor.AgorApp", category: "app")
     static let shared = AppLogger()
 
     struct LogEntry: Identifiable {
@@ -30,6 +35,7 @@ final class AppLogger {
 
     func log(_ message: String, level: LogEntry.Level = .info, category: String = "General") {
         let entry = LogEntry(timestamp: Date(), level: level, category: category, message: message)
+        Self.osLog.log("[\(category, privacy: .public)] \(message, privacy: .public)")
         if Thread.isMainThread {
             append(entry)
         } else {
