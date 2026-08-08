@@ -79,12 +79,23 @@ final class TranscriptionService {
             whisperKit = try await WhisperKit(model: modelName, prewarm: false)
             AppLogger.shared.log("[Voice] WhisperKit loaded model: \(modelName)", level: .info, category: "Voice")
 
-            // Prewarm separately so we can show "Warming up..." state
-            state = .warming
-            AppLogger.shared.log("[Voice] Prewarming CoreML model (first-run compilation)...", level: .info, category: "Voice")
-            try await whisperKit?.prewarmModels()
+            // Usable as soon as the model is loaded — prewarm only removes latency
+            // from the *first* transcription. It used to be awaited here, which put
+            // a multi-second CoreML compile on the critical path of enabling voice
+            // mode and left "Compiling model (first run)…" on screen the whole time.
             state = .ready
             AppLogger.shared.log("[Voice] WhisperKit ready", level: .info, category: "Voice")
+
+            let kit = whisperKit
+            Task.detached(priority: .utility) {
+                AppLogger.shared.log("[Voice] Prewarming CoreML model in background…", level: .info, category: "Voice")
+                do {
+                    try await kit?.prewarmModels()
+                    AppLogger.shared.log("[Voice] Prewarm complete", level: .info, category: "Voice")
+                } catch {
+                    AppLogger.shared.log("[Voice] Prewarm failed (transcription still works): \(error.localizedDescription)", level: .warning, category: "Voice")
+                }
+            }
         } catch {
             let errorMsg = "Failed to initialize WhisperKit: \(error.localizedDescription)"
             state = .error(errorMsg)

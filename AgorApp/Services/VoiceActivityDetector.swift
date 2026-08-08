@@ -117,6 +117,12 @@ final class VoiceActivityDetector {
 
     func startListening() throws {
         guard state == .idle else { return }
+        // Adopt the shared model if this detector was never initialized — resume
+        // paths reach startListening() without going through initializeModel(),
+        // which failed with "model not loaded" even though the model was warm.
+        if vadManager == nil, let shared = MainActor.assumeIsolated({ Self.sharedManager }) {
+            vadManager = shared
+        }
         guard vadManager != nil else {
             throw VADError.modelNotLoaded
         }
