@@ -36,6 +36,9 @@ final class AppLogger {
     func log(_ message: String, level: LogEntry.Level = .info, category: String = "General") {
         let entry = LogEntry(timestamp: Date(), level: level, category: category, message: message)
         Self.osLog.log("[\(category, privacy: .public)] \(message, privacy: .public)")
+        // stdout too: devicectl's --console streams stdout, not the unified log,
+        // so this is what makes a device run observable from the Mac.
+        print("[\(entry.timestamp.timeIntervalSince1970)] [\(category)] \(message)")
         if Thread.isMainThread {
             append(entry)
         } else {
