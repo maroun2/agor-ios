@@ -84,6 +84,7 @@
 		C836E615CD25F252F2639596 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = D1D99525620248594DB52F1B /* SocketIO */; };
 		C8433C96761A25FC9351BF20 /* SidebarCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF9252EBCE2EDCEDA004F97E /* SidebarCache.swift */; };
 		CDEBF637FBE32C5E2C4B0B3A /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B49269B8327D13BD55EE0D /* HapticFeedback.swift */; };
+		D0A832B5292D0F2045EEFB41 /* FileContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EEF47BB1C6DD4974DF5328E /* FileContentCache.swift */; };
 		DC7DE9D63126F6C32DA55CD6 /* AgorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AD14B2C4A77F8AB29C83992 /* AgorApp.swift */; };
 		E2C80CF39B3793824AA85B2F /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E6DB9DADA9003E0EF0DBE3 /* KeychainHelper.swift */; };
 		E3E39E9B1BBAF2D1B46CCB2D /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAC2691C0FAA7FFDFD5E63F /* User.swift */; };
@@ -162,6 +163,7 @@
 		74F180C8B57C6ACEF06AD452 /* AVSpeechSynthesisVoice+Best.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVSpeechSynthesisVoice+Best.swift"; sourceTree = "<group>"; };
 		79AA0E541AF2D2E4F02EAE49 /* Permission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permission.swift; sourceTree = "<group>"; };
 		7CF029D8E2E4880084975A69 /* SessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRow.swift; sourceTree = "<group>"; };
+		7EEF47BB1C6DD4974DF5328E /* FileContentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileContentCache.swift; sourceTree = "<group>"; };
 		7F78F2D50983FDDBFE11F828 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		8027B33B9D570D05B020E7E1 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		833B335418FA70748FB8BA96 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
@@ -424,6 +426,7 @@
 				24DD571A578E09FE13A6841C /* BackgroundSessionPoller.swift */,
 				A2105103F7F30CD64FE8CA2F /* ContinuousVoiceService.swift */,
 				5BCEEC0F5D3546FD7B36F2A8 /* CrashLogService.swift */,
+				7EEF47BB1C6DD4974DF5328E /* FileContentCache.swift */,
 				833B335418FA70748FB8BA96 /* NetworkMonitor.swift */,
 				8027B33B9D570D05B020E7E1 /* NotificationManager.swift */,
 				98474D53C4659417E9565C4D /* ServerProfileManager.swift */,
@@ -613,6 +616,7 @@
 				007F555116C96EF8BFF85B4F /* EnhancedTextBlockView.swift in Sources */,
 				E40E7CC4E8995149A8346CCD /* FileBrowserView.swift in Sources */,
 				932C9C5B55131B0EB36E9E97 /* FileBrowserViewModel.swift in Sources */,
+				D0A832B5292D0F2045EEFB41 /* FileContentCache.swift in Sources */,
 				40E8878105F35F2854FC84BD /* FileDetailView.swift in Sources */,
 				316D193D271773C9352B3CD2 /* FileItem.swift in Sources */,
 				8704AE2A12444ABE18BF24D6 /* FilePathDetector.swift in Sources */,

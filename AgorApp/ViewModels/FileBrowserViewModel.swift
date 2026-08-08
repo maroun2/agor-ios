@@ -128,6 +128,14 @@ final class FileBrowserViewModel {
     /// in one JSON packet, which is fragile for large/binary files — URLSession
     /// streams the HTTP body instead. Falls back to the socket on HTTP failure.
     private func fetchDetail(_ filePath: String) async throws -> FileDetail {
+        let baseURL = socketService.httpClient.baseURL
+
+        // Binary payloads (images, PDFs, downloads) are cached on disk for 3 days.
+        // Text is never cached — worktree source changes constantly.
+        if let cached = FileContentCache.load(baseURL: baseURL, worktreeId: worktreeId, path: filePath) {
+            return cached
+        }
+
         // Encode the path as ONE Feathers id segment: "/" must become %2F so the
         // route matches; Express decodes the param back to the full path.
         var allowed = CharacterSet.urlPathAllowed
@@ -140,17 +148,20 @@ final class FileBrowserViewModel {
                 "/file/\(encodedId)",
                 query: ["worktree_id": worktreeId, "branch_id": worktreeId]
             )
+            FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: filePath)
             return detail
         } catch {
             AppLogger.shared.log(
                 "[FileBrowser] HTTP file fetch failed (\(error.localizedDescription)) — falling back to socket",
                 level: .warning, category: "FileBrowser"
             )
-            return try await socketService.serviceGet(
+            let detail: FileDetail = try await socketService.serviceGet(
                 service: "file",
                 id: filePath,
                 query: ["branch_id": worktreeId]
             )
+            FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: filePath)
+            return detail
         }
     }
 

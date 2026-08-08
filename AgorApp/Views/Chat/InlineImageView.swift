@@ -44,11 +44,20 @@ struct InlineImageView: View {
         defer { isLoading = false }
 
         do {
-            let detail: FileDetail = try await socketService.serviceGet(
-                service: "file",
-                id: path,
-                query: ["branch_id": worktreeId]
-            )
+            // Thumbnails come from the same 3-day disk cache as the file browser,
+            // so a scrolled-past image doesn't refetch on every appearance.
+            let baseURL = socketService.httpClient.baseURL
+            let detail: FileDetail
+            if let cached = FileContentCache.load(baseURL: baseURL, worktreeId: worktreeId, path: path) {
+                detail = cached
+            } else {
+                detail = try await socketService.serviceGet(
+                    service: "file",
+                    id: path,
+                    query: ["branch_id": worktreeId]
+                )
+                FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: path)
+            }
 
             guard let content = detail.content else { failed = true; return }
 
