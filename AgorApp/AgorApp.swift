@@ -27,6 +27,7 @@ struct AgorApp: App {
                     // Load Whisper in the background so voice mode starts instantly
                     // instead of downloading/warming the model on first use.
                     TranscriptionService.preload()
+                    VoiceActivityDetector.preload()
                     // Drop cached file payloads older than 3 days.
                     Task.detached(priority: .utility) {
                         FileContentCache.prune()

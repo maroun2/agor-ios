@@ -54,12 +54,50 @@ final class VoiceActivityDetector {
 
     // MARK: - Model Initialization
 
+    /// One VadManager for the whole app. Each ContinuousVoiceService used to build
+    /// its own detector and load the CoreML model again, so every voice-mode start
+    /// paid the download/compile cost — that is the delay seen when opening voice
+    /// mode even though Whisper was already preloaded.
+    /// Main-actor isolated: the launch preload and a voice-mode enable can race,
+    /// and unsynchronized statics would let both past the in-flight check and load
+    /// the model twice. The hop costs nothing next to a CoreML compile.
+    @MainActor @ObservationIgnored private static var sharedManager: VadManager?
+    @MainActor @ObservationIgnored private static var loadTask: Task<VadManager, Error>?
+
+    @MainActor
+    private static func loadSharedManager(threshold: Float) async throws -> VadManager {
+        if let sharedManager { return sharedManager }
+        if let loadTask {
+            // A load is already in flight (launch preload racing voice enable)
+            return try await loadTask.value
+        }
+        let task = Task { try await VadManager(config: VadConfig(defaultThreshold: threshold)) }
+        loadTask = task
+        do {
+            let manager = try await task.value
+            sharedManager = manager
+            loadTask = nil
+            AppLogger.shared.log("[VAD] FluidAudio Silero model loaded (threshold=\(String(format: "%.2f", threshold)))", level: .info, category: "Voice")
+            return manager
+        } catch {
+            loadTask = nil  // allow a retry on the next call
+            throw error
+        }
+    }
+
+    /// Warm the shared Silero model in the background at launch so the first
+    /// voice-mode start is instant instead of compiling the model on demand.
+    static func preload() {
+        Task { @MainActor in
+            AppLogger.shared.log("[VAD] Preloading Silero model at launch", level: .info, category: "Voice")
+            _ = try? await loadSharedManager(threshold: VADConfig.threshold(for: 0.5))
+        }
+    }
+
     /// Download/load Silero VAD CoreML model (~2MB, runs on Neural Engine).
-    /// Call once before startListening().
+    /// Call once before startListening(); returns immediately once preloaded.
     func initializeModel() async throws {
-        let threshold = config.threshold
-        vadManager = try await VadManager(config: VadConfig(defaultThreshold: threshold))
-        AppLogger.shared.log("[VAD] FluidAudio Silero model loaded (threshold=\(String(format: "%.2f", threshold)))", level: .info, category: "Voice")
+        vadManager = try await Self.loadSharedManager(threshold: config.threshold)
     }
 
     // MARK: - Configuration
