@@ -273,6 +273,12 @@ final class ChatViewModel {
         promptText = draftText(for: sessionId)
 
         Task {
+            // Cover the whole open — session fetch and task list run before any
+            // message load, and without this the view falls through to the empty
+            // state for those seconds instead of showing a spinner.
+            isLoadingMessages = true
+            defer { isLoadingMessages = false }
+
             await loadSession(sessionId)
             // Mark as viewed if server flagged ready_for_prompt
             if currentSession?.readyForPrompt == true {
@@ -306,6 +312,11 @@ final class ChatViewModel {
         userIsNearBottom = true
         lastNearBottomTime = Date()
         Task {
+            // Same reason as openSession: keep the spinner up across the session
+            // and task fetches that precede any message load.
+            isLoadingMessages = true
+            defer { isLoadingMessages = false }
+
             await loadSession(sessionId)
             await MainActor.run { updateVoiceListening() }
             await loadTasks(sessionId)
