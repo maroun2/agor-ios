@@ -37,3 +37,4 @@
 - [ ] Cache downloaded files by filename.
 - [ ] Add file-menu action beside “Open in App” to clear cache and redownload.
 - [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
+- [ ] **Voice mode should not auto-read the last message — add a per-message speak button** — When voice mode starts or resumes, it must not automatically read the most recent assistant message aloud. Instead, each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read.
