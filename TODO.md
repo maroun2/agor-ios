@@ -32,9 +32,9 @@
 - [x] **PDF preview** — Render PDFs inline in the file view instead of requiring an external app. Fixed: PDFKit PDFView (continuous vertical, auto-scale) for base64 .pdf content.
 - [x] **Hide Running and Favorites sections when filtering by board** — When a board filter is active, the Running and Favorites sections should be hidden so only the board's sessions are shown. Fixed: sections gated on selectedBoardId == nil.
 - [x] **Background session status refresh + notifications** — While the app is in the background, refresh session status every 5 minutes and post a notification on status changes. Fixed root cause: previousSessionStatuses was memory-only, so BGAppRefresh cold launches could never see running→idle transitions — now persisted to UserDefaults; refresh chain also re-armed on every launch. Note: iOS decides actual BGAppRefresh timing (5 min is the minimum request, not a guarantee).
-- [ ] Hold-to-speak voice input.
-- [ ] Model preloading.
-- [ ] Cache downloaded files by filename.
+- [ ] Hold-to-speak voice input. Reverted: the press-and-hold mic gesture was unreliable in practice and was removed; needs a fresh approach if still wanted.
+- [x] **Model preloading.** Fixed: Whisper preloads in the background on every launch. Previously gated on a voiceUsedKey flag, so a fresh install — the case preloading exists for — never preloaded.
+- [x] **Cache downloaded files by filename.** Fixed: FileContentCache stores binary payloads (chat thumbnails, in-app PDF/file previews, downloads) in the Caches directory keyed by server + worktree + path, expiring 3 days after write — dropped on read, swept at launch. Text files excluded: live worktree source changes constantly.
 - [ ] Add file-menu action beside “Open in App” to clear cache and redownload.
 - [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
 - [ ] **Voice mode should not auto-read the last message — add a per-message speak button** — When voice mode starts or resumes, it must not automatically read the most recent assistant message aloud. Instead, each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read.
