@@ -69,6 +69,11 @@ enum FileContentCache {
         }
     }
 
+    /// Drop one file's cached payload so the next fetch goes to the server.
+    static func remove(baseURL: String, worktreeId: String, path: String) {
+        try? FileManager.default.removeItem(at: entryURL(baseURL: baseURL, worktreeId: worktreeId, path: path))
+    }
+
     // MARK: - Maintenance
 
     /// Delete entries older than `maxAge`. Called at launch.

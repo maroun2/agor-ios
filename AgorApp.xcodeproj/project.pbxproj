@@ -67,6 +67,7 @@
 		95A6B5DCB502F9A370E3D7B2 /* AgorWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18998888FC12464F75FF29AA /* AgorWidgets.swift */; };
 		96697CA3EA529BD1802F76F7 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33932D88DC36C87CA02FC50A /* ConnectionSetupView.swift */; };
 		99F2CC0F63DD8F8F9254874A /* VADConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02D9614CD0538B8E925FECA4 /* VADConfig.swift */; };
+		9F226435988E6A8BEDBF45C4 /* MessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F97ABB48A74C15BD93C1159A /* MessageCache.swift */; };
 		A5E109EF5588E680731A6795 /* AgentIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D605F6B723D6EA97E1A72D /* AgentIcon.swift */; };
 		A64D1F14CDC83982EFE2519C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5F1BBED22797D1140CCECD58 /* WhisperKit */; };
 		A6D79B6661690381A79C5F6D /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = CCF002A5A41C9F07F7F17C60 /* Textual */; };
@@ -213,6 +214,7 @@
 		F49970DDB4CA1070C3F082DC /* ImageBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBlockView.swift; sourceTree = "<group>"; };
 		F6E42D02A86522D0471F54DF /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		F81CFE6381FDD29480EFA395 /* GitVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitVersion.swift; sourceTree = "<group>"; };
+		F97ABB48A74C15BD93C1159A /* MessageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCache.swift; sourceTree = "<group>"; };
 		FC71207C8865D4E80E36A220 /* WorktreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -427,6 +429,7 @@
 				A2105103F7F30CD64FE8CA2F /* ContinuousVoiceService.swift */,
 				5BCEEC0F5D3546FD7B36F2A8 /* CrashLogService.swift */,
 				7EEF47BB1C6DD4974DF5328E /* FileContentCache.swift */,
+				F97ABB48A74C15BD93C1159A /* MessageCache.swift */,
 				833B335418FA70748FB8BA96 /* NetworkMonitor.swift */,
 				8027B33B9D570D05B020E7E1 /* NotificationManager.swift */,
 				98474D53C4659417E9565C4D /* ServerProfileManager.swift */,
@@ -634,6 +637,7 @@
 				C51EE22C2E17AC4CA86513B8 /* MCPViewModel.swift in Sources */,
 				0DFBFA7A639DDCCCA6DD34FF /* Message.swift in Sources */,
 				1A3718A7729A34DE78A08914 /* MessageBubble.swift in Sources */,
+				9F226435988E6A8BEDBF45C4 /* MessageCache.swift in Sources */,
 				F0C35104273368720F561695 /* MessageContentView.swift in Sources */,
 				350F75444CDCD3A9389358B0 /* NavigationViewModel.swift in Sources */,
 				21ED72DCF9767B32F82D794D /* NetworkMonitor.swift in Sources */,

@@ -64,6 +64,13 @@ struct FileDetailView: View {
                     }
                     .disabled(viewModel.fileDetail?.path != filePath)
 
+                    Button {
+                        Task { await viewModel.redownloadFile(filePath) }
+                    } label: {
+                        Label("Clear cache & redownload", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(viewModel.isLoadingFile)
+
                     Toggle(isOn: openExternallyBinding) {
                         Label("Always open .\(fileExtension) externally", systemImage: "arrow.up.forward.app")
                     }

@@ -35,6 +35,7 @@
 - [ ] Hold-to-speak voice input. Reverted: the press-and-hold mic gesture was unreliable in practice and was removed; needs a fresh approach if still wanted.
 - [x] **Model preloading.** Fixed: Whisper preloads in the background on every launch. Previously gated on a voiceUsedKey flag, so a fresh install — the case preloading exists for — never preloaded.
 - [x] **Cache downloaded files by filename.** Fixed: FileContentCache stores binary payloads (chat thumbnails, in-app PDF/file previews, downloads) in the Caches directory keyed by server + worktree + path, expiring 3 days after write — dropped on read, swept at launch. Text files excluded: live worktree source changes constantly.
-- [ ] Add file-menu action beside “Open in App” to clear cache and redownload.
+- [x] **Add file-menu action beside “Open in App” to clear cache and redownload.** Fixed: "Clear cache & redownload" in the file detail menu drops that file's FileContentCache entry and refetches.
+- [x] **Cache finished task transcripts.** Fixed: MessageCache stores messages of tasks in a terminal state (completed/failed/timed out/stopped), keyed by server + task id, 30-day sweep. Cached on fetch only — running tasks always hit the server, and a just-failed task still refetches so the executor's error message isn't missed.
 - [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
 - [ ] **Voice mode should not auto-read the last message — add a per-message speak button** — When voice mode starts or resumes, it must not automatically read the most recent assistant message aloud. Instead, each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read.

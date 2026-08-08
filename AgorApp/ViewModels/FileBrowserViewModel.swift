@@ -165,6 +165,13 @@ final class FileBrowserViewModel {
         }
     }
 
+    /// Drop this file's cached copy and pull it fresh from the server.
+    func redownloadFile(_ filePath: String) async {
+        FileContentCache.remove(baseURL: socketService.httpClient.baseURL, worktreeId: worktreeId, path: filePath)
+        AppLogger.shared.log("[FileBrowser] cache cleared, redownloading \"\(filePath)\"", level: .info, category: "FileBrowser")
+        await loadFileDetail(filePath)
+    }
+
     func loadFileDetail(_ filePath: String) async {
         AppLogger.shared.log("[FileBrowser] loadFileDetail path=\"\(filePath)\" worktreeId=\(worktreeId)", level: .debug, category: "FileBrowser")
         isLoadingFile = true

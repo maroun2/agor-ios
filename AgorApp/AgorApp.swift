@@ -28,7 +28,10 @@ struct AgorApp: App {
                     // instead of downloading/warming the model on first use.
                     TranscriptionService.preload()
                     // Drop cached file payloads older than 3 days.
-                    Task.detached(priority: .utility) { FileContentCache.prune() }
+                    Task.detached(priority: .utility) {
+                        FileContentCache.prune()
+                        MessageCache.prune()
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {

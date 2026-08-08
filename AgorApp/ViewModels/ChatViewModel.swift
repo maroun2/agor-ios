@@ -421,6 +421,18 @@ final class ChatViewModel {
         // Skip virtual task IDs
         guard !taskId.hasPrefix("virtual-") else { return }
 
+        // A finished task's transcript is immutable — serve it from disk and skip
+        // the round trip entirely. Running tasks always go to the server.
+        let taskIsFinished = tasks.first { $0.taskId == taskId }?.status.isFinished ?? false
+        if taskIsFinished, let cached = MessageCache.load(baseURL: client.baseURL, taskId: taskId) {
+            messagesByTask[taskId] = cached
+            loadedTaskIds.insert(taskId)
+            self.error = nil
+            reconcileOutboundPrompts(for: sessionId)
+            rebuildDisplayItems()
+            return
+        }
+
         isLoadingMessages = true
         do {
             let response: PaginatedResponse<Message> = try await client.getPaginated(
@@ -432,7 +444,11 @@ final class ChatViewModel {
                 ]
             )
             guard currentSessionId == sessionId else { return }
-            messagesByTask[taskId] = response.data.sorted { $0.index < $1.index }
+            let sorted = response.data.sorted { $0.index < $1.index }
+            messagesByTask[taskId] = sorted
+            if taskIsFinished {
+                MessageCache.store(sorted, baseURL: client.baseURL, taskId: taskId)
+            }
             loadedTaskIds.insert(taskId)
             self.error = nil
             AppLogger.shared.log("[Chat] loadTaskMessages: \(response.data.count) msgs for task \(taskId.prefix(8))", level: .debug, category: "Chat")

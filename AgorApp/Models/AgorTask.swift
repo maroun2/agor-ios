@@ -14,6 +14,12 @@ enum TaskStatus: String, Codable {
     case failed
     case stopped
 
+    /// Terminal states — the task will never produce another message, so its
+    /// transcript is immutable and safe to cache.
+    var isFinished: Bool {
+        self == .completed || self == .failed || self == .timedOut || self == .stopped
+    }
+
     var displayLabel: String {
         switch self {
         case .queued: "Queued"
