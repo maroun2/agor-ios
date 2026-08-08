@@ -8,6 +8,15 @@ struct PromptInputBar: View {
     @State private var showFilePicker = false
     @State private var showPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isPressingMic = false
+    @State private var holdTask: Task<Void, Never>?
+    @State private var pressStartedAt: Date?
+
+    /// How long the mic must be held before dictation starts, so a tap meant for
+    /// voice mode never trips it.
+    private let holdToRecordDelay: Double = 1.5
+
+    private var dictation: DictationService { DictationService.shared }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,17 +121,7 @@ struct PromptInputBar: View {
                         .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
 
                     if !viewModel.voiceModeEnabled {
-                        // Voice mode toggle
-                        Button {
-                            HapticFeedback.light()
-                            viewModel.voiceModeEnabled = true
-                        } label: {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.blue)
-                                .frame(width: 36, height: 36)
-                        }
-                        .disabled(viewModel.currentSessionId == nil)
+                        micButton
                     }
 
                     // Send button
@@ -162,6 +161,83 @@ struct PromptInputBar: View {
         .onChange(of: selectedPhoto) { _, newValue in
             handlePhotoSelection(newValue)
         }
+    }
+
+    /// Tap enables continuous voice mode. Holding for `holdToRecordDelay` starts
+    /// push-to-talk dictation instead: record until release, transcribe once, append
+    /// the text to whatever is already in the field.
+    ///
+    /// One DragGesture drives both — a LongPressGesture sequenced with a drag (the
+    /// obvious spelling) drops touches when the two recognizers disagree about who
+    /// owns the press. `minimumDistance: 0` makes onChanged fire on touch-down and
+    /// onEnded on lift, which is exactly the press/release pair needed here.
+    private var micButton: some View {
+        Group {
+            if dictation.state == .transcribing {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 36, height: 36)
+            } else {
+                Image(systemName: dictation.isRecording ? "waveform.circle.fill" : "mic.fill")
+                    .font(.system(size: dictation.isRecording ? 26 : 20))
+                    .foregroundStyle(dictation.isRecording ? .red : (viewModel.currentSessionId == nil ? Color.secondary : .blue))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+                    .scaleEffect(dictation.isRecording ? 1.15 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: dictation.isRecording)
+                    .gesture(micGesture)
+            }
+        }
+    }
+
+    private var micGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard viewModel.currentSessionId != nil, !isPressingMic else { return }
+                isPressingMic = true
+                pressStartedAt = Date()
+                holdTask = Task {
+                    try? await Task.sleep(for: .seconds(holdToRecordDelay))
+                    guard !Task.isCancelled else { return }
+                    HapticFeedback.light()
+                    await dictation.start()
+                }
+            }
+            .onEnded { _ in
+                guard isPressingMic else { return }
+                isPressingMic = false
+                let held = Date().timeIntervalSince(pressStartedAt ?? Date())
+                pressStartedAt = nil
+                let task = holdTask
+                holdTask = nil
+
+                // Tap-vs-hold is decided by elapsed time, NOT by dictation.isRecording:
+                // releasing right at the threshold can land while start() is still
+                // awaiting permission/audio setup, and testing isRecording there would
+                // both enable voice mode and leave a recording running with no owner.
+                guard held >= holdToRecordDelay else {
+                    task?.cancel()
+                    HapticFeedback.light()
+                    viewModel.voiceModeEnabled = true
+                    return
+                }
+
+                Task {
+                    // Let a start() already in flight finish before stopping it.
+                    await task?.value
+                    guard dictation.isRecording else {
+                        dictation.cancel()
+                        return
+                    }
+                    guard let text = await dictation.stopAndTranscribe() else { return }
+                    // Append — never clobber what the user already typed.
+                    let existing = viewModel.promptText
+                    viewModel.promptText = existing.isEmpty
+                        ? text
+                        : existing + (existing.hasSuffix(" ") ? "" : " ") + text
+                    HapticFeedback.light()
+                }
+            }
     }
 
     private var voiceStatusView: some View {

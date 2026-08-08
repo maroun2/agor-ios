@@ -12,6 +12,7 @@
 		03781520E668203C6012378E /* Permission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA0E541AF2D2E4F02EAE49 /* Permission.swift */; };
 		05C095D4C93E72284978C4B0 /* SocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3C6C8A44F09215C1E9387E /* SocketService.swift */; };
 		069098C39CDE8E9A33B7217C /* InputRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0769CCEA40D22DDA6010D42 /* InputRequest.swift */; };
+		07E1CCD002F9E6149AF5A0B2 /* DictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 855FEA4901F633ACF935284C /* DictationService.swift */; };
 		0DFBFA7A639DDCCCA6DD34FF /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0AD9A555E01E8E4969D922C /* Message.swift */; };
 		0F7050228A6E77DC360720A9 /* ToolUseBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA2A3F882B5A99C76A0E922 /* ToolUseBlockView.swift */; };
 		1074F181D730E0C247CF54BB /* Streaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B96EA3FFAB599C55A79C4A5 /* Streaming.swift */; };
@@ -168,6 +169,7 @@
 		7F78F2D50983FDDBFE11F828 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		8027B33B9D570D05B020E7E1 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		833B335418FA70748FB8BA96 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		855FEA4901F633ACF935284C /* DictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationService.swift; sourceTree = "<group>"; };
 		8692EBFE755DEC0F54AB7A44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		86D5209B11ED6A367C9FB3F0 /* FileItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileItem.swift; sourceTree = "<group>"; };
 		90FCF9CF63C48B3A78374E46 /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
@@ -428,6 +430,7 @@
 				24DD571A578E09FE13A6841C /* BackgroundSessionPoller.swift */,
 				A2105103F7F30CD64FE8CA2F /* ContinuousVoiceService.swift */,
 				5BCEEC0F5D3546FD7B36F2A8 /* CrashLogService.swift */,
+				855FEA4901F633ACF935284C /* DictationService.swift */,
 				7EEF47BB1C6DD4974DF5328E /* FileContentCache.swift */,
 				F97ABB48A74C15BD93C1159A /* MessageCache.swift */,
 				833B335418FA70748FB8BA96 /* NetworkMonitor.swift */,
@@ -616,6 +619,7 @@
 				B6D02A7511B2398604ED1061 /* CrashLogService.swift in Sources */,
 				B3FA358624E33D770635A063 /* DateFormatting.swift in Sources */,
 				306B6AAF323920BB9E425801 /* DebugLogView.swift in Sources */,
+				07E1CCD002F9E6149AF5A0B2 /* DictationService.swift in Sources */,
 				007F555116C96EF8BFF85B4F /* EnhancedTextBlockView.swift in Sources */,
 				E40E7CC4E8995149A8346CCD /* FileBrowserView.swift in Sources */,
 				932C9C5B55131B0EB36E9E97 /* FileBrowserViewModel.swift in Sources */,
