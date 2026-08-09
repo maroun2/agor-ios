@@ -39,3 +39,4 @@
 - [x] **Cache finished task transcripts.** Fixed: MessageCache stores messages of tasks in a terminal state (completed/failed/timed out/stopped), keyed by server + task id, 30-day sweep. Cached on fetch only — running tasks always hit the server, and a just-failed task still refetches so the executor's error message isn't missed.
 - [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
 - [ ] **Per-message speak button** — Each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read. Done already: enabling voice mode no longer auto-reads the last message.
+- [ ] Recognize Agor UI session URLs in messages and render same session-link treatment as other session messages.
