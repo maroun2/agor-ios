@@ -40,3 +40,4 @@
 - [ ] Keep PDF viewer at current scroll position during normal viewing without touch.
 - [ ] **Per-message speak button** — Each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read. Done already: enabling voice mode no longer auto-reads the last message.
 - [ ] Recognize Agor UI session URLs in messages and render same session-link treatment as other session messages.
+- [ ] Make chat image-thumbnail downloads reliable and retry-safe; investigate failures and duplicate note/message content on retry, using bounded or sequential fetching only if excessive concurrency is confirmed as cause.
