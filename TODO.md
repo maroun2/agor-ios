@@ -44,5 +44,5 @@
 - [ ] **Per-message speak button** — Each assistant *text* message (not tool-use or tool-result blocks) gets a small inline speak button the user taps to have that message read. Done already: enabling voice mode no longer auto-reads the last message.
 - [ ] Recognize Agor UI session URLs in messages and render same session-link treatment as other session messages.
 - [ ] Make chat image-thumbnail downloads reliable and retry-safe; investigate failures and duplicate note/message content on retry, using bounded or sequential fetching only if excessive concurrency is confirmed as cause.
-- [ ] Download chat image thumbnails sequentially rather than concurrently.
+- [x] **Download chat image thumbnails sequentially rather than concurrently.** Fixed: InlineImageLoader chains fetches so one download is on the wire at a time, dedupes identical paths, and checks FileContentCache both before queueing and again when the queued turn starts. Queued downloads are not cancelled with the view, so scrolling past an image still lands it in the cache. Views retry once after a failure instead of showing a permanent placeholder. Thumbnails now fetch over HTTP rather than the socket.
 - [ ] Fix file/image download failures reporting Apple URL loading error -1001 (request timed out), with reliable retry behavior.
