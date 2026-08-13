@@ -199,6 +199,22 @@ final class FileBrowserViewModel {
         }
     }
 
+    /// Match a path written in a message against the real worktree tree. Only
+    /// used after a direct fetch has already failed — an exact path never needs
+    /// the file list at all.
+    private func resolvePathAgainstFileList(_ filePath: String) -> String? {
+        guard !files.isEmpty else { return nil }
+        let paths = files.map(\.path)
+        if paths.contains(filePath) { return filePath }
+
+        let suffixMatches = paths.filter { $0.hasSuffix("/" + filePath) }
+        if suffixMatches.count == 1 { return suffixMatches[0] }
+
+        let name = filePath.components(separatedBy: "/").last ?? filePath
+        let nameMatches = paths.filter { ($0.components(separatedBy: "/").last ?? $0) == name }
+        return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
     /// Elapsed milliseconds since a CFAbsoluteTime mark, for the [Timing] lines
     /// that break a file open into its steps.
     static func ms(since start: CFAbsoluteTime) -> Int {
@@ -219,7 +235,23 @@ final class FileBrowserViewModel {
         fileDetail = nil
         do {
             // HTTP REST first (streams large/binary payloads), socket fallback inside
-            fileDetail = try await fetchDetail(filePath)
+            var detail: FileDetail
+            do {
+                detail = try await fetchDetail(filePath)
+            } catch {
+                // Only now is the file list worth its cost: the path as written
+                // in the message didn't resolve on the server, so scan the tree
+                // and try to match it against a real one.
+                AppLogger.shared.log(
+                    "[FileBrowser] direct fetch failed for \"\(filePath)\" — scanning file list to resolve the path",
+                    level: .warning, category: "FileBrowser"
+                )
+                await loadFiles()
+                guard let resolved = resolvePathAgainstFileList(filePath), resolved != filePath else { throw error }
+                AppLogger.shared.log("[FileBrowser] resolved \"\(filePath)\" → \"\(resolved)\"", level: .info, category: "FileBrowser")
+                detail = try await fetchDetail(resolved)
+            }
+            fileDetail = detail
             let byteCount = fileDetail?.content?.utf8.count ?? 0
             AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
             AppLogger.shared.log(

@@ -21,7 +21,7 @@ struct FileDetailView: View {
         Group {
             if viewModel.isLoadingFile {
                 ProgressView("Loading file...")
-            } else if let detail = viewModel.fileDetail, detail.path == filePath {
+            } else if let detail = viewModel.fileDetail, isCurrentFile(detail) {
                 if detail.encoding == "base64", isPDFFile(filePath) {
                     pdfPreview(detail: detail)
                 } else if detail.encoding == "base64", isImageFile(filePath) {
@@ -62,7 +62,7 @@ struct FileDetailView: View {
                     } label: {
                         Label("Open in app…", systemImage: "square.and.arrow.up")
                     }
-                    .disabled(viewModel.fileDetail?.path != filePath)
+                    .disabled(!(viewModel.fileDetail.map(isCurrentFile) ?? false))
 
                     Button {
                         Task {
@@ -142,7 +142,7 @@ struct FileDetailView: View {
     /// Write the loaded file content to a temp file with its real name and
     /// present the system share / open-in sheet.
     private func prepareExportAndShare() {
-        guard let detail = viewModel.fileDetail, detail.path == filePath,
+        guard let detail = viewModel.fileDetail, isCurrentFile(detail),
               let content = detail.content else { return }
 
         let data: Data
@@ -199,7 +199,7 @@ struct FileDetailView: View {
 
     private func decodeCurrentImage() async {
         guard let detail = viewModel.fileDetail,
-              detail.path == filePath,
+              isCurrentFile(detail),
               detail.encoding == "base64",
               isImageFile(filePath),
               let content = detail.content,
@@ -274,6 +274,14 @@ struct FileDetailView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// The loaded payload belongs to this view. A path written in a message can
+    /// be worktree-relative in a shorter form than the server's canonical path,
+    /// and the failed-fetch fallback resolves it against the file list — so the
+    /// returned path may legitimately be a longer form of the requested one.
+    private func isCurrentFile(_ detail: FileDetail) -> Bool {
+        detail.path == filePath || detail.path.hasSuffix("/" + filePath)
     }
 
     private func isImageFile(_ path: String) -> Bool {

@@ -57,18 +57,18 @@ struct FileBrowserView: View {
                 }
             }
             .task {
-                // Opened straight onto a file (a chat link): download that file
-                // first and let the tree scan wait, so the thing the user asked
-                // for isn't queued behind a full worktree walk on the daemon.
-                if openedOnFile {
-                    // Give the detail view a moment to start its own fetch before
-                    // sampling isLoadingFile, which it sets on appear.
-                    try? await Task.sleep(for: .milliseconds(200))
-                    while viewModel.isLoadingFile {
-                        try? await Task.sleep(for: .milliseconds(100))
-                    }
-                }
+                // Opened straight onto a file from a chat link: the path is
+                // already known, so fetch it and nothing else. Enumerating the
+                // worktree makes the daemon walk the whole tree for a list the
+                // user never sees. It loads when they navigate back to the list.
+                guard !openedOnFile else { return }
                 await viewModel.loadFiles()
+            }
+            .onChange(of: navigationPath.count) { _, count in
+                // Back on the list itself — now the scan is worth paying for.
+                if count == 0, viewModel.files.isEmpty {
+                    Task { await viewModel.loadFiles() }
+                }
             }
             .refreshable {
                 await viewModel.loadFiles(force: true)

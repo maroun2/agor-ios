@@ -47,11 +47,30 @@ final class InlineImageLoader {
                 return cached
             }
 
-            let detail: FileDetail = try await socketService.serviceGet(
-                service: "file",
-                id: path,
-                query: ["branch_id": worktreeId]
-            )
+            // HTTP, not the socket: the express route is gzipped (base64
+            // compresses well) and it doesn't share a connection with every
+            // other socket message. The socket remains the fallback.
+            var allowed = CharacterSet.urlPathAllowed
+            allowed.remove(charactersIn: "/")
+            let encodedId = path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
+
+            let detail: FileDetail
+            do {
+                detail = try await socketService.httpClient.get(
+                    "/file/\(encodedId)",
+                    query: ["worktree_id": worktreeId, "branch_id": worktreeId]
+                )
+            } catch {
+                AppLogger.shared.log(
+                    "[InlineImage] HTTP fetch failed for \"\(path)\" (\(error.localizedDescription)) — falling back to socket",
+                    level: .warning, category: "FileBrowser"
+                )
+                detail = try await socketService.serviceGet(
+                    service: "file",
+                    id: path,
+                    query: ["branch_id": worktreeId]
+                )
+            }
             FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: path)
             self?.inFlight[key] = nil
             return detail

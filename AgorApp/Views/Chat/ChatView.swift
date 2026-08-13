@@ -32,19 +32,20 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showSessionSettings) { sessionSettingsSheet }
+            // The file list is deliberately NOT loaded here. The daemon walks the
+            // entire worktree for every find, and opening a session only needs to
+            // be able to *fetch* a path, not enumerate the tree. The list is
+            // loaded when the browser is opened as a list, or as a fallback when
+            // fetching a path directly fails.
             .onChange(of: viewModel.currentSession?.worktreeId) { _, newWorktreeId in
                 if let wid = newWorktreeId, fileBrowserVM?.worktreeId != wid {
-                    let vm = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
-                    fileBrowserVM = vm
-                    Task { await vm.loadFiles() }
+                    fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
                 }
             }
             .onAppear {
                 viewModel.displayedChatSessionId = sessionId
                 if fileBrowserVM == nil, let wid = viewModel.currentSession?.worktreeId {
-                    let vm = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
-                    fileBrowserVM = vm
-                    Task { await vm.loadFiles() }
+                    fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
                 }
             }
             .onChange(of: sessionId) { _, newId in
@@ -58,10 +59,6 @@ struct ChatView: View {
                 }
             }
             .onChange(of: viewModel.connectionState) { _, state in
-                // Retry file list load when socket connects (initial load may have failed before socket was ready)
-                if state == .connected, let vm = fileBrowserVM, vm.files.isEmpty {
-                    Task { await vm.loadFiles() }
-                }
                 if state == .connected {
                     viewModel.error = nil
                     viewModel.refreshCurrentSession()
