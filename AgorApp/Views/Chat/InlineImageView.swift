@@ -9,6 +9,7 @@ struct InlineImageView: View {
     @State private var image: UIImage?
     @State private var isLoading = false
     @State private var failed = false
+    @State private var retriesLeft = 1
 
     var body: some View {
         ZStack {
@@ -45,19 +46,13 @@ struct InlineImageView: View {
 
         do {
             // Thumbnails come from the same 3-day disk cache as the file browser,
-            // so a scrolled-past image doesn't refetch on every appearance.
-            let baseURL = socketService.httpClient.baseURL
-            let detail: FileDetail
-            if let cached = FileContentCache.load(baseURL: baseURL, worktreeId: worktreeId, path: path) {
-                detail = cached
-            } else {
-                detail = try await socketService.serviceGet(
-                    service: "file",
-                    id: path,
-                    query: ["branch_id": worktreeId]
-                )
-                FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: path)
-            }
+            // so a scrolled-past image doesn't refetch on every appearance. Misses
+            // go through the shared loader, which runs one download at a time.
+            let detail = try await InlineImageLoader.shared.load(
+                path: path,
+                worktreeId: worktreeId,
+                socketService: socketService
+            )
 
             guard let content = detail.content else { failed = true; return }
 
@@ -72,6 +67,15 @@ struct InlineImageView: View {
                 failed = true
             }
         } catch {
+            // One retry: a transient socket timeout shouldn't leave a permanent
+            // "Image unavailable" placeholder for the life of the view.
+            if !Task.isCancelled, retriesLeft > 0 {
+                retriesLeft -= 1
+                try? await Task.sleep(for: .seconds(1))
+                isLoading = false
+                await loadImage()
+                return
+            }
             failed = true
         }
     }
