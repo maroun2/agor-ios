@@ -132,9 +132,18 @@ final class FileBrowserViewModel {
 
         // Binary payloads (images, PDFs, downloads) are cached on disk for 3 days.
         // Text is never cached — worktree source changes constantly.
+        let cacheStart = CFAbsoluteTimeGetCurrent()
         if let cached = FileContentCache.load(baseURL: baseURL, worktreeId: worktreeId, path: filePath) {
+            AppLogger.shared.log(
+                "[Timing] cache hit \"\(filePath)\" in \(Self.ms(since: cacheStart))ms",
+                level: .info, category: "FileBrowser"
+            )
             return cached
         }
+        AppLogger.shared.log(
+            "[Timing] cache miss \"\(filePath)\" (lookup \(Self.ms(since: cacheStart))ms)",
+            level: .info, category: "FileBrowser"
+        )
 
         // Encode the path as ONE Feathers id segment: "/" must become %2F so the
         // route matches; Express decodes the param back to the full path.
@@ -144,25 +153,45 @@ final class FileBrowserViewModel {
 
         do {
             // Send both param spellings — older daemons use worktree_id, newer branch_id
+            let httpStart = CFAbsoluteTimeGetCurrent()
             let detail: FileDetail = try await socketService.httpClient.get(
                 "/file/\(encodedId)",
                 query: ["worktree_id": worktreeId, "branch_id": worktreeId]
             )
+            AppLogger.shared.log(
+                "[Timing] HTTP fetch+decode \(Self.ms(since: httpStart))ms (\(detail.content?.utf8.count ?? 0) content bytes)",
+                level: .info, category: "FileBrowser"
+            )
+            let storeStart = CFAbsoluteTimeGetCurrent()
             FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: filePath)
+            AppLogger.shared.log("[Timing] cache store \(Self.ms(since: storeStart))ms", level: .info, category: "FileBrowser")
             return detail
         } catch {
             AppLogger.shared.log(
                 "[FileBrowser] HTTP file fetch failed (\(error.localizedDescription)) — falling back to socket",
                 level: .warning, category: "FileBrowser"
             )
+            let socketStart = CFAbsoluteTimeGetCurrent()
             let detail: FileDetail = try await socketService.serviceGet(
                 service: "file",
                 id: filePath,
                 query: ["branch_id": worktreeId]
             )
+            AppLogger.shared.log(
+                "[Timing] SOCKET fallback fetch+decode \(Self.ms(since: socketStart))ms (\(detail.content?.utf8.count ?? 0) content bytes)",
+                level: .info, category: "FileBrowser"
+            )
+            let storeStart = CFAbsoluteTimeGetCurrent()
             FileContentCache.store(detail, baseURL: baseURL, worktreeId: worktreeId, path: filePath)
+            AppLogger.shared.log("[Timing] cache store \(Self.ms(since: storeStart))ms", level: .info, category: "FileBrowser")
             return detail
         }
+    }
+
+    /// Elapsed milliseconds since a CFAbsoluteTime mark, for the [Timing] lines
+    /// that break a file open into its steps.
+    static func ms(since start: CFAbsoluteTime) -> Int {
+        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 
     /// Drop this file's cached copy and pull it fresh from the server.
@@ -174,6 +203,7 @@ final class FileBrowserViewModel {
 
     func loadFileDetail(_ filePath: String) async {
         AppLogger.shared.log("[FileBrowser] loadFileDetail path=\"\(filePath)\" worktreeId=\(worktreeId)", level: .debug, category: "FileBrowser")
+        let openStart = CFAbsoluteTimeGetCurrent()
         isLoadingFile = true
         fileDetail = nil
         do {
@@ -181,6 +211,10 @@ final class FileBrowserViewModel {
             fileDetail = try await fetchDetail(filePath)
             let byteCount = fileDetail?.content?.utf8.count ?? 0
             AppLogger.shared.log("[FileBrowser] loadFileDetail OK: \(byteCount) bytes", level: .debug, category: "FileBrowser")
+            AppLogger.shared.log(
+                "[Timing] TOTAL tap→content \(Self.ms(since: openStart))ms for \"\(filePath)\" (\(byteCount) bytes)",
+                level: .info, category: "FileBrowser"
+            )
         } catch {
             AppLogger.shared.log("[FileBrowser] loadFileDetail ERROR: \(error.localizedDescription)", level: .error, category: "FileBrowser")
             if Self.isWorktreeNotFound(error) {

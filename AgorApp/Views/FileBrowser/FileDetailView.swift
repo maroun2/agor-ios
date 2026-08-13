@@ -166,7 +166,7 @@ struct FileDetailView: View {
     private func pdfPreview(detail: FileDetail) -> some View {
         if let content = detail.content,
            let data = Data(base64Encoded: content),
-           let document = PDFDocument(data: data) {
+           let document = pdfDocument(from: data) {
             PDFKitView(document: document)
         } else {
             ContentUnavailableView {
@@ -177,6 +177,18 @@ struct FileDetailView: View {
         }
     }
 
+    /// Timed wrapper so the log shows what PDF construction costs — this runs
+    /// inside a ViewBuilder, so it repeats on every body evaluation.
+    private func pdfDocument(from data: Data) -> PDFDocument? {
+        let start = CFAbsoluteTimeGetCurrent()
+        let document = PDFDocument(data: data)
+        AppLogger.shared.log(
+            "[Timing] PDFDocument build \(FileBrowserViewModel.ms(since: start))ms (\(data.count) bytes)",
+            level: .info, category: "FileBrowser"
+        )
+        return document
+    }
+
     private func decodeCurrentImage() async {
         guard let detail = viewModel.fileDetail,
               detail.path == filePath,
@@ -184,8 +196,13 @@ struct FileDetailView: View {
               isImageFile(filePath),
               let content = detail.content,
               let data = Data(base64Encoded: content) else { return }
+        let start = CFAbsoluteTimeGetCurrent()
         let image = await Task.detached(priority: .userInitiated) { decodeGIF(data) }.value
         decodedImage = image
+        AppLogger.shared.log(
+            "[Timing] image base64+decode \(FileBrowserViewModel.ms(since: start))ms (\(data.count) bytes)",
+            level: .info, category: "FileBrowser"
+        )
     }
 
     @ViewBuilder
