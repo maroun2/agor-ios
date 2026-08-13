@@ -65,7 +65,15 @@ struct FileDetailView: View {
                     .disabled(viewModel.fileDetail?.path != filePath)
 
                     Button {
-                        Task { await viewModel.redownloadFile(filePath) }
+                        Task {
+                            // The decoded image is view state, not part of
+                            // fileDetail — without clearing and re-decoding it the
+                            // refetched file only appeared after leaving and
+                            // reopening the view.
+                            decodedImage = nil
+                            await viewModel.redownloadFile(filePath)
+                            await decodeCurrentImage()
+                        }
                     } label: {
                         Label("Clear cache & redownload", systemImage: "arrow.clockwise")
                     }

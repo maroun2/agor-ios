@@ -55,9 +55,20 @@ final class FileBrowserViewModel {
         currentPath.isEmpty ? [] : currentPath.components(separatedBy: "/")
     }
 
-    func loadFiles() async {
+    /// Fetch the worktree file list. The daemon re-walks the entire tree on every
+    /// call, so this is expensive on both ends — an already-loaded list is reused
+    /// unless the caller explicitly asks for a fresh scan.
+    func loadFiles(force: Bool = false) async {
         guard !isLoading else { return }
+        if !force, hasLoadedOnce, !files.isEmpty {
+            AppLogger.shared.log("[FileBrowser] loadFiles skipped — \(files.count) files already loaded", level: .debug, category: "FileBrowser")
+            return
+        }
         hasLoadedOnce = true
+        let listStart = CFAbsoluteTimeGetCurrent()
+        defer {
+            AppLogger.shared.log("[Timing] file list find \(Self.ms(since: listStart))ms (\(files.count) entries)", level: .info, category: "FileBrowser")
+        }
         let displayPath = currentPath.isEmpty ? "/" : currentPath
         AppLogger.shared.log("[FileBrowser] loadFiles worktreeId=\(worktreeId) path=\"\(displayPath)\"", level: .debug, category: "FileBrowser")
         isLoading = true

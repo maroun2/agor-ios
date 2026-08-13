@@ -7,6 +7,9 @@ struct FileBrowserView: View {
     @State private var shareURL: URL?
     @State private var isPreparingShare = false
     @State private var navigationPath = NavigationPath()
+    /// Sheet was opened directly onto a file from a chat link — that download
+    /// takes priority over the worktree file list.
+    @State private var openedOnFile = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -26,7 +29,7 @@ struct FileBrowserView: View {
                             Button("Close") { dismiss() }
                         } else {
                             Button("Retry") {
-                                Task { await viewModel.loadFiles() }
+                                Task { await viewModel.loadFiles(force: true) }
                             }
                         }
                     }
@@ -54,11 +57,26 @@ struct FileBrowserView: View {
                 }
             }
             .task {
+                // Opened straight onto a file (a chat link): download that file
+                // first and let the tree scan wait, so the thing the user asked
+                // for isn't queued behind a full worktree walk on the daemon.
+                if openedOnFile {
+                    // Give the detail view a moment to start its own fetch before
+                    // sampling isLoadingFile, which it sets on appear.
+                    try? await Task.sleep(for: .milliseconds(200))
+                    while viewModel.isLoadingFile {
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                }
                 await viewModel.loadFiles()
+            }
+            .refreshable {
+                await viewModel.loadFiles(force: true)
             }
             .onAppear {
                 if let pending = viewModel.pendingFilePath {
                     viewModel.pendingFilePath = nil
+                    openedOnFile = true
                     navigationPath.append(pending)
                 }
             }
