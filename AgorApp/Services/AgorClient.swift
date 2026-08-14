@@ -357,36 +357,91 @@ final class AgorClient {
 
     func uploadFile(sessionId: String, fileData: Data, fileName: String, mimeType: String) async throws -> UploadResponse {
         guard !baseURL.isEmpty else { throw AgorAPIError.invalidURL }
-        guard let url = URL(string: "\(baseURL)/sessions/\(sessionId)/upload?destination=branch") else {
+        // The daemon validates this against worktree | temp | global and fails
+        // the whole request on anything else. "branch" is the newer name for a
+        // worktree everywhere *except* here, and sending it rejected every
+        // upload before multer ever wrote a file.
+        guard let url = URL(string: "\(baseURL)/sessions/\(sessionId)/upload?destination=worktree") else {
             throw AgorAPIError.invalidURL
         }
 
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Uploads don't go through executeRaw, so nothing here refreshes an
+        // expiring token or retries a 401 — an upload attempted near expiry used
+        // to fail outright with no recovery.
+        if let token = accessToken, let exp = decodeJwtExp(token), exp.timeIntervalSinceNow < 120 {
+            AppLogger.shared.log("[Auth] token expires in \(Int(exp.timeIntervalSinceNow))s — refreshing before upload", level: .info, category: "Auth")
+            _ = await coalescedRefresh()
         }
 
+        let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"files\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        AppLogger.shared.log("[HTTP] → POST /sessions/\(String(sessionId.prefix(8)))/upload (\(fileName), \(fileData.count) bytes)", level: .debug, category: "HTTP")
+        func makeRequest() -> URLRequest {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            if let token = accessToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            // A photo over a phone link needs longer than the 30s default, which
+            // surfaced as URLError -1001 "request timed out".
+            request.timeoutInterval = 120
+            request.httpBody = body
+            return request
+        }
 
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        AppLogger.shared.log("[HTTP] → POST /sessions/\(String(sessionId.prefix(8)))/upload (\(fileName), \(fileData.count) bytes)", level: .info, category: "HTTP")
+
+        let start = Date()
+        var (data, response) = try await session.data(for: makeRequest())
+        var statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        if statusCode == 401 {
+            AppLogger.shared.log("[HTTP] ← 401 upload — attempting auth recovery", level: .warning, category: "HTTP")
+            var recovered = false
+            if refreshToken != nil {
+                recovered = await coalescedRefresh()
+            }
+            if !recovered, let reAuth = onSilentReAuth {
+                recovered = (try? await reAuth()) != nil
+            }
+            if recovered {
+                (data, response) = try await session.data(for: makeRequest())
+                statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            }
+        }
+
+        guard (200...299).contains(statusCode) else {
             let responseBody = String(data: data, encoding: .utf8)
+            AppLogger.shared.log(
+                "[HTTP] ← \(statusCode) upload \(fileName) (\(Int(Date().timeIntervalSince(start) * 1000))ms) body=\(AppLogger.scrub(responseBody ?? "no body"))",
+                level: .error, category: "HTTP"
+            )
             throw AgorAPIError.httpError(statusCode: statusCode, body: responseBody)
         }
 
-        return try decoder.decode(UploadResponse.self, from: data)
+        AppLogger.shared.log(
+            "[HTTP] ← \(statusCode) upload \(fileName) OK (\(Int(Date().timeIntervalSince(start) * 1000))ms)",
+            level: .info, category: "HTTP"
+        )
+
+        do {
+            return try decoder.decode(UploadResponse.self, from: data)
+        } catch {
+            // The upload itself succeeded — say so, instead of reporting a
+            // decode failure as if the file never made it.
+            let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+            AppLogger.shared.log(
+                "[HTTP] upload response decode failed: \(error) body=\(AppLogger.scrub(raw))",
+                level: .error, category: "HTTP"
+            )
+            throw AgorAPIError.decodingError(error)
+        }
     }
 
     // MARK: - Token Refresh (public — used by SocketService to refresh after socket auth failure)
