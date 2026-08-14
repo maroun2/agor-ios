@@ -1047,6 +1047,14 @@ final class ChatViewModel {
         }
     }
 
+    /// Called with the file paths a *just arrived* message mentions. Wired from
+    /// the chat view, which knows the worktree and the real file list.
+    ///
+    /// Deliberately driven from the socket event rather than from the transcript
+    /// changing: reopening a session or relaunching the app replays old
+    /// messages, and those must not invalidate anything.
+    var onFilesMentionedInNewMessage: (([String]) -> Void)?
+
     private func setupSocketHandlers() {
         socketService.onMessageCreated { [weak self] message in
             guard let self else { return }
@@ -1056,6 +1064,14 @@ final class ChatViewModel {
                 self.reconcileOutboundPrompt(with: message)
             }
             guard message.sessionId == self.currentSessionId else { return }
+            // An agent that just talked about a file very likely just wrote it,
+            // so the cached copy is stale.
+            if let text = self.messageText(message) {
+                let mentioned = FilePathDetector.detect(in: text).map(\.path)
+                if !mentioned.isEmpty {
+                    self.onFilesMentionedInNewMessage?(mentioned)
+                }
+            }
             // Remove from streaming (handoff)
             self.activeStreams.removeValue(forKey: message.messageId)
             // Restore auto-scroll after permission resolution

@@ -50,6 +50,9 @@ struct ChatView: View {
                 if fileBrowserVM == nil, let wid = viewModel.currentSession?.worktreeId {
                     fileBrowserVM = FileBrowserViewModel(worktreeId: wid, socketService: socketService)
                 }
+                viewModel.onFilesMentionedInNewMessage = { paths in
+                    dropCachedCopies(of: paths)
+                }
             }
             .onChange(of: sessionId) { _, newId in
                 viewModel.displayedChatSessionId = newId
@@ -392,6 +395,29 @@ struct ChatView: View {
             }
         }
         return map
+    }
+
+    /// Drop cached copies of files a newly arrived message mentions — the agent
+    /// that just described a file has very likely just rewritten it, and a
+    /// three-day-old cached copy would show the version before its work.
+    ///
+    /// Both the path as written and its resolved form are dropped: the cache is
+    /// keyed by exact path, and a message may quote an absolute or partial one.
+    private func dropCachedCopies(of paths: [String]) {
+        guard let vm = fileBrowserVM else { return }
+        let baseURL = socketService.httpClient.baseURL
+        let known = vm.filePaths
+        for path in paths {
+            FileContentCache.remove(baseURL: baseURL, worktreeId: vm.worktreeId, path: path)
+            let resolved = FilePathDetector.resolve(path, knownFiles: known)
+            if resolved != path {
+                FileContentCache.remove(baseURL: baseURL, worktreeId: vm.worktreeId, path: resolved)
+            }
+        }
+        AppLogger.shared.log(
+            "[FileCache] invalidated \(paths.count) path(s) mentioned by a new message",
+            level: .debug, category: "FileBrowser"
+        )
     }
 
     private func openFileInBrowser(_ path: String) {
