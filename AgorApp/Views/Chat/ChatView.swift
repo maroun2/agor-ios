@@ -13,6 +13,9 @@ struct ChatView: View {
     @State private var showSessionSettings = false
     @State private var showResetAlert = false
     @State private var fileBrowserVM: FileBrowserViewModel?
+    /// nil until the transcript first renders — loading a session is not a new
+    /// message and must not trigger a worktree scan.
+    @State private var lastSeenItemCount: Int?
     @State private var mcpVM: MCPViewModel?
     @State private var isQueueExpanded = true
 
@@ -50,6 +53,16 @@ struct ChatView: View {
             }
             .onChange(of: sessionId) { _, newId in
                 viewModel.displayedChatSessionId = newId
+                lastSeenItemCount = nil
+            }
+            .onChange(of: viewModel.displayItems.count) { _, count in
+                // Messages that just arrived can mention files created by the
+                // agent seconds ago. Those paths only render as links once they
+                // match a known file, so refresh the list — debounced and rate
+                // limited in the view model, since each scan walks the worktree.
+                defer { lastSeenItemCount = count }
+                guard let previous = lastSeenItemCount, count > previous else { return }
+                fileBrowserVM?.refreshFileListForNewMessages()
             }
             .onDisappear {
                 // Chat detail left the screen (navigated back to the list) — clear so the

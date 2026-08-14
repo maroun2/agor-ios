@@ -7,6 +7,10 @@ final class FileBrowserViewModel {
     var currentPath: String = ""
     var isLoading = false
     private var hasLoadedOnce = false
+    /// Shortest gap between two message-driven file list scans.
+    private static let minListRefreshInterval: TimeInterval = 15
+    @ObservationIgnored private var lastListLoad: Date?
+    @ObservationIgnored private var pendingListRefresh: Task<Void, Never>?
     var error: String?
     /// True when the server reports the worktree no longer exists (stale ID)
     var isWorktreeGone = false
@@ -58,6 +62,22 @@ final class FileBrowserViewModel {
     /// Fetch the worktree file list. The daemon re-walks the entire tree on every
     /// call, so this is expensive on both ends — an already-loaded list is reused
     /// unless the caller explicitly asks for a fresh scan.
+    /// A new message can mention files that didn't exist at the last scan, and
+    /// paths only turn into links when they resolve against a known file. One
+    /// refresh per burst of arriving messages, rate-limited — the daemon walks
+    /// the whole worktree for every scan, so this must not run per message.
+    func refreshFileListForNewMessages() {
+        pendingListRefresh?.cancel()
+        pendingListRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            if let last = lastListLoad, Date().timeIntervalSince(last) < Self.minListRefreshInterval {
+                return
+            }
+            await loadFiles(force: true)
+        }
+    }
+
     func loadFiles(force: Bool = false) async {
         guard !isLoading else { return }
         if !force, hasLoadedOnce, !files.isEmpty {
@@ -65,6 +85,7 @@ final class FileBrowserViewModel {
             return
         }
         hasLoadedOnce = true
+        lastListLoad = Date()
         let listStart = CFAbsoluteTimeGetCurrent()
         defer {
             AppLogger.shared.log("[Timing] file list find \(Self.ms(since: listStart))ms (\(files.count) entries)", level: .info, category: "FileBrowser")
