@@ -181,6 +181,13 @@ struct MainNavigationView: View {
                 }
                 Task { @MainActor in socketService.reconnect() }
             }
+            // The socket authenticated with the old token; the server keeps that
+            // connection bound to it, so it has to re-authenticate after every
+            // refresh or it goes quiet while HTTP carries on working.
+            appViewModel.client.onTokenRefreshed = {
+                AppLogger.shared.log("[App] Access token refreshed — re-authenticating socket", level: .info, category: "Auth")
+                socketService.reauthenticate()
+            }
             // Called only after silentReAuth also failed — force logout
             appViewModel.client.onSessionExpired = {
                 AppLogger.shared.log("[App] All auth recovery failed — logging out", level: .error, category: "App")

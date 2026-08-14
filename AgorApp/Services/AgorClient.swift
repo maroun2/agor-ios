@@ -35,6 +35,12 @@ final class AgorClient {
     /// Wire this to logout in the app entry point.
     var onSessionExpired: (() -> Void)?
 
+    /// Called after the access token is successfully replaced. The socket
+    /// authenticated with the *previous* token and the server keeps that
+    /// connection bound to it, so it has to re-authenticate or it silently stops
+    /// receiving events while HTTP keeps working.
+    var onTokenRefreshed: (() -> Void)?
+
     /// Called when JWT refresh fails (or no refresh token) before giving up.
     /// Should attempt password-based re-login with stored credentials.
     /// Throw on failure so AgorClient knows to proceed to onSessionExpired.
@@ -167,6 +173,22 @@ final class AgorClient {
         let label = requestLabel(for: request)
         let start = Date()
 
+        var request = request
+        // Renew before the token dies rather than after: waiting for the 401
+        // costs a wasted round trip, and any request in flight at the moment of
+        // expiry fails on transports that can't retry (uploads, the socket).
+        // `attemptRefresh == false` marks the refresh call itself and its retry.
+        if attemptRefresh, let token = accessToken, let exp = decodeJwtExp(token),
+           exp.timeIntervalSinceNow < 60 {
+            AppLogger.shared.log(
+                "[Auth] token expires in \(Int(exp.timeIntervalSinceNow))s — refreshing before \(label)",
+                level: .info, category: "Auth"
+            )
+            if await coalescedRefresh(), let fresh = accessToken {
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            }
+        }
+
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -220,6 +242,18 @@ final class AgorClient {
                 }
                 throw AgorAPIError.tokenRefreshFailed
             }
+        }
+
+        if statusCode == 401, !attemptRefresh {
+            // A 401 that survives a successful refresh means the new token was
+            // rejected too — the interesting case, and previously invisible
+            // because the error only carried the status code.
+            let body = String(data: data, encoding: .utf8) ?? "no body"
+            let expiry = accessToken.flatMap(decodeJwtExp).map { Int($0.timeIntervalSinceNow) }
+            AppLogger.shared.log(
+                "[Auth] 401 persisted after refresh on \(label) — token expires in \(expiry.map(String.init) ?? "?")s, body=\(AppLogger.scrub(body))",
+                level: .error, category: "Auth"
+            )
         }
 
         guard (200...299).contains(statusCode) else {
@@ -287,6 +321,13 @@ final class AgorClient {
         }
         KeychainHelper.save(authResponse.accessToken, for: .accessToken)
 
+        if let exp = decodeJwtExp(authResponse.accessToken) {
+            AppLogger.shared.log(
+                "[Auth] new access token valid for \(Int(exp.timeIntervalSinceNow))s",
+                level: .info, category: "Auth"
+            )
+        }
+
         // Also persist to per-profile storage so restoreSession() finds fresh tokens
         let pm = ServerProfileManager.shared
         if let profileId = pm.activeProfileId {
@@ -295,6 +336,9 @@ final class AgorClient {
                 pm.saveToken(newRefresh, key: .refreshToken, profileId: profileId)
             }
         }
+
+        let notify = onTokenRefreshed
+        Task { @MainActor in notify?() }
     }
 
     // MARK: - File Upload (multipart/form-data)
