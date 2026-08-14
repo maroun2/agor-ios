@@ -11,6 +11,9 @@ struct FileDetailView: View {
     @State private var lastOffset: CGSize = .zero
     /// Decoded off the main thread; nil while loading or on failure.
     @State private var decodedImage: UIImage?
+    /// Built once per file — see decodeCurrentPDF().
+    @State private var pdfDocument: PDFDocument?
+    @State private var isDecodingPDF = false
     /// Temp-file copy of the current file, for the share / open-in-app flow.
     @State private var exportedFileURL: URL?
     @State private var showShareSheet = false
@@ -23,7 +26,7 @@ struct FileDetailView: View {
                 ProgressView("Loading file...")
             } else if let detail = viewModel.fileDetail, isCurrentFile(detail) {
                 if detail.encoding == "base64", isPDFFile(filePath) {
-                    pdfPreview(detail: detail)
+                    pdfPreview
                 } else if detail.encoding == "base64", isImageFile(filePath) {
                     // Zoomable image (no ScrollView - gestures need direct access)
                     zoomableImage(uiImage: decodedImage)
@@ -71,8 +74,10 @@ struct FileDetailView: View {
                             // refetched file only appeared after leaving and
                             // reopening the view.
                             decodedImage = nil
+                            pdfDocument = nil
                             await viewModel.redownloadFile(filePath)
                             await decodeCurrentImage()
+                            await decodeCurrentPDF()
                         }
                     } label: {
                         Label("Clear cache & redownload", systemImage: "arrow.clockwise")
@@ -95,10 +100,12 @@ struct FileDetailView: View {
         .task {
             await viewModel.loadFileDetail(filePath)
             await decodeCurrentImage()
+            await decodeCurrentPDF()
             autoOpenExternallyIfConfigured()
         }
         .onChange(of: filePath) { _, _ in
             decodedImage = nil
+            pdfDocument = nil
             exportedFileURL = nil
             imageScale = 1.0
             lastScale = 1.0
@@ -106,6 +113,7 @@ struct FileDetailView: View {
             lastOffset = .zero
             Task {
                 await decodeCurrentImage()
+                await decodeCurrentPDF()
                 autoOpenExternallyIfConfigured()
             }
         }
@@ -171,11 +179,11 @@ struct FileDetailView: View {
     // MARK: - PDF preview
 
     @ViewBuilder
-    private func pdfPreview(detail: FileDetail) -> some View {
-        if let content = detail.content,
-           let data = Data(base64Encoded: content),
-           let document = pdfDocument(from: data) {
-            PDFKitView(document: document)
+    private var pdfPreview: some View {
+        if let pdfDocument {
+            PDFKitView(document: pdfDocument)
+        } else if isDecodingPDF {
+            ProgressView()
         } else {
             ContentUnavailableView {
                 Label("Cannot preview PDF", systemImage: "doc.richtext")
@@ -185,16 +193,28 @@ struct FileDetailView: View {
         }
     }
 
-    /// Timed wrapper so the log shows what PDF construction costs — this runs
-    /// inside a ViewBuilder, so it repeats on every body evaluation.
-    private func pdfDocument(from data: Data) -> PDFDocument? {
+    /// Build the document once and hold it in view state.
+    ///
+    /// This used to run inside the ViewBuilder, so every body evaluation — a
+    /// scroll, a toolbar state change, anything — produced a *new* PDFDocument.
+    /// PDFView reloads when handed a different document, which is what threw the
+    /// reader back to the top of the file while it was just being read.
+    private func decodeCurrentPDF() async {
+        guard pdfDocument == nil,
+              let detail = viewModel.fileDetail,
+              isCurrentFile(detail),
+              detail.encoding == "base64",
+              isPDFFile(filePath),
+              let content = detail.content,
+              let data = Data(base64Encoded: content) else { return }
+        isDecodingPDF = true
+        defer { isDecodingPDF = false }
         let start = CFAbsoluteTimeGetCurrent()
-        let document = PDFDocument(data: data)
+        pdfDocument = await Task.detached(priority: .userInitiated) { PDFDocument(data: data) }.value
         AppLogger.shared.log(
             "[Timing] PDFDocument build \(FileBrowserViewModel.ms(since: start))ms (\(data.count) bytes)",
             level: .info, category: "FileBrowser"
         )
-        return document
     }
 
     private func decodeCurrentImage() async {
