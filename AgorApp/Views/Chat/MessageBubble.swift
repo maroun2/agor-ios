@@ -11,6 +11,8 @@ struct MessageBubble: View {
     var onOpenFile: ((String) -> Void)?
     var onOpenSession: ((String) -> Void)?
 
+    private var speaker: MessageSpeaker { MessageSpeaker.shared }
+
     var body: some View {
         VStack(alignment: alignment, spacing: 4) {
             // Role label
@@ -27,6 +29,20 @@ struct MessageBubble: View {
                     Text(message.timestamp.shortTime)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                    if message.role == .assistant, let text = speakableText {
+                        Button {
+                            speaker.toggle(messageId: message.messageId, text: text)
+                        } label: {
+                            Image(systemName: isSpeakingThisMessage ? "stop.circle.fill" : "speaker.wave.2")
+                                .font(.caption2)
+                                .foregroundStyle(isSpeakingThisMessage ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                // Small glyph, comfortable target.
+                                .frame(width: 24, height: 20)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isSpeakingThisMessage ? "Stop speaking" : "Speak message")
+                    }
                 }
                 .padding(.horizontal, 4)
             }
@@ -98,6 +114,16 @@ struct MessageBubble: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: frameAlignment)
+    }
+
+    /// Prose only — a message that is nothing but tool calls or tool results
+    /// gets no speak button.
+    private var speakableText: String? {
+        MessageSpeaker.speakableText(for: message)
+    }
+
+    private var isSpeakingThisMessage: Bool {
+        speaker.speakingMessageId == message.messageId
     }
 
     private var roleLabel: String {
