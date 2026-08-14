@@ -225,15 +225,8 @@ final class FileBrowserViewModel {
     /// the file list at all.
     private func resolvePathAgainstFileList(_ filePath: String) -> String? {
         guard !files.isEmpty else { return nil }
-        let paths = files.map(\.path)
-        if paths.contains(filePath) { return filePath }
-
-        let suffixMatches = paths.filter { $0.hasSuffix("/" + filePath) }
-        if suffixMatches.count == 1 { return suffixMatches[0] }
-
-        let name = filePath.components(separatedBy: "/").last ?? filePath
-        let nameMatches = paths.filter { ($0.components(separatedBy: "/").last ?? $0) == name }
-        return nameMatches.count == 1 ? nameMatches[0] : nil
+        let resolved = FilePathDetector.resolve(filePath, knownFiles: files.map(\.path))
+        return resolved == filePath ? nil : resolved
     }
 
     /// Elapsed milliseconds since a CFAbsoluteTime mark, for the [Timing] lines

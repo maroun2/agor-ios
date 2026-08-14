@@ -15,7 +15,10 @@ struct DetectedFilePath {
 enum FilePathDetector {
     // Matches file paths like: path/to/file.ext, ./file.ext, @path/to/file.ext
     // Must contain at least one slash or start with @ and have an extension
-    private static let pathPattern = #"(?:@|\.\/)?(?:[\w\-\.]+\/)+[\w\-\.]+\.\w{2,10}"#
+    // The leading "/" is part of the match: an absolute path used to be captured
+    // from its second component onward, which silently turned it into a bogus
+    // worktree-relative path that no lookup could recover.
+    private static let pathPattern = #"(?:@|\.\/|\/)?(?:[\w\-\.]+\/)+[\w\-\.]+\.\w{2,10}"#
 
     // Matches "Saved X", "Created X", "Wrote X", "Written to X" patterns
     private static let actionPattern = #"(?:Saved|Created|Wrote|Written to)\s+([\w\-\.\/]+\.\w{2,10})"#
@@ -143,13 +146,43 @@ enum FilePathDetector {
     }
 
     private static func resolveToKnownFile(_ path: String, knownFiles: [String], lookup: [String: String]) -> String {
+        resolve(path, knownFiles: knownFiles, lookup: lookup)
+    }
+
+    /// Map a path as written in a message onto a real worktree-relative path.
+    ///
+    /// Messages quote paths in whatever form the agent used: absolute
+    /// (`/Users/me/code/proj/src/main.swift`), prefixed with the worktree or
+    /// repo directory, or bare. The daemon only accepts paths relative to the
+    /// worktree root, so the leading part has to come off — but cutting it by
+    /// guesswork is what produced "file not found" on paths the chat displayed
+    /// correctly.
+    ///
+    /// This takes the *longest* trailing run of components that identifies
+    /// exactly one known file. Trying longest-first is what keeps ambiguous
+    /// basenames (`index.ts`, `README.md`) honest: `api/index.ts` wins over a
+    /// coin flip between five files named `index.ts`. Falls back to a unique
+    /// basename, and finally returns the path untouched.
+    static func resolve(_ path: String, knownFiles: [String], lookup: [String: String]? = nil) -> String {
         guard !knownFiles.isEmpty else { return path }
         if knownFiles.contains(path) { return path }
-        let suffix = "/" + path
-        let matches = knownFiles.filter { $0.hasSuffix(suffix) }
-        if matches.count == 1 { return matches[0] }
-        let name = (path.components(separatedBy: "/").last ?? path).lowercased()
-        if let resolved = lookup[name] { return resolved }
+
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        if knownFiles.contains(trimmed) { return trimmed }
+
+        let components = trimmed.split(separator: "/").map(String.init)
+        // start = 0 is the whole path; each step drops one leading component,
+        // so the first unique match found is the most specific one.
+        for start in components.indices {
+            let candidate = components[start...].joined(separator: "/")
+            if knownFiles.contains(candidate) { return candidate }
+            let matches = knownFiles.filter { $0.hasSuffix("/" + candidate) }
+            if matches.count == 1 { return matches[0] }
+        }
+
+        let name = (components.last ?? trimmed).lowercased()
+        let byName = lookup ?? buildFilenameLookup(from: knownFiles)
+        if let resolved = byName[name] { return resolved }
         return path
     }
 }
