@@ -15,7 +15,9 @@ enum AgorAPIError: Error, LocalizedError {
         case .invalidURL: "Invalid URL"
         case .notAuthenticated: "Not authenticated"
         case .httpError(let code, let body): "HTTP \(code): \(body ?? "Unknown error")"
-        case .decodingError(let err): "Decoding error: \(err.localizedDescription)"
+        // The underlying error names the offending key and type; the localized
+        // description flattens all of that into "the data couldn't be read".
+        case .decodingError(let err): "Decoding error: \(err)"
         case .networkError(let err): "Network error: \(err.localizedDescription)"
         case .tokenRefreshFailed: "Session expired. Please log in again."
         }
@@ -343,16 +345,73 @@ final class AgorClient {
 
     // MARK: - File Upload (multipart/form-data)
 
-    struct UploadedFile: Codable {
+    /// Decoded leniently: daemon versions differ on which of these keys they
+    /// send, and the only field the app actually uses is the path. Failing the
+    /// whole upload because `success` or `mimeType` was absent reported a
+    /// finished upload as a failure.
+    struct UploadedFile: Decodable {
         let filename: String
         let path: String
         let size: Int
         let mimeType: String
+
+        private enum CodingKeys: String, CodingKey {
+            case filename, name, originalname
+            case path, relativePath, filepath, destination
+            case size
+            case mimeType, mimetype, type
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let name = try c.decodeIfPresent(String.self, forKey: .filename)
+                ?? c.decodeIfPresent(String.self, forKey: .name)
+                ?? c.decodeIfPresent(String.self, forKey: .originalname)
+            let resolvedPath = try c.decodeIfPresent(String.self, forKey: .path)
+                ?? c.decodeIfPresent(String.self, forKey: .relativePath)
+                ?? c.decodeIfPresent(String.self, forKey: .filepath)
+                ?? c.decodeIfPresent(String.self, forKey: .destination)
+
+            guard let path = resolvedPath ?? name else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .path, in: c,
+                    debugDescription: "upload response carried neither a path nor a filename"
+                )
+            }
+            self.path = path
+            self.filename = name ?? (path.components(separatedBy: "/").last ?? path)
+            self.size = (try? c.decodeIfPresent(Int.self, forKey: .size)) .flatMap { $0 } ?? 0
+            self.mimeType = try c.decodeIfPresent(String.self, forKey: .mimeType)
+                ?? c.decodeIfPresent(String.self, forKey: .mimetype)
+                ?? c.decodeIfPresent(String.self, forKey: .type)
+                ?? "application/octet-stream"
+        }
     }
 
-    struct UploadResponse: Codable {
+    struct UploadResponse: Decodable {
         let success: Bool
         let files: [UploadedFile]
+
+        private enum CodingKeys: String, CodingKey {
+            case success, files, file, data, uploaded
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            success = try c.decodeIfPresent(Bool.self, forKey: .success) ?? true
+            if let files = try c.decodeIfPresent([UploadedFile].self, forKey: .files) {
+                self.files = files
+            } else if let files = try c.decodeIfPresent([UploadedFile].self, forKey: .uploaded) {
+                self.files = files
+            } else if let files = try c.decodeIfPresent([UploadedFile].self, forKey: .data) {
+                self.files = files
+            } else if let single = try c.decodeIfPresent(UploadedFile.self, forKey: .file) {
+                self.files = [single]
+            } else {
+                // A bare object response: the whole payload describes one file.
+                self.files = [try UploadedFile(from: decoder)]
+            }
+        }
     }
 
     func uploadFile(sessionId: String, fileData: Data, fileName: String, mimeType: String) async throws -> UploadResponse {
@@ -425,8 +484,10 @@ final class AgorClient {
             throw AgorAPIError.httpError(statusCode: statusCode, body: responseBody)
         }
 
+        // Logged unconditionally: the shape of this response is the one thing
+        // that has repeatedly not matched what the app expects.
         AppLogger.shared.log(
-            "[HTTP] ← \(statusCode) upload \(fileName) OK (\(Int(Date().timeIntervalSince(start) * 1000))ms)",
+            "[HTTP] ← \(statusCode) upload \(fileName) OK (\(Int(Date().timeIntervalSince(start) * 1000))ms) body=\(AppLogger.scrub(String(data: data, encoding: .utf8) ?? "<binary \(data.count) bytes>"))",
             level: .info, category: "HTTP"
         )
 
