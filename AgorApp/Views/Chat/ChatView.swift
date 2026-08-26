@@ -437,6 +437,17 @@ struct ChatView: View {
         let allSessions = navigationVM.boardNodes.flatMap { $0.worktrees.flatMap(\.sessions) }
         if let session = allSessions.first(where: { $0.sessionId.hasPrefix(hash) || $0.sessionId == hash }) {
             onOpenSession?(session.sessionId)
+            return
+        }
+        // Not in the loaded tree — a link can point at a session on a board the
+        // sidebar hasn't loaded, or one filtered out of view. A full id is
+        // enough to open on its own; a short hash is not, and tapping would
+        // otherwise do nothing at all with no explanation.
+        if hash.count == 36 {
+            AppLogger.shared.log("[Chat] session link \(hash.prefix(8)) not in loaded tree — opening by id", level: .info, category: "Chat")
+            onOpenSession?(hash)
+        } else {
+            AppLogger.shared.log("[Chat] session link \(hash) matches no loaded session", level: .warning, category: "Chat")
         }
     }
 }
