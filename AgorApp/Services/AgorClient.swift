@@ -24,6 +24,23 @@ enum AgorAPIError: Error, LocalizedError {
     }
 }
 
+/// Bytes-received / expected-total for a streaming fetch, plus which phase
+/// produced it — a caller can be waiting on a file-list scan (indeterminate)
+/// before the actual download (determinate once Content-Length is known).
+struct DownloadProgress: Equatable {
+    var bytesReceived: Int
+    var expectedTotalBytes: Int?
+}
+
+// Tracks the time of the last byte received so the stall watchdog can tell
+// "still downloading a big file" from "connection died" without a fixed
+// total deadline.
+private actor StallTracker {
+    private var last = Date()
+    func touch() { last = Date() }
+    func idleSeconds() -> TimeInterval { Date().timeIntervalSince(last) }
+}
+
 // MARK: - Agor REST Client
 
 @Observable
@@ -103,6 +120,149 @@ final class AgorClient {
         let request = try buildRequest(path: path, method: "DELETE")
         logOutgoingRequest(request)
         return try await executeRaw(request, attemptRefresh: true)
+    }
+
+    // MARK: - Streaming GET (size-aware timeout)
+
+    /// Same auth handling as `get`, but reads the body via `bytes(for:)`
+    /// instead of `data(for:)`. Multi-MB base64 file payloads over a phone
+    /// link routinely exceeded the 30s/60s request/resource deadlines and
+    /// failed with NSURLErrorTimedOut even though bytes were still arriving —
+    /// there was no way to tell "slow but alive" from "dead" with a fixed
+    /// deadline. This enforces a STALL watchdog instead: the fetch fails only
+    /// if no new bytes land for `stallTimeout`, so a huge file gets as long as
+    /// it needs while a genuinely dead connection still fails fast.
+    func getStreaming<T: Decodable>(
+        _ path: String,
+        query: [String: String] = [:],
+        stallTimeout: TimeInterval = 20,
+        onProgress: (@Sendable (DownloadProgress) -> Void)? = nil
+    ) async throws -> T {
+        let request = try buildRequest(path: path, method: "GET", query: query)
+        logOutgoingRequest(request)
+        let data = try await executeStreaming(request, attemptRefresh: true, stallTimeout: stallTimeout, onProgress: onProgress)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw AgorAPIError.decodingError(error)
+        }
+    }
+
+    private func executeStreaming(
+        _ request: URLRequest,
+        attemptRefresh: Bool,
+        stallTimeout: TimeInterval,
+        onProgress: (@Sendable (DownloadProgress) -> Void)?
+    ) async throws -> Data {
+        let label = requestLabel(for: request)
+        let start = Date()
+
+        var request = request
+        // Same pre-expiry refresh as executeRaw — see its comment.
+        if attemptRefresh, let token = accessToken, let exp = decodeJwtExp(token),
+           exp.timeIntervalSinceNow < 60 {
+            AppLogger.shared.log(
+                "[Auth] token expires in \(Int(exp.timeIntervalSinceNow))s — refreshing before \(label)",
+                level: .info, category: "Auth"
+            )
+            if await coalescedRefresh(), let fresh = accessToken {
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            }
+        }
+
+        let asyncBytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (asyncBytes, response) = try await session.bytes(for: request)
+        } catch {
+            let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
+            AppLogger.shared.log("[HTTP] ← NETWORK_ERROR \(label) (\(elapsedMs)ms) \(error.localizedDescription)", level: .error, category: "HTTP")
+            throw AgorAPIError.networkError(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AgorAPIError.networkError(URLError(.badServerResponse))
+        }
+        let statusCode = httpResponse.statusCode
+
+        // 401 handling mirrors executeRaw: refresh (or silent re-auth) then retry once.
+        if statusCode == 401 && attemptRefresh {
+            AppLogger.shared.log("[HTTP] ← 401 \(label) — attempting auth recovery (streaming)", level: .debug, category: "HTTP")
+            var tokenRefreshed = false
+            if refreshToken != nil {
+                tokenRefreshed = await coalescedRefresh()
+                if !tokenRefreshed {
+                    refreshToken = nil
+                }
+            }
+            if !tokenRefreshed, let reAuth = onSilentReAuth {
+                tokenRefreshed = (try? await reAuth()) != nil
+            }
+            if tokenRefreshed {
+                var retryRequest = request
+                if let token = accessToken {
+                    retryRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+                return try await executeStreaming(retryRequest, attemptRefresh: false, stallTimeout: stallTimeout, onProgress: onProgress)
+            } else {
+                Task { @MainActor [weak self] in self?.onSessionExpired?() }
+                throw AgorAPIError.tokenRefreshFailed
+            }
+        }
+
+        let expectedTotal = httpResponse.expectedContentLength > 0 ? Int(httpResponse.expectedContentLength) : nil
+        let tracker = StallTracker()
+
+        let data: Data
+        do {
+            data = try await withThrowingTaskGroup(of: Data?.self) { group in
+                group.addTask {
+                    var data = Data(capacity: expectedTotal ?? 0)
+                    var buffer = [UInt8]()
+                    buffer.reserveCapacity(65536)
+                    for try await byte in asyncBytes {
+                        buffer.append(byte)
+                        if buffer.count >= 65536 {
+                            data.append(contentsOf: buffer)
+                            buffer.removeAll(keepingCapacity: true)
+                            await tracker.touch()
+                            onProgress?(DownloadProgress(bytesReceived: data.count, expectedTotalBytes: expectedTotal))
+                        }
+                    }
+                    data.append(contentsOf: buffer)
+                    onProgress?(DownloadProgress(bytesReceived: data.count, expectedTotalBytes: expectedTotal))
+                    return data
+                }
+                group.addTask {
+                    while true {
+                        try await Task.sleep(for: .seconds(2))
+                        if await tracker.idleSeconds() > stallTimeout {
+                            throw AgorAPIError.networkError(URLError(.timedOut))
+                        }
+                    }
+                }
+                defer { group.cancelAll() }
+                guard let result = try await group.next() ?? nil else {
+                    throw AgorAPIError.networkError(URLError(.badServerResponse))
+                }
+                return result
+            }
+        } catch {
+            let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
+            AppLogger.shared.log("[HTTP] ← STREAM_FAILED \(label) (\(elapsedMs)ms) \(error.localizedDescription)", level: .error, category: "HTTP")
+            throw error
+        }
+
+        let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
+        guard (200...299).contains(statusCode) else {
+            let body = String(data: data, encoding: .utf8)
+            let truncatedBody = body.map { $0.count > 300 ? String($0.prefix(300)) + "..." : $0 } ?? "no body"
+            AppLogger.shared.log("[HTTP] ← \(statusCode) \(label) (\(elapsedMs)ms, \(data.count) bytes) body=\(truncatedBody)", level: .error, category: "HTTP")
+            throw AgorAPIError.httpError(statusCode: statusCode, body: body)
+        }
+
+        AppLogger.shared.log("[HTTP] ← \(statusCode) \(label) (\(elapsedMs)ms, \(data.count) bytes, streamed)", level: .debug, category: "HTTP")
+        return data
     }
 
     // MARK: - Request Building

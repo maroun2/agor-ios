@@ -9,7 +9,20 @@ struct InlineImageView: View {
     @State private var image: UIImage?
     @State private var isLoading = false
     @State private var failed = false
-    @State private var retriesLeft = 1
+
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        return f
+    }()
+
+    private var progressKey: String {
+        InlineImageLoader.progressKey(baseURL: socketService.httpClient.baseURL, worktreeId: worktreeId, path: path)
+    }
+
+    private var progress: InlineImageLoader.Progress? {
+        InlineImageLoader.shared.progress[progressKey]
+    }
 
     var body: some View {
         ZStack {
@@ -27,15 +40,49 @@ struct InlineImageView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .onTapGesture { onTapFile(path) }
             } else if isLoading {
-                ProgressView()
-                    .frame(width: 100, height: 60)
+                placeholder
             } else if failed {
-                Label("Image unavailable", systemImage: "photo.slash")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                // Retries already happened inside the loader with backoff —
+                // a permanent failure needs a visible, tappable way out rather
+                // than a dead "Image unavailable" label the user can't act on.
+                Button {
+                    failed = false
+                    Task { await loadImage() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .frame(width: 100, height: 60)
             }
         }
         .task { await loadImage() }
+    }
+
+    @ViewBuilder
+    private var placeholder: some View {
+        VStack(spacing: 4) {
+            switch progress?.phase {
+            case .scanning:
+                ProgressView()
+                Text("Scanning files…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            case .downloading:
+                if let total = progress?.expectedTotalBytes, total > 0 {
+                    ProgressView(value: Double(progress?.bytesReceived ?? 0), total: Double(total))
+                        .frame(width: 80)
+                    Text("\(Self.byteFormatter.string(fromByteCount: Int64(progress?.bytesReceived ?? 0))) / \(Self.byteFormatter.string(fromByteCount: Int64(total)))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView()
+                }
+            case nil:
+                ProgressView()
+            }
+        }
+        .frame(width: 100, height: 60)
     }
 
     @MainActor
@@ -47,7 +94,8 @@ struct InlineImageView: View {
         do {
             // Thumbnails come from the same 3-day disk cache as the file browser,
             // so a scrolled-past image doesn't refetch on every appearance. Misses
-            // go through the shared loader, which runs one download at a time.
+            // go through the shared loader, which runs one download at a time and
+            // retries transient failures itself.
             let detail = try await InlineImageLoader.shared.load(
                 path: path,
                 worktreeId: worktreeId,
@@ -67,15 +115,6 @@ struct InlineImageView: View {
                 failed = true
             }
         } catch {
-            // One retry: a transient socket timeout shouldn't leave a permanent
-            // "Image unavailable" placeholder for the life of the view.
-            if !Task.isCancelled, retriesLeft > 0 {
-                retriesLeft -= 1
-                try? await Task.sleep(for: .seconds(1))
-                isLoading = false
-                await loadImage()
-                return
-            }
             failed = true
         }
     }
